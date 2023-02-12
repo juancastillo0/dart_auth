@@ -19,6 +19,7 @@ linter:
   rules:
     omit_local_variable_types: false
     unnecessary_brace_in_string_interps: false
+    sort_constructors_first: false
 
 # analyzer:
 #   exclude:
