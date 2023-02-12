@@ -20,6 +20,14 @@ class GoogleProvider extends OAuthProvider {
 
   @override
   HttpAuthMethod get authMethod => HttpAuthMethod.formUrlencoded;
+
+  @override
+  List<GrantType> get supportedFlows => const [
+        GrantType.authorization_code,
+        GrantType.refresh_token,
+        GrantType.device_code,
+        GrantType.jwtBearer,
+      ];
 }
 // scope -> openid email profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile
 

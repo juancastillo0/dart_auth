@@ -1,5 +1,7 @@
 // ignore_for_file: non_constant_identifier_names
 
+import 'dart:convert' show base64Encode, utf8;
+
 import 'package:oauth/src/code_challenge.dart';
 
 export 'package:oauth/src/code_challenge.dart';
@@ -13,17 +15,23 @@ abstract class OAuthProvider {
     required this.clientIdentifier,
     required this.clientSecret,
     this.wellKnownOpenIdEndpoint,
+    this.deviceAuthorizationEndpoint,
   });
 
   final String authorizationEndpoint;
   final String tokenEndpoint;
   final String? revokeTokenEndpoint;
+  final String? deviceAuthorizationEndpoint;
   final String clientIdentifier;
   final String clientSecret;
   final String? wellKnownOpenIdEndpoint;
 
+  String basicAuthHeader() =>
+      'Basic ${base64Encode(utf8.encode('$clientIdentifier:${clientSecret}'))}';
+
   HttpAuthMethod get authMethod => HttpAuthMethod.basic;
   CodeChallengeMethod get codeChallengeMethod => CodeChallengeMethod.S256;
+  List<GrantType> get supportedFlows;
 }
 
 enum HttpAuthMethod {
@@ -38,7 +46,7 @@ enum HttpAuthMethod {
 }
 
 abstract class UrlParams {
-  ///
+  /// Returns a Map with the url query parameters
   Map<String, String?> toJson();
 }
 
@@ -97,7 +105,27 @@ mixin AuthParamsBaseMixin implements AuthParams {
   String? get code_challenge_method => baseAuthParams.code_challenge_method;
 }
 
-enum GrantType { authorization_code, refresh_token, password }
+enum GrantType {
+  /// response_type=code
+  authorization_code('authorization_code'),
+
+  /// response_type=code
+  refresh_token('refresh_token'),
+
+  /// deviceAuthorizationEndpoint
+  device_code('urn:ietf:params:oauth:grant-type:device_code'),
+  password('password'),
+  client_credentials('client_credentials'),
+
+  /// response_type=token and grant_type=null
+  tokenImplicit('token'),
+  jwtBearer('urn:ietf:params:oauth:grant-type:jwt-bearer');
+
+  const GrantType(this.value);
+
+  /// The grant_type to set in the url parameter
+  final String value;
+}
 
 class TokenParams implements UrlParams {
   ///
@@ -136,7 +164,7 @@ class TokenParams implements UrlParams {
 
   /// This field must contain a value of authorization_code,
   /// as defined in the OAuth 2.0 specification.
-  /// authorization_code, refresh_token or password
+  /// authorization_code, refresh_token, token or password
   final GrantType grant_type;
 
   final String? code_verifier;
@@ -145,7 +173,7 @@ class TokenParams implements UrlParams {
   Map<String, String> toJson() => {
         'client_id': client_id,
         'client_secret': client_secret,
-        'grant_type': grant_type.name,
+        'grant_type': grant_type.value,
         if (grant_type == GrantType.authorization_code)
           'code': code
         else if (grant_type == GrantType.refresh_token)
@@ -183,6 +211,7 @@ class TokenResponse {
     required this.scope,
     required this.token_type,
     required this.refresh_token,
+    this.state,
   });
 
   ///
@@ -193,6 +222,7 @@ class TokenResponse {
         scope: json['scope'] as String,
         token_type: json['token_type'] as String,
         refresh_token: json['refresh_token'] as String?,
+        state: json['state'] as String?,
       );
 
   /// A token that can be sent to a Google API.
@@ -217,5 +247,6 @@ class TokenResponse {
   /// offline in the authentication request. For details, see Refresh tokens.
   final String? refresh_token;
 
-  // TODO: for implicint flow final String? state;
+  /// TODO: for implicint flow
+  final String? state;
 }

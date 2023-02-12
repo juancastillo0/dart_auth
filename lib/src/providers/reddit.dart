@@ -14,7 +14,17 @@ class RedditAuthProvider extends OAuthProvider {
         );
 
   @override
-  HttpAuthMethod get authMethod => HttpAuthMethod.basic;
+  List<GrantType> get supportedFlows => const [
+        GrantType.authorization_code,
+        GrantType.refresh_token,
+        GrantType.tokenImplicit,
+        // https://github.com/reddit-archive/reddit/wiki/OAuth2#application-only-oauth
+        GrantType.client_credentials,
+      ];
+
+  /// scope -> identity
+  /// https://github.com/reddit-archive/reddit/wiki/JSON#account-implements-created
+  /// https://www.reddit.com/dev/api/#GET_api_v1_me
 }
 
 class RedditAuthParams with AuthParamsBaseMixin {

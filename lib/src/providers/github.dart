@@ -1,6 +1,9 @@
 // ignore_for_file: non_constant_identifier_names, constant_identifier_names
 
+import 'dart:convert' show jsonDecode;
+
 import 'package:oauth/oauth.dart';
+import 'package:oauth/src/providers/github_token.dart';
 
 /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
 class GithubProvider extends OAuthProvider {
@@ -12,10 +15,34 @@ class GithubProvider extends OAuthProvider {
           authorizationEndpoint: 'https://github.com/login/oauth/authorize',
           tokenEndpoint: 'https://github.com/login/oauth/access_token',
           // https://docs.github.com/en/rest/apps/oauth-applications?apiVersion=2022-11-28#about-oauth-apps
+          // https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation
           // TODO: access_token param instead of token
           revokeTokenEndpoint:
               'https://api.github.com/applications/$clientIdentifier/token',
+          deviceAuthorizationEndpoint: 'https://github.com/login/device/code',
         );
+
+  @override
+  List<GrantType> get supportedFlows =>
+      const [GrantType.authorization_code, GrantType.device_code];
+
+  Future<GithubToken> getUser(HttpClient client, TokenResponse token) async {
+    final response = await client.post(
+      Uri.parse('https://api.github.com/applications/$clientIdentifier/token'),
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': basicAuthHeader(),
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      body: {
+        'access_token': token.access_token,
+      },
+    );
+    if (response.statusCode != 200) {
+      throw response;
+    }
+    return GithubToken.fromJson(jsonDecode(response.body) as Map);
+  }
 }
 
 // https://docs.github.com/en/developers/apps/building-oauth-apps/scopes-for-oauth-apps
@@ -145,6 +172,7 @@ class DeviceCodeResponse {
     required this.verification_uri,
     required this.expires_in,
     required this.interval,
+    this.message,
   });
 
   /// The device verification code is 40 characters and used to verify the device.
@@ -169,6 +197,12 @@ class DeviceCodeResponse {
   /// If you make more than one request over 5 seconds, then you will
   /// hit the rate limit and receive a slow_down error.
   final int interval;
+
+  /// From Microsoft https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code
+  /// A human-readable string with instructions for the user. 
+  /// This can be localized by including a query parameter in the request 
+  /// of the form ?mkt=xx-XX, filling in the appropriate language culture code.
+  final String? message;
 }
 
 /// Your device will show the user verification code and
