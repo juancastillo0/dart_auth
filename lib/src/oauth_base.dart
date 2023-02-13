@@ -18,16 +18,16 @@ abstract class OAuthProvider {
     this.deviceAuthorizationEndpoint,
   });
 
+  final String clientIdentifier;
+  final String clientSecret;
   final String authorizationEndpoint;
   final String tokenEndpoint;
   final String? revokeTokenEndpoint;
   final String? deviceAuthorizationEndpoint;
-  final String clientIdentifier;
-  final String clientSecret;
   final String? wellKnownOpenIdEndpoint;
 
   String basicAuthHeader() =>
-      'Basic ${base64Encode(utf8.encode('$clientIdentifier:${clientSecret}'))}';
+      'Basic ${base64Encode(utf8.encode('$clientIdentifier:$clientSecret'))}';
 
   HttpAuthMethod get authMethod => HttpAuthMethod.basic;
   CodeChallengeMethod get codeChallengeMethod => CodeChallengeMethod.S256;
