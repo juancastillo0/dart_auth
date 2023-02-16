@@ -10,7 +10,7 @@ Uint8List generateRandomBytes(
 }) {
   random ??= Random.secure();
   return Uint8List.fromList(
-    List.generate(bytes, (index) => random!.nextInt(8)),
+    List.generate(bytes, (index) => random!.nextInt(256)),
   );
 }
 
