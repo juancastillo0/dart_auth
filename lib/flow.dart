@@ -38,7 +38,7 @@ Future<Uri> openIdConnectAuthorizeUri({
     login_hint: loginHint,
     nonce: nonce,
   );
-  final uri = Uri.parse(config.authorization_endpoint)
+  final uri = Uri.parse(config.authorizationEndpoint)
       .replace(queryParameters: params.toJson());
 
   await persistence.setState(state, nonce);

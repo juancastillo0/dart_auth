@@ -1,5 +1,6 @@
 import 'package:oauth/oauth.dart';
 import 'package:oauth/src/openid_claims.dart';
+import 'package:oauth/src/openid_configuration.dart';
 
 export 'package:oauth/src/openid_claims.dart';
 
@@ -18,6 +19,35 @@ class AppleProvider extends OAuthProvider {
           tokenEndpoint: 'https://appleid.apple.com/auth/token',
           revokeTokenEndpoint: 'https://appleid.apple.com/auth/revoke',
         );
+
+  OpenIdConfiguration get openIdConfiguration => const OpenIdConfiguration(
+        issuer: 'https://appleid.apple.com',
+        authorizationEndpoint: 'https://appleid.apple.com/auth/authorize',
+        jwksUri: 'https://appleid.apple.com/auth/keys',
+        tokenEndpoint: 'https://appleid.apple.com/auth/token',
+        revocationEndpoint: 'https://appleid.apple.com/auth/revoke',
+        responseTypesSupported: ['code', 'code id_token'],
+        grantTypesSupported: ['authorization_code', 'refresh_token'],
+        responseModesSupported: ['query', 'fragment', 'form_post'],
+        idTokenSigningAlgValuesSupported: ['ES256'],
+        tokenEndpointAuthMethodsSupported: ['client_secret_post'],
+        scopesSupported: ['name', 'email'],
+        claimsSupported: [
+          'iss',
+          'sub',
+          'aud',
+          'iat',
+          'exp',
+          'nonce',
+          'transaction',
+          'nonce_supported',
+          'email',
+          'email_verified',
+          'is_private_email',
+          'real_user_status',
+          'transfer_sub',
+        ],
+      );
 
   @override
   List<GrantType> get supportedFlows => const [
