@@ -1,9 +1,9 @@
 import 'package:oauth/oauth.dart';
 
 /// https://github.com/reddit-archive/reddit/wiki/OAuth2
-class RedditAuthProvider extends OAuthProvider {
+class RedditProvider extends OAuthProvider {
   /// https://github.com/reddit-archive/reddit/wiki/OAuth2
-  const RedditAuthProvider({
+  const RedditProvider({
     required super.clientIdentifier,
     required super.clientSecret,
   }) : super(

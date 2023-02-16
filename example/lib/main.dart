@@ -31,7 +31,7 @@ void main() async {
   print('Serving at http://${server.address.host}:${server.port}');
 }
 
-class InMemoryPersistance implements Persistence {
+class InMemoryPersistance extends Persistence {
   final Map<String, String> map = {};
   @override
   Future<String?> getState(String key) async {

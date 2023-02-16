@@ -22,4 +22,6 @@ enum SupportedProviders {
   steam,
   twitter,
   spotify,
+  /// Custom provider
+  other,
 }

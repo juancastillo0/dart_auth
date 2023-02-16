@@ -25,6 +25,8 @@ class FacebookProvider extends OAuthProvider {
   // comma separated scopes
   String get scopes => 'openid,public_profile,email';
 
+  // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/
+
   // Cancellation webhook
 
   @override
@@ -46,6 +48,7 @@ class FacebookProvider extends OAuthProvider {
     TokenResponse token, {
     String fields = defaultFields,
   }) async {
+    // TODO: should we use https://developers.facebook.com/docs/facebook-login/guides/advanced/oidc-token?
     final response = await client.get(
       Uri.parse('https://graph.facebook.com/v16.0/me?fields=$fields'),
       headers: {
