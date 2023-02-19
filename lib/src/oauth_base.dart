@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert' show base64Encode, jsonDecode, utf8;
 
 import 'package:oauth/oauth.dart';
@@ -125,6 +126,46 @@ abstract class OAuthProvider<U> {
     } else {
       return Err(OAuthErrorResponse.fromJson(jsonData));
     }
+  }
+
+  Stream<Result<TokenResponse, OAuthErrorResponse>> subscribeToDeviceCodeState(
+    HttpClient client,
+    DeviceCodeResponse deviceCode, {
+    Map<String, String?>? otherParams,
+  }) {
+    final controller =
+        StreamController<Result<TokenResponse, OAuthErrorResponse>>();
+
+    Duration duration = Duration(seconds: deviceCode.interval);
+    Timer timer;
+    Future<void> callback() async {
+      final response = await pollDeviceCodeToken(
+        client,
+        deviceCode: deviceCode.deviceCode,
+        otherParams: otherParams,
+      );
+      if (controller.isClosed) return;
+
+      controller.add(response);
+      await response.when(
+        ok: (ok) => controller.sink.close(),
+        err: (err) async {
+          if (err.error == DeviceFlowError.slow_down.name) {
+            duration = Duration(seconds: duration.inSeconds + 1);
+          } else if (err.error != DeviceFlowError.authorization_pending.name) {
+            await controller.sink.close();
+          }
+        },
+      );
+      if (!controller.isClosed) {
+        timer = Timer(duration, callback);
+      }
+    }
+
+    timer = Timer(duration, callback);
+    controller.onCancel = timer.cancel;
+
+    return controller.stream;
   }
 
   Future<ParsedResponse> sendHttpPost(

@@ -218,28 +218,32 @@ class DeviceCode {
 class DeviceCodeResponse {
   ///
   const DeviceCodeResponse({
-    required this.device_code,
-    required this.user_code,
-    required this.verification_uri,
-    required this.expires_in,
+    required this.deviceCode,
+    required this.userCode,
+    required this.verificationUri,
+    required this.expiresIn,
     required this.interval,
+    required this.expiresAt,
     this.message,
+    this.verificationUriComplete,
   });
 
   /// The device verification code is 40 characters and used to verify the device.
-  final String device_code;
+  final String deviceCode;
 
   /// The user verification code is displayed on the device so the user
   /// can enter the code in a browser.
   /// This code is 8 characters with a hyphen in the middle.
-  final String user_code;
+  final String userCode;
 
   /// The verification URL where users need to enter the user_code: https://github.com/login/device.
-  final String verification_uri;
+  final String verificationUri;
 
   /// The number of seconds before the device_code and user_code expire.
   /// The default is 900 seconds or 15 minutes.
-  final int expires_in;
+  final int expiresIn;
+
+  final DateTime expiresAt;
 
   /// The minimum number of seconds that must pass before you can make a new
   /// access token request (POST https://github.com/login/oauth/access_token)
@@ -249,12 +253,61 @@ class DeviceCodeResponse {
   /// hit the rate limit and receive a slow_down error.
   final int interval;
 
+  /// A verification URI that includes the "user_code" (or
+  /// other information with the same function as the "user_code"),
+  /// which is designed for non-textual transmission.
+  final String? verificationUriComplete;
+
   /// From Microsoft https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code
-  /// A human-readable string with instructions for the user. 
-  /// This can be localized by including a query parameter in the request 
+  /// A human-readable string with instructions for the user.
+  /// This can be localized by including a query parameter in the request
   /// of the form ?mkt=xx-XX, filling in the appropriate language culture code.
   final String? message;
+
+// generated-dart-fixer-start{"jsonKeyCase":"snake_case","md5Hash":"AhyXQgvT12+RbqzO0xDxBQ=="}
+
+  factory DeviceCodeResponse.fromJson(Map json) {
+    return DeviceCodeResponse(
+      deviceCode: json['device_code'] as String,
+      userCode: json['user_code'] as String,
+      verificationUri: json['verification_uri'] as String,
+      expiresIn: json['expires_in'] as int,
+      interval: json['interval'] as int,
+      message: json['message'] as String?,
+      verificationUriComplete: json['verification_uri_complete'] as String?,
+      expiresAt: parseExpiresAt(json),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'device_code': deviceCode,
+      'user_code': userCode,
+      'verification_uri': verificationUri,
+      'expires_in': expiresIn,
+      'interval': interval,
+      'verification_uri_complete': verificationUriComplete,
+      'message': message,
+      'expires_at': expiresAt.toIso8601String(),
+    };
+  }
+
+  @override
+  String toString() {
+    return "DeviceCodeResponse${{
+      "deviceCode": deviceCode,
+      "userCode": userCode,
+      "verificationUri": verificationUri,
+      "expiresIn": expiresIn,
+      "interval": interval,
+      "verificationUriComplete": verificationUriComplete,
+      "message": message,
+      "expiresAt": expiresAt,
+    }}";
+  }
 }
+
+// generated-dart-fixer-end{"jsonKeyCase":"snake_case","md5Hash":"AhyXQgvT12+RbqzO0xDxBQ=="}
 
 /// Your device will show the user verification code and
 /// prompt the user to enter the code at https://github.com/login/device.
