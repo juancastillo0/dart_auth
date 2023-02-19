@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart' show sha256;
 /// Create an anti-forgery state token
 String generateStateToken({int size = 48, Random? random}) {
   final r = random ?? Random.secure();
-  return base64Encode(List.generate(size, (_) => r.nextInt(8)));
+  return base64Encode(List.generate(size, (_) => r.nextInt(256)));
 }
 
 enum CodeChallengeMethod {
@@ -49,10 +49,14 @@ class CodeChallenge {
   static const codeVerifierVocabulary =
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-~';
 
-  @override
+  /// The code verifier from where [codeChallenge] was computed.
+  /// Sent in the token endpoint.
   final String codeVerifier;
-  @override
+
+  /// The code challenge computed from [codeVerifier].
+  /// Sent in the authorization endpoint.
   final String codeChallenge;
-  @override
+
+  /// The method used to compute [codeChallenge] from [codeVerifier].
   final CodeChallengeMethod codeChallengeMethod;
 }

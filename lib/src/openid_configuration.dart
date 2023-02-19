@@ -147,7 +147,7 @@ class OpenIdConfiguration {
   /// be used to provide X.509 representations of keys provided. When used, the
   /// bare key values MUST still be present and MUST match those in the
   /// certificate.
-  final String jwksUri;
+  final String? jwksUri;
 
   /// RECOMMENDED. URL of the OP's Dynamic Client Registration Endpoint
   /// [OpenID.Registration].
@@ -594,7 +594,7 @@ class OpenIdConfiguration {
       authorizationEndpoint: json['authorization_endpoint'] as String,
       tokenEndpoint: json['token_endpoint'] as String?,
       userinfoEndpoint: json['userinfo_endpoint'] as String?,
-      jwksUri: json['jwks_uri'] as String,
+      jwksUri: json['jwks_uri'] as String?,
       registrationEndpoint: json['registration_endpoint'] as String?,
       scopesSupported: json['scopes_supported'] == null
           ? null

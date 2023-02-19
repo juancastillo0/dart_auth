@@ -85,6 +85,24 @@ class AuthUser<T> {
   final OpenIdClaims? openIdClaims;
   final T providerUser;
 
+  static AuthUser<OpenIdClaims> fromClaims(
+    SupportedProviders provider,
+    OpenIdClaims claims,
+  ) =>
+      AuthUser(
+        emailIsVerified: claims.emailVerified ?? false,
+        phoneIsVerified: claims.phoneNumberVerified ?? false,
+        provider: provider,
+        providerUser: claims,
+        rawUserData: claims.toJson(),
+        userAppId: claims.subject,
+        email: claims.email,
+        name: claims.name,
+        openIdClaims: claims,
+        phone: claims.phoneNumber,
+        profilePicture: claims.picture?.toString(),
+      );
+
   Map<String, Object?> toJson() => {
         ...rawUserData,
         'provider': provider.name,
