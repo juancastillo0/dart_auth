@@ -2,96 +2,223 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:oauth/oauth.dart';
-import 'package:oauth/src/openid_configuration.dart';
-import 'package:oauth/src/providers/google.dart';
 
-Future<OpenIdConfiguration> retrieveConfiguration(String wellKnown) async {
-  final client = http.Client();
-  final responseMetadata = await client.get(Uri.parse(wellKnown));
+class OAuthFlow<U> {
+  final OAuthProvider<U> provider;
+  final Persistence persistence;
 
-  if (responseMetadata.statusCode > 300) {
-    throw Error();
-  }
-  final json = jsonDecode(responseMetadata.body) as Map;
-  final config = OpenIdConfiguration.fromJson(json);
-  return config;
-}
+  final HttpClient client;
 
-Future<Uri> openIdConnectAuthorizeUri({
-  required String clientId,
-  required String redirectUri,
-  required Persistence persistence,
-  String? loginHint,
-}) async {
-  const wellKnown =
-      'https://accounts.google.com/.well-known/openid-configuration';
-  final config = await retrieveConfiguration(wellKnown);
-  final state = generateStateToken();
-  final nonce = generateStateToken();
-  final params = GoogleAuthParams(
-    client_id: clientId,
-    state: state,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    access_type: 'offline',
-    login_hint: loginHint,
-    nonce: nonce,
-  );
-  final uri = Uri.parse(config.authorizationEndpoint)
-      .replace(queryParameters: params.toJson());
+  ///
+  OAuthFlow(this.provider, this.persistence, {HttpClient? client})
+      : client = client ?? http.Client();
 
-  await persistence.setState(state, nonce);
-  return uri;
-}
-
-Future<GoogleSuccessAuth> openIdConnectHandleRedirectUri(
-  Uri uri,
-  Persistence persistence,
-  OAuthProvider provider,
-  String redirectUri,
-) async {
-  final code = uri.queryParameters['code'];
-  final state = uri.queryParameters['state'];
-  final GoogleAuthError? error = uri.queryParameters['error'];
-  if (error != null) {
-    throw Exception(error);
-  }
-  if (code == null || state == null) {
-    throw Error();
-  }
-  final nonce = await persistence.getState(state);
-  if (nonce == null) {
-    throw Error();
-  }
-
-  final client = http.Client();
-
-  final responseToken = await client.post(
-    Uri.parse(provider.tokenEndpoint),
-    body: GoogleTokenParams(
-      client_id: provider.clientIdentifier,
-      client_secret: provider.clientSecret,
-      code: code,
-      grant_type: 'authorization_code',
+  Future<Uri> getAuthorizeUri({
+    required String redirectUri,
+    String? loginHint,
+    Map<String, String?>? otherParams,
+    String? scope,
+    OAuthResponseType responseType = OAuthResponseType.code,
+  }) async {
+    scope ??= provider.defaultScopes;
+    final state = generateStateToken();
+    final nonce = scope.split(RegExp('[ ,]')).contains('openid')
+        ? generateStateToken()
+        : null;
+    final challenge = responseType == OAuthResponseType.code
+        ? CodeChallenge.generateS256()
+        : null;
+    final paramsModel = AuthParams(
+      client_id: provider.clientId,
+      state: state,
       redirect_uri: redirectUri,
-    ).toJson(),
-  );
+      response_type: responseType.value,
+      scope: scope,
+      code_challenge: challenge?.codeChallenge,
+      code_challenge_method: challenge?.codeChallengeMethod.name,
+      nonce: nonce,
+      otherParams: otherParams,
+      // TODO:
+      // access_type: 'offline',
+      // login_hint: loginHint,
+    );
+    final params = provider.mapAuthParamsToQueryParams(paramsModel);
+    final uri = Uri.parse(provider.authorizationEndpoint)
+        .replace(queryParameters: params);
+    final stateMode = AuthStateModel(
+      createdAt: DateTime.now(),
+      codeVerifier: challenge?.codeVerifier,
+      nonce: nonce,
+      responseType: responseType,
+    );
+    await persistence.setState(state, jsonEncode(stateMode.toJson()));
+    return uri;
+  }
 
-  if (responseToken.statusCode > 300) {
-    throw Error();
+  Future<Result<TokenResponse, AuthResponseError>> handleRedirectUri({
+    required Uri uri,
+    // TODO: not necessary for implicit
+    required String redirectUri,
+    Map<String, String?>? otherParams,
+  }) async {
+    final data = AuthRedirectResponse.fromJson(uri.queryParameters);
+    if (data.error != null) {
+      return Err(AuthResponseError(data, AuthResponseErrorKind.endpointError));
+    }
+    final code = data.code;
+    final state = data.state;
+    if (state == null) {
+      return Err(AuthResponseError(data, AuthResponseErrorKind.noState));
+    }
+    final stateData = await persistence.getState(state);
+    if (stateData == null) {
+      return Err(AuthResponseError(data, AuthResponseErrorKind.notFoundState));
+    }
+    final stateModel = AuthStateModel.fromJson(
+      jsonDecode(stateData) as Map<String, Object?>,
+    );
+    final grantType = stateModel.responseType.grantType;
+
+    final TokenResponse token;
+    HttpResponse? responseToken;
+    if (grantType == GrantType.tokenImplicit) {
+      token = TokenResponse.fromJson(uri.queryParameters);
+    } else {
+      if (code == null) {
+        return Err(
+          AuthResponseError(data, AuthResponseErrorKind.noCode),
+        );
+      }
+      final params = provider.mapTokenParamsToQueryParams(
+        TokenParams(
+          // TODO: remove these params
+          client_id: provider.clientId,
+          client_secret: provider.clientSecret,
+          code: code,
+          grant_type: grantType,
+          redirect_uri: redirectUri,
+          code_verifier: stateModel.codeVerifier,
+          otherParams: otherParams,
+        ),
+      );
+      final parsedResponse = await provider.sendHttpPost(client, params);
+      responseToken = parsedResponse.response;
+      final tokenBody = parsedResponse.parsedBody;
+
+      if (responseToken.statusCode != 200 || tokenBody == null) {
+        OAuthErrorResponse? error;
+        try {
+          error = OAuthErrorResponse.fromJson(tokenBody! as Map);
+        } catch (_) {}
+        return Err(
+          AuthResponseError(
+            data,
+            AuthResponseErrorKind.tokenResponseError,
+            response: responseToken,
+            error: error,
+          ),
+        );
+      }
+      token = TokenResponse.fromJson(
+        (tokenBody is List ? tokenBody[0] : tokenBody) as Map,
+        nonce: stateModel.nonce,
+      );
+    }
+    // TODO: validate token https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
+    // final claims = GoogleClaims.fromJson(jsonDecode(token.id_token) as Map);
+    // if (claims.nonce == null || claims.nonce != nonce) {
+    //   throw Error();
+    // }
+    // return GoogleSuccessAuth(
+    //   token: token,
+    //   claims: claims,
+    // );
+    if (token.state != state) {
+      return Err(
+        AuthResponseError(
+          data,
+          AuthResponseErrorKind.invalidState,
+          response: responseToken,
+        ),
+      );
+    }
+    return Ok(token);
   }
-  final tokenBody = jsonDecode(responseToken.body);
-  final token = GoogleTokenResponse.fromJson(
-    (tokenBody is List ? tokenBody[0] : tokenBody) as Map,
-  );
-  // TODO: validate token https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
-  final claims = GoogleClaims.fromJson(jsonDecode(token.id_token) as Map);
-  if (claims.nonce == null || claims.nonce != nonce) {
-    throw Error();
+}
+
+enum OAuthResponseType {
+  code('code'),
+  token('token');
+
+  const OAuthResponseType(this.value);
+  final String value;
+
+  String toJson() => value;
+
+  factory OAuthResponseType.fromJson(Object? value) =>
+      values.firstWhere((e) => e.value == value);
+
+  GrantType get grantType {
+    switch (this) {
+      case OAuthResponseType.code:
+        return GrantType.authorizationCode;
+      case OAuthResponseType.token:
+        return GrantType.tokenImplicit;
+    }
   }
-  return GoogleSuccessAuth(
-    token: token,
-    claims: claims,
-  );
+}
+
+class AuthResponseError {
+  final AuthRedirectResponse data;
+  final AuthResponseErrorKind kind;
+  final HttpResponse? response;
+  final OAuthErrorResponse? error;
+
+  AuthResponseError(
+    this.data,
+    this.kind, {
+    this.response,
+    this.error,
+  });
+}
+
+enum AuthResponseErrorKind {
+  endpointError,
+  noState,
+  noCode,
+  notFoundState,
+  tokenResponseError,
+  invalidState,
+}
+
+class AuthStateModel {
+  final String? codeVerifier;
+  final String? nonce;
+  final OAuthResponseType responseType;
+  final DateTime createdAt;
+
+  AuthStateModel({
+    required this.responseType,
+    required this.createdAt,
+    this.codeVerifier,
+    this.nonce,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'createdAt': createdAt.toIso8601String(),
+      'codeVerifier': codeVerifier,
+      'nonce': nonce,
+      'responseType': responseType.toJson(),
+    };
+  }
+
+  factory AuthStateModel.fromJson(Map<String, dynamic> map) {
+    return AuthStateModel(
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      responseType: OAuthResponseType.fromJson(map['responseType'] as String),
+      codeVerifier: map['codeVerifier'] as String?,
+      nonce: map['nonce'] as String?,
+    );
+  }
 }
