@@ -1,33 +1,128 @@
-// ignore_for_file: non_constant_identifier_names
+import 'dart:convert' show base64Encode, jsonDecode, utf8;
 
-import 'dart:convert' show base64Encode, utf8;
-
-import 'package:oauth/src/code_challenge.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/openid_configuration.dart';
 
 export 'package:oauth/src/code_challenge.dart';
+export 'package:oauth/src/response_models.dart';
 
-abstract class OAuthProvider {
+class Headers {
+  static const contentType = 'Content-Type';
+  static const accept = 'Accept';
+  static const authorization = 'Authorization';
+  static const appJson = 'application/json';
+  static const appFormUrlEncoded = 'application/x-www-form-urlencoded';
+}
+
+abstract class OAuthProvider<U> {
   ///
   const OAuthProvider({
     required this.authorizationEndpoint,
     required this.tokenEndpoint,
     required this.revokeTokenEndpoint,
-    required this.clientIdentifier,
+    required this.clientId,
     required this.clientSecret,
-    this.wellKnownOpenIdEndpoint,
     this.deviceAuthorizationEndpoint,
   });
 
-  final String clientIdentifier;
-  final String clientSecret;
-  final String authorizationEndpoint;
-  final String tokenEndpoint;
-  final String? revokeTokenEndpoint;
-  final String? deviceAuthorizationEndpoint;
-  final String? wellKnownOpenIdEndpoint;
+  /// The client identifier for the application.
+  /// Typically found in the dashboard, developer portal/console of the provider.
+  final String clientId;
 
+  /// The client secret for the application.
+  /// Typically found in the dashboard, developer portal/console of the provider.
+  /// Can be an empty String for flows that do not require a client secret
+  /// (implicit flow).
+  final String clientSecret;
+
+  /// The OAuth2 authorization endpoint.
+  final String authorizationEndpoint;
+
+  /// The OAuth2 token endpoint.
+  final String tokenEndpoint;
+
+  /// The OAuth2 token revocation endpoint.
+  final String? revokeTokenEndpoint;
+
+  /// The OAuth2 device authorization endpoint (For device flow).
+  final String? deviceAuthorizationEndpoint;
+
+  /// The supported authorization flows.
+  List<GrantType> get supportedFlows;
+
+  /// The default scopes to use for the [authorizationEndpoint].
+  String get defaultScopes;
+
+  /// Retrieves the user information given an authenticated [client]
+  /// and the [token] from [tokenEndpoint].
+  Future<Result<AuthUser<U>, GetUserError>> getUser(
+    HttpClient client,
+    TokenResponse token,
+  );
+
+  /// Parses the [userData] JSON and returns the generic [AuthUser] model.
+  AuthUser<U> parseUser(Map<String, Object?> userData);
+
+  /// The authentication method used for [tokenEndpoint].
+  HttpAuthMethod get authMethod => HttpAuthMethod.basicHeader;
+
+  /// The supported code challenge for Proof Key for Code Exchange (PKCE).
+  CodeChallengeMethod get codeChallengeMethod => CodeChallengeMethod.S256;
+
+  /// The Authorization header used for Basic HTTP authentication
   String basicAuthHeader() =>
+      'Basic ${base64Encode(utf8.encode('$clientId:$clientSecret'))}';
+
+  /// Maps the [AuthParams] to the query parameters
+  /// used in [authorizationEndpoint].
+  Map<String, String?> mapAuthParamsToQueryParams(AuthParams params) =>
+      params.toJson();
+
+  /// Maps the [TokenParams] to the query parameters used in [tokenEndpoint].
+  Map<String, String?> mapTokenParamsToQueryParams(TokenParams params) =>
+      params.toJson();
+
       'Basic ${base64Encode(utf8.encode('$clientIdentifier:$clientSecret'))}';
+
+  Future<ParsedResponse> sendHttpPost(
+    HttpClient client,
+    Map<String, String?> params,
+  ) async {
+    if (authMethod == HttpAuthMethod.formUrlencodedBody) {
+      params['client_id'] = clientId;
+      params['client_secret'] = clientSecret;
+    }
+    final response = await client.post(
+      Uri.parse(tokenEndpoint),
+      headers: {
+        Headers.accept: '${Headers.appJson}, ${Headers.appFormUrlEncoded}',
+        Headers.contentType: Headers.appFormUrlEncoded,
+        if (authMethod == HttpAuthMethod.basicHeader)
+          Headers.authorization: basicAuthHeader(),
+      },
+      body: params,
+    );
+
+    Object? parsedBody;
+    try {
+      if (response.headers[Headers.contentType] == Headers.appFormUrlEncoded) {
+        parsedBody = Uri.splitQueryString(response.body);
+      } else {
+        parsedBody = jsonDecode(response.body);
+      }
+    } catch (_) {}
+
+    return ParsedResponse(response, parsedBody);
+  }
+}
+
+class ParsedResponse {
+  final HttpResponse response;
+  final Object? parsedBody;
+
+  ParsedResponse(this.response, this.parsedBody);
+}
 
   HttpAuthMethod get authMethod => HttpAuthMethod.basic;
   CodeChallengeMethod get codeChallengeMethod => CodeChallengeMethod.S256;

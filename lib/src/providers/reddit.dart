@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/providers/reddit_user.dart';
 
 /// https://github.com/reddit-archive/reddit/wiki/OAuth2
-class RedditProvider extends OAuthProvider {
+class RedditProvider extends OAuthProvider<RedditUser> {
   /// https://github.com/reddit-archive/reddit/wiki/OAuth2
   const RedditProvider({
-    required super.clientIdentifier,
+    required super.clientId,
     required super.clientSecret,
   }) : super(
           authorizationEndpoint:
@@ -15,12 +19,43 @@ class RedditProvider extends OAuthProvider {
 
   @override
   List<GrantType> get supportedFlows => const [
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
         GrantType.tokenImplicit,
         // https://github.com/reddit-archive/reddit/wiki/OAuth2#application-only-oauth
-        GrantType.client_credentials,
+        GrantType.clientCredentials,
       ];
+
+  @override
+  String get defaultScopes => 'identity';
+
+  @override
+  Future<Result<AuthUser<RedditUser>, GetUserError>> getUser(
+    HttpClient client,
+    TokenResponse token,
+  ) async {
+    final response = await client
+        .get(Uri.parse('https://oauth.reddit.com/api/v1/me?raw_json=1'));
+    if (response.statusCode != 200) {
+      return Err(GetUserError(token: token, response: response));
+    }
+    final userData = jsonDecode(response.body) as Map<String, Object?>;
+    return Ok(parseUser(userData));
+  }
+
+  @override
+  AuthUser<RedditUser> parseUser(Map<String, Object?> userData) {
+    final user = RedditUser.fromJson(userData);
+    return AuthUser(
+      emailIsVerified: user.hasVerifiedEmail ?? false,
+      phoneIsVerified: false,
+      provider: SupportedProviders.reddit,
+      providerUser: user,
+      rawUserData: userData,
+      userAppId: user.id,
+      name: user.name,
+    );
+  }
 
   /// scope -> identity
   /// https://github.com/reddit-archive/reddit/wiki/JSON#account-implements-created
@@ -93,10 +128,14 @@ class RedditAuthRedirect {
   /// See [RedditAuthError] for list of causes.
   final RedditAuthError? error;
 
-  /// A one-time use code that may be exchanged for a bearer token. See the next step
+  /// A one-time use code that may be exchanged for a bearer token.
   final String? code;
 
-  /// This value should be the same as the one sent in the initial authorization request, and your app should verify that it is, in fact, the same. Your app may also do anything else it wishes with the state info, such as parse a portion of it to determine what action to perform on behalf of the user.
+  /// This value should be the same as the one sent in the initial
+  /// authorization request, and your app should verify that it is, in fact,
+  /// the same. Your app may also do anything else it wishes with
+  /// the state info, such as parse a portion of it to determine
+  /// what action to perform on behalf of the user.
   final String? state;
 }
 

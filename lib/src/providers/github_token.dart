@@ -1638,8 +1638,8 @@ class GithubToken {
   final DateTime updated_at;
   final DateTime created_at;
   final String? fingerprint;
-  final Object? user;
-  final Object? installation;
+  final GithubTokenUser? user;
+  final GithubTokenInstallation? installation;
   final DateTime? expires_at;
 
   /// The authorization for an OAuth app, GitHub App, or a Personal Access Token.
@@ -1678,8 +1678,12 @@ class GithubToken {
       updated_at: DateTime.parse(json['updated_at'] as String),
       created_at: DateTime.parse(json['created_at'] as String),
       fingerprint: json['fingerprint'] as String?,
-      user: json['user'],
-      installation: json['installation'],
+      user: json['user'] == null
+          ? null
+          : GithubTokenUser.fromJson(json['user'] as Map),
+      installation: json['installation'] == null
+          ? null
+          : GithubTokenInstallation.fromJson(json['installation'] as Map),
       expires_at: json['expires_at'] == null
           ? null
           : DateTime.parse(json['expires_at'] as String),
@@ -1725,9 +1729,9 @@ class GithubToken {
     DateTime? created_at,
     String? fingerprint,
     bool fingerprintToNull = false,
-    Object? user,
+    GithubTokenUser? user,
     bool userToNull = false,
-    Object? installation,
+    GithubTokenInstallation? installation,
     bool installationToNull = false,
     DateTime? expires_at,
     bool expires_atToNull = false,

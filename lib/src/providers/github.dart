@@ -3,13 +3,14 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 import 'package:oauth/src/providers/github_token.dart';
 
 /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
-class GithubProvider extends OAuthProvider {
+class GithubProvider extends OAuthProvider<GithubToken> {
   /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
   const GithubProvider({
-    required super.clientIdentifier,
+    required super.clientId,
     required super.clientSecret,
   }) : super(
           authorizationEndpoint: 'https://github.com/login/oauth/authorize',
@@ -18,17 +19,26 @@ class GithubProvider extends OAuthProvider {
           // https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation
           // TODO: access_token param instead of token
           revokeTokenEndpoint:
-              'https://api.github.com/applications/$clientIdentifier/token',
+              'https://api.github.com/applications/$clientId/token',
           deviceAuthorizationEndpoint: 'https://github.com/login/device/code',
         );
 
   @override
-  List<GrantType> get supportedFlows =>
-      const [GrantType.authorization_code, GrantType.device_code];
+  String get defaultScopes => 'read:user user:email';
 
-  Future<GithubToken> getUser(HttpClient client, TokenResponse token) async {
+  @override
+  List<GrantType> get supportedFlows => const [
+        GrantType.authorizationCode,
+        GrantType.deviceCode,
+      ];
+
+  @override
+  Future<Result<AuthUser<GithubToken>, GetUserError>> getUser(
+    HttpClient client,
+    TokenResponse token,
+  ) async {
     final response = await client.post(
-      Uri.parse('https://api.github.com/applications/$clientIdentifier/token'),
+      Uri.parse('https://api.github.com/applications/$clientId/token'),
       headers: {
         'Accept': 'application/vnd.github+json',
         'Authorization': basicAuthHeader(),
@@ -39,9 +49,50 @@ class GithubProvider extends OAuthProvider {
       },
     );
     if (response.statusCode != 200) {
-      throw response;
+      return Err(GetUserError(response: response, token: token));
     }
-    return GithubToken.fromJson(jsonDecode(response.body) as Map);
+    final tokenData = jsonDecode(response.body) as Map<String, Object?>;
+    final userData = tokenData['user'] as Map?;
+
+    if (userData != null && userData['email'] == null) {
+      // If the user does not have a public email, fetch other emails with
+      // https://docs.github.com/en/rest/users/emails?apiVersion=2022-11-28#list-email-addresses-for-the-authenticated-user
+      final emailResponse = await client.get(
+        Uri.parse('https://api.github.com/user/emails'),
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        },
+      );
+
+      if (emailResponse.statusCode != 200) {
+        return Err(GetUserError(response: emailResponse, token: token));
+      }
+      final emails = jsonDecode(emailResponse.body) as List;
+      if (emails.isNotEmpty) {
+        userData['email'] =
+            GithubEmail.fromJson((emails.first as Map).cast()).email;
+      }
+    }
+    return Ok(parseUser(tokenData));
+  }
+
+  @override
+  AuthUser<GithubToken> parseUser(Map<String, Object?> userData) {
+    final token = GithubToken.fromJson(userData);
+    final user = token.user!;
+
+    return AuthUser(
+      provider: SupportedProviders.github,
+      userAppId: user.id.toString(),
+      emailIsVerified: user.email != null,
+      email: user.email,
+      name: user.name,
+      profilePicture: user.avatar_url,
+      phoneIsVerified: false,
+      rawUserData: userData,
+      providerUser: token,
+    );
   }
 }
 
@@ -271,3 +322,72 @@ enum DeviceFlowError {
   /// For more information, see "Device flow."
   device_flow_disabled,
 }
+
+// generated-dart-fixer-json{"from":"./github_email.schema.json","kind":"schema","md5Hash":"33otMXuVAM4DyJBAxMBFgA=="}
+
+/// Email
+class GithubEmail {
+  /// #### Example
+  /// ```json
+  /// "octocat@github.com"
+  /// ```
+  final String email;
+
+  /// #### Example
+  /// ```json
+  /// true
+  /// ```
+  final bool primary;
+
+  /// #### Example
+  /// ```json
+  /// true
+  /// ```
+  final bool verified;
+
+  /// #### Example
+  /// ```json
+  /// "public"
+  /// ```
+  final String? visibility;
+
+  const GithubEmail({
+    required this.email,
+    required this.primary,
+    required this.verified,
+    this.visibility,
+  });
+
+// generated-dart-fixer-start{"jsonKeyCase":"snake_case","md5Hash":"+yoEqmeJgxjYMIGerbn5Eg=="}
+
+  factory GithubEmail.fromJson(Map json) {
+    return GithubEmail(
+      email: json['email'] as String,
+      primary: json['primary'] as bool,
+      verified: json['verified'] as bool,
+      visibility: json['visibility'] as String?,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
+      'email': email,
+      'primary': primary,
+      'verified': verified,
+      'visibility': visibility,
+    };
+  }
+
+  @override
+  String toString() {
+    return "GithubEmail${{
+      "email": email,
+      "primary": primary,
+      "verified": verified,
+      "visibility": visibility,
+    }}";
+  }
+}
+
+
+// generated-dart-fixer-end{"jsonKeyCase":"snake_case","md5Hash":"+yoEqmeJgxjYMIGerbn5Eg=="}

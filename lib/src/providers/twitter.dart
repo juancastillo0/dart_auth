@@ -1,18 +1,19 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 import 'package:oauth/src/providers/twitter_user.dart';
 import 'package:oauth/src/providers/twitter_verify_credentials.dart';
 
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/user-access-token
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/authorization-code
 /// https://developer.twitter.com/en/docs/authentication/guides/v2-authentication-mapping
-class TwitterProvider extends OAuthProvider {
+class TwitterProvider extends OAuthProvider<TwitterUserData> {
   /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/user-access-token
   /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/authorization-code
   /// https://developer.twitter.com/en/docs/authentication/guides/v2-authentication-mapping
   const TwitterProvider({
-    required super.clientIdentifier,
+    required super.clientId,
     required super.clientSecret,
   }) : super(
           // TODO: response_type=code&code_challenge=dwdwa&code_challenge_method=plain
@@ -27,16 +28,17 @@ class TwitterProvider extends OAuthProvider {
   List<GrantType> get supportedFlows =>
       // S256 OR plain
       const [
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
         // App only bearer token https://developer.twitter.com/en/docs/authentication/api-reference/invalidate_bearer_token
         // revoke https://api.twitter.com/oauth2/invalidate_token
         // https://developer.twitter.com/en/docs/authentication/api-reference/token
-        GrantType.client_credentials,
+        GrantType.clientCredentials,
       ];
 
-  // scope: users.read tweet.read offline.access
-  //
+  @override
+  String get defaultScopes => 'users.read tweet.read offline.access';
+
   // url: "https://api.twitter.com/2/users/me",
   // user.fields: profile_image_url
   // https://developer.twitter.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me
@@ -44,7 +46,8 @@ class TwitterProvider extends OAuthProvider {
   static const defaultUserFields =
       'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,verified_type,withheld';
 
-  Future<TwitterUserData> getUser(
+  @override
+  Future<Result<AuthUser<TwitterUserData>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token, {
     String userFields = defaultUserFields,
@@ -74,16 +77,43 @@ class TwitterProvider extends OAuthProvider {
 
     final responseEmail = await responseEmailFuture;
     if (response.statusCode != 200) {
-      throw response;
+      return Err(GetUserError(response: response, token: token));
     }
     if (responseEmail.statusCode != 200) {
-      throw responseEmail;
+      return Err(GetUserError(response: responseEmail, token: token));
     }
-    final user = TwitterUser.fromJson(jsonDecode(response.body) as Map);
-    final userV1 = TwitterVerifyCredentials.fromJson(
-      jsonDecode(responseEmail.body) as Map,
+    final userData = jsonDecode(response.body) as Map;
+    final verifyCredentialsData = jsonDecode(responseEmail.body) as Map;
+
+    return Ok(
+      parseUser({
+        'user': userData,
+        'verifyCredentials': verifyCredentialsData,
+      }),
     );
-    return TwitterUserData(user: user, userV1: userV1);
+  }
+
+  @override
+  AuthUser<TwitterUserData> parseUser(Map<String, Object?> json) {
+    final user = TwitterUser.fromJson(json['user']! as Map);
+    final verifyCredentials =
+        TwitterVerifyCredentials.fromJson(json['verifyCredentials']! as Map);
+    return AuthUser(
+      emailIsVerified: verifyCredentials.email != null,
+      phoneIsVerified: false,
+      provider: SupportedProviders.twitter,
+      userAppId: user.id,
+      email: verifyCredentials.email,
+      name: user.name,
+      profilePicture: user.profile_image_url ??
+          verifyCredentials.profile_image_url_https ??
+          verifyCredentials.profile_image_url,
+      rawUserData: json,
+      providerUser: TwitterUserData(
+        user: user,
+        verifyCredentials: verifyCredentials,
+      ),
+    );
   }
 }
 
@@ -92,10 +122,15 @@ class TwitterProvider extends OAuthProvider {
 
 class TwitterUserData {
   final TwitterUser user;
-  final TwitterVerifyCredentials userV1;
+  final TwitterVerifyCredentials verifyCredentials;
 
   const TwitterUserData({
-    required this.userV1,
+    required this.verifyCredentials,
     required this.user,
   });
+
+  Map<String, Object?> toJson() => {
+        'user': user,
+        'verifyCredentials': verifyCredentials,
+      };
 }

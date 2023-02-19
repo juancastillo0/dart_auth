@@ -1,12 +1,13 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 
 /// https://discord.com/developers/docs/topics/oauth2
-class DiscordProvider extends OAuthProvider {
+class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
   /// https://discord.com/developers/docs/topics/oauth2
   const DiscordProvider({
-    required super.clientIdentifier,
+    required super.clientId,
     required super.clientSecret,
   }) : super(
           authorizationEndpoint: 'https://discord.com/oauth2/authorize',
@@ -16,18 +17,21 @@ class DiscordProvider extends OAuthProvider {
 
   @override
   List<GrantType> get supportedFlows => const [
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
         GrantType.tokenImplicit,
-        GrantType.client_credentials
+        GrantType.clientCredentials
       ];
 
-  /// https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes
-  /// scopes -> identify email
   /// https://discord.com/developers/docs/topics/oauth2#webhooks Send messages to a channel
   /// scopes -> webhook.incoming
 
-  Future<DiscordOAuth2Me> getUser(
+  /// https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes
+  @override
+  String get defaultScopes => 'identify email';
+
+  @override
+  Future<Result<AuthUser<DiscordOAuth2Me>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token,
   ) async {
@@ -40,9 +44,26 @@ class DiscordProvider extends OAuthProvider {
       },
     );
     if (response.statusCode != 200) {
-      throw response;
+      return Err(GetUserError(response: response, token: token));
     }
-    return DiscordOAuth2Me.fromJson(jsonDecode(response.body) as Map);
+    final data = jsonDecode(response.body) as Map<String, Object?>;
+    return Ok(parseUser(data));
+  }
+
+  @override
+  AuthUser<DiscordOAuth2Me> parseUser(Map<String, Object?> userData) {
+    final discordData = DiscordOAuth2Me.fromJson(userData);
+    final discordUser = discordData.user!;
+    return AuthUser(
+      emailIsVerified: discordUser.verified ?? false,
+      phoneIsVerified: false,
+      provider: SupportedProviders.discord,
+      rawUserData: userData,
+      userAppId: discordUser.id,
+      email: discordUser.email,
+      name: discordUser.username,
+      providerUser: discordData,
+    );
   }
 }
 

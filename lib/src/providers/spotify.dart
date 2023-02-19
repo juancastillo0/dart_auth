@@ -1,12 +1,13 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 
 /// https://developer.spotify.com/documentation/general/guides/authorization/
-class SpotifyProvider extends OAuthProvider {
+class SpotifyProvider extends OAuthProvider<SpotifyUser> {
   /// https://developer.spotify.com/documentation/general/guides/authorization/
   const SpotifyProvider({
-    required super.clientIdentifier,
+    required super.clientId,
     required super.clientSecret,
   }) : super(
           authorizationEndpoint: 'https://accounts.spotify.com/authorize',
@@ -18,17 +19,19 @@ class SpotifyProvider extends OAuthProvider {
   @override
   List<GrantType> get supportedFlows => const [
         // TODO: code_challenge_method=S256
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
         GrantType.tokenImplicit,
-        GrantType.client_credentials
+        GrantType.clientCredentials
       ];
 
   /// https://developer.spotify.com/documentation/general/guides/authorization/scopes/
-  /// scopes -> user-read-private user-read-email
-  ///
+  @override
+  String get defaultScopes => 'user-read-private user-read-email';
+
   /// https://developer.spotify.com/documentation/web-api/reference/#/operations/get-current-users-profile
-  Future<SpotifyUser> getUser(
+  @override
+  Future<Result<AuthUser<SpotifyUser>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token,
   ) async {
@@ -41,9 +44,25 @@ class SpotifyProvider extends OAuthProvider {
       },
     );
     if (response.statusCode != 200) {
-      throw response;
+      return Err(GetUserError(response: response, token: token));
     }
-    return SpotifyUser.fromJson(jsonDecode(response.body) as Map);
+    final userData = jsonDecode(response.body) as Map<String, Object>;
+    return Ok(parseUser(userData));
+  }
+
+  @override
+  AuthUser<SpotifyUser> parseUser(Map<String, Object?> userData) {
+    final user = SpotifyUser.fromJson(userData);
+    return AuthUser(
+      emailIsVerified: true,
+      phoneIsVerified: false,
+      provider: SupportedProviders.spotify,
+      rawUserData: userData,
+      userAppId: user.id,
+      email: user.email,
+      name: user.display_name,
+      providerUser: user,
+    );
   }
 }
 
@@ -59,6 +78,7 @@ class SpotifyAuthParams with AuthParamsBaseMixin {
   /// already approved the application may be automatically redirected
   /// to the URI specified by redirect_uri. If true, the user will not be
   /// automatically redirected and will have to approve the app again.
+  @override
   final String? show_dialog;
 
   @override
