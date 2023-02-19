@@ -1,10 +1,11 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 import 'package:oauth/src/providers/facebook_user.dart';
 
 /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
-class FacebookProvider extends OAuthProvider {
+class FacebookProvider extends OAuthProvider<FacebookUser> {
   /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
   const FacebookProvider({
     required super.clientIdentifier,
@@ -23,27 +24,29 @@ class FacebookProvider extends OAuthProvider {
 
   // S256 and plain and id_token for OpenID Connect
   // comma separated scopes
-  String get scopes => 'openid,public_profile,email';
+  @override
+  String get defaultScopes => 'openid,public_profile,email';
 
   // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/
 
   // Cancellation webhook
 
   @override
-  HttpAuthMethod get authMethod => HttpAuthMethod.formUrlencoded;
+  HttpAuthMethod get authMethod => HttpAuthMethod.formUrlencodedBody;
 
   @override
   List<GrantType> get supportedFlows => const [
-        GrantType.authorization_code,
-        GrantType.client_credentials,
-        GrantType.device_code
+        GrantType.authorizationCode,
+        GrantType.clientCredentials,
+        GrantType.deviceCode
       ];
 
   /// id,first_name,last_name,middle_name,name,name_format,picture,short_name,email,install_type,installed,is_guest_user
   static const defaultFields =
       'id,first_name,last_name,middle_name,name,name_format,picture,short_name,email';
 
-  Future<Result<FacebookUser, GetUserError>> getUser(
+  @override
+  Future<Result<AuthUser<FacebookUser>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token, {
     String fields = defaultFields,
@@ -61,7 +64,8 @@ class FacebookProvider extends OAuthProvider {
     }
 
     try {
-      return Ok(FacebookUser.fromJson(jsonDecode(response.body) as Map));
+      final userData = jsonDecode(response.body) as Map<String, Object?>;
+      return Ok(parseUser(userData));
     } catch (e, s) {
       return Err(
         GetUserError(
@@ -72,6 +76,22 @@ class FacebookProvider extends OAuthProvider {
         ),
       );
     }
+  }
+
+  @override
+  AuthUser<FacebookUser> parseUser(Map<String, Object?> userData) {
+    final user = FacebookUser.fromJson(userData);
+    return AuthUser(
+      emailIsVerified: true,
+      phoneIsVerified: false,
+      provider: SupportedProviders.facebook,
+      providerUser: user,
+      rawUserData: userData,
+      userAppId: user.id,
+      email: user.email,
+      name: user.name,
+      profilePicture: user.profile_pic ?? user.picture.data.url,
+    );
   }
 }
 

@@ -1,73 +1,92 @@
 import 'package:oauth/oauth.dart';
-import 'package:oauth/src/openid_claims.dart';
+import 'package:oauth/providers.dart';
 import 'package:oauth/src/openid_configuration.dart';
-
-export 'package:oauth/src/openid_claims.dart';
 
 /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_rest_api
 /// https://developer.apple.com/documentation/sign_in_with_apple/configuring_your_environment_for_sign_in_with_apple
 /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_js/incorporating_sign_in_with_apple_into_other_platforms
-class AppleProvider extends OAuthProvider {
+class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
   /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_rest_api
   /// https://developer.apple.com/documentation/sign_in_with_apple/configuring_your_environment_for_sign_in_with_apple
   /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_js/incorporating_sign_in_with_apple_into_other_platforms
-  const AppleProvider({
-    required super.clientIdentifier,
+  AppleProvider({
+    required super.clientId,
     required super.clientSecret,
   }) : super(
-          authorizationEndpoint: 'https://appleid.apple.com/auth/authorize',
-          tokenEndpoint: 'https://appleid.apple.com/auth/token',
-          revokeTokenEndpoint: 'https://appleid.apple.com/auth/revoke',
+          openIdConfig: const OpenIdConfiguration(
+            // https://appleid.apple.com/.well-known/openid-configuration
+            issuer: 'https://appleid.apple.com',
+            authorizationEndpoint: 'https://appleid.apple.com/auth/authorize',
+            jwksUri: 'https://appleid.apple.com/auth/keys',
+            tokenEndpoint: 'https://appleid.apple.com/auth/token',
+            revocationEndpoint: 'https://appleid.apple.com/auth/revoke',
+            responseTypesSupported: ['code'],
+            grantTypesSupported: ['authorization_code', 'refresh_token'],
+            responseModesSupported: ['query', 'fragment', 'form_post'],
+            idTokenSigningAlgValuesSupported: ['RS256'],
+            tokenEndpointAuthMethodsSupported: ['client_secret_post'],
+            scopesSupported: ['openid', 'name', 'email'],
+            subjectTypesSupported: ['pairwise'],
+            claimsSupported: [
+              'iss',
+              'sub',
+              'aud',
+              'iat',
+              'exp',
+              'nonce',
+              'nonce_supported',
+              'email',
+              'email_verified',
+              'is_private_email',
+              'real_user_status',
+              'transfer_sub',
+              'transaction',
+            ],
+          ),
         );
-
-  OpenIdConfiguration get openIdConfiguration => const OpenIdConfiguration(
-        issuer: 'https://appleid.apple.com',
-        authorizationEndpoint: 'https://appleid.apple.com/auth/authorize',
-        jwksUri: 'https://appleid.apple.com/auth/keys',
-        tokenEndpoint: 'https://appleid.apple.com/auth/token',
-        revocationEndpoint: 'https://appleid.apple.com/auth/revoke',
-        responseTypesSupported: ['code', 'code id_token'],
-        grantTypesSupported: ['authorization_code', 'refresh_token'],
-        responseModesSupported: ['query', 'fragment', 'form_post'],
-        idTokenSigningAlgValuesSupported: ['ES256'],
-        tokenEndpointAuthMethodsSupported: ['client_secret_post'],
-        scopesSupported: ['name', 'email'],
-        claimsSupported: [
-          'iss',
-          'sub',
-          'aud',
-          'iat',
-          'exp',
-          'nonce',
-          'transaction',
-          'nonce_supported',
-          'email',
-          'email_verified',
-          'is_private_email',
-          'real_user_status',
-          'transfer_sub',
-        ],
-      );
 
   @override
   List<GrantType> get supportedFlows => const [
         // code id_token
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
       ];
 
   // TODO: webhooks https://developer.apple.com/documentation/sign_in_with_apple/processing_changes_for_sign_in_with_apple_accounts
 
-  String get scope => 'name email';
+  // TODO: openid shows up in the .well-known/openid-configuration, but not in the docs , response_type='code id_token' shows in the docs, but not in the configuration
+  @override
+  String get defaultScopes => 'openid name email';
 
-  Future<OpenIdClaims> getUser(
+  @override
+  Future<Result<AuthUser<AppleClaims>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token,
   ) async {
-    final jwt = JsonWebToken.unverified(token.id_token!);
-    final claims = OpenIdClaims.fromJson(jwt.claims.toJson());
+    final result = await OpenIdConnectProvider.getOpenIdConnectUser(
+      token: token,
+      clientId: clientId,
+      jwksUri: openIdConfig.jwksUri,
+      issuer: openIdConfig.issuer,
+    );
+    return result.map((claims) => parseUser(claims.toJson()));
+  }
 
-    return claims;
+  @override
+  AuthUser<AppleClaims> parseUser(Map<String, Object?> userData) {
+    final appleClaims = AppleClaims.fromJson(userData);
+
+    return AuthUser(
+      emailIsVerified: appleClaims.email_verified,
+      phoneIsVerified: false,
+      provider: SupportedProviders.apple,
+      providerUser: appleClaims,
+      rawUserData: userData,
+      userAppId: appleClaims.sub,
+      email: appleClaims.email,
+      name: appleClaims.aud,
+      openIdClaims: OpenIdClaims.fromJson(userData),
+    );
   }
 }
 
@@ -223,8 +242,10 @@ class AppleClaims {
       nonce: json['nonce'] as String,
       nonce_supported: json['nonce_supported'] as bool,
       email: json['email'] as String?,
-      email_verified: json['email_verified'] as bool,
-      is_private_email: json['is_private_email'] as bool,
+      email_verified:
+          json['email_verified'] == 'true' || json['email_verified'] == true,
+      is_private_email: json['is_private_email'] == 'true' ||
+          json['is_private_email'] == true,
       real_user_status: json['real_user_status'] as int,
       transfer_sub: json['transfer_sub'] as String,
     );

@@ -4,14 +4,24 @@
 // https://learn.microsoft.com/en-us/azure/active-directory-b2c/tutorial-create-tenant
 
 import 'package:oauth/oauth.dart';
-import 'package:oauth/src/openid_claims.dart';
+import 'package:oauth/providers.dart';
 
 export 'package:oauth/src/openid_claims.dart';
 
-/// https://discord.com/developers/docs/topics/oauth2
-class MicrosoftProvider extends OAuthProvider {
-  /// https://discord.com/developers/docs/topics/oauth2
+/// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
+class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
+  /// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
+  /// TODO: https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#send-a-sign-out-request
   MicrosoftProvider({
+    required super.openIdConfig,
+    required super.clientId,
+    required super.clientSecret,
+  });
+
+  static Future<MicrosoftProvider> retrieve({
+    required String clientId,
+    required String clientSecret,
+
     /// The {tenant} value in the path of the request can be used to
     /// control who can sign into the application. Valid values are common,
     /// organizations, consumers, and tenant identifiers. For guest scenarios
@@ -19,45 +29,53 @@ class MicrosoftProvider extends OAuthProvider {
     /// provide the tenant identifier to sign them into the resource tenant.
     /// For more information, see Endpoints.
     MicrosoftTenant tenant = MicrosoftTenant.common,
-    required super.clientIdentifier,
-    required super.clientSecret,
-  }) : super(
-          authorizationEndpoint:
-              'https://login.microsoftonline.com/${tenant.value}/oauth2/v2.0/authorize',
-          tokenEndpoint:
-              'https://login.microsoftonline.com/${tenant.value}/oauth2/v2.0/token',
-          // TODO: https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#send-a-sign-out-request
-          revokeTokenEndpoint: null,
-          // poll the /token endpoint
-          deviceAuthorizationEndpoint:
-              'https://login.microsoftonline.com/${tenant.value}/oauth2/v2.0/devicecode',
-          wellKnownOpenIdEndpoint:
-              'https://login.microsoftonline.com/${tenant.value}/v2.0/.well-known/openid-configuration',
-        );
+  }) async =>
+      MicrosoftProvider(
+        openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
+          'https://login.microsoftonline.com/${tenant.value}/v2.0/.well-known/openid-configuration',
+        ),
+        clientId: clientId,
+        clientSecret: clientSecret,
+      );
+
+  @override
+  String get defaultScopes => 'openid email profile offline_access';
 
   @override
   List<GrantType> get supportedFlows => const [
         // TODO: "response_type=id_token%20token"
-        GrantType.authorization_code,
-        GrantType.refresh_token,
+        GrantType.authorizationCode,
+        GrantType.refreshToken,
         GrantType.tokenImplicit,
-        GrantType.client_credentials,
-        GrantType.device_code,
+        GrantType.clientCredentials,
+        GrantType.deviceCode,
         GrantType.password,
       ];
 
-// plain and S256
-// Cancel url https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#single-sign-out
+  // plain and S256
+  // Cancel url https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#single-sign-out
 
   /// https://learn.microsoft.com/en-us/azure/active-directory/develop/userinfo
-  Future<OpenIdClaims> getUser(
+  @override
+  Future<Result<AuthUser<OpenIdClaims>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token,
   ) async {
-    final jwt = JsonWebToken.unverified(token.id_token!);
-    final claims = OpenIdClaims.fromJson(jwt.claims.toJson());
+    final result = await OpenIdConnectProvider.getOpenIdConnectUser(
+      token: token,
+      clientId: clientId,
+      jwksUri: openIdConfig.jwksUri,
+      issuer: openIdConfig.issuer,
+    );
+    return result.map((claims) => parseUser(claims.toJson()));
+  }
 
-    return claims;
+  @override
+  AuthUser<OpenIdClaims> parseUser(Map<String, Object?> userData) {
+    return AuthUser.fromClaims(
+      SupportedProviders.microsoft,
+      OpenIdClaims.fromJson(userData),
+    );
   }
 }
 

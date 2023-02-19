@@ -83,7 +83,49 @@ abstract class OAuthProvider<U> {
   Map<String, String?> mapTokenParamsToQueryParams(TokenParams params) =>
       params.toJson();
 
-      'Basic ${base64Encode(utf8.encode('$clientIdentifier:$clientSecret'))}';
+  ///
+  Future<DeviceCodeResponse?> getDeviceCode(
+    HttpClient client, {
+    String? scope,
+    String? redirectUri,
+    Map<String, String?>? otherParams,
+  }) async {
+    if (deviceAuthorizationEndpoint == null) return null;
+    final response = await client.post(
+      Uri.parse(deviceAuthorizationEndpoint!),
+      body: {
+        'client_id': clientId,
+        'scope': scope ?? defaultScopes,
+        if (redirectUri != null) 'redirect_uri': redirectUri,
+        ...?otherParams,
+      },
+    );
+    final jsonData = jsonDecode(response.body) as Map<String, Object?>;
+    return DeviceCodeResponse.fromJson(jsonData);
+  }
+
+  ///
+  Future<Result<TokenResponse, OAuthErrorResponse>> pollDeviceCodeToken(
+    HttpClient client, {
+    required String deviceCode,
+    Map<String, String?>? otherParams,
+  }) async {
+    final response = await client.post(
+      Uri.parse(tokenEndpoint),
+      body: {
+        'grant_type': GrantType.deviceCode.value,
+        'device_code': deviceCode,
+        'client_id': clientId,
+        ...?otherParams,
+      },
+    );
+    final jsonData = jsonDecode(response.body) as Map<String, Object?>;
+    if (response.statusCode == 200) {
+      return Ok(TokenResponse.fromJson(jsonData));
+    } else {
+      return Err(OAuthErrorResponse.fromJson(jsonData));
+    }
+  }
 
   Future<ParsedResponse> sendHttpPost(
     HttpClient client,
@@ -124,9 +166,130 @@ class ParsedResponse {
   ParsedResponse(this.response, this.parsedBody);
 }
 
-  HttpAuthMethod get authMethod => HttpAuthMethod.basic;
-  CodeChallengeMethod get codeChallengeMethod => CodeChallengeMethod.S256;
-  List<GrantType> get supportedFlows;
+abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
+  ///
+  OpenIdConnectProvider({
+    required this.openIdConfig,
+    required super.clientId,
+    required super.clientSecret,
+  }) : super(
+          authorizationEndpoint: openIdConfig.authorizationEndpoint,
+          revokeTokenEndpoint: openIdConfig.revocationEndpoint,
+          tokenEndpoint: openIdConfig.tokenEndpoint!,
+          deviceAuthorizationEndpoint: openIdConfig.deviceAuthorizationEndpoint,
+        );
+
+  final OpenIdConfiguration openIdConfig;
+
+  @override
+  HttpAuthMethod get authMethod =>
+      openIdConfig.tokenEndpointAuthMethodsSupported == null
+          ? super.authMethod
+          : (openIdConfig.tokenEndpointAuthMethodsSupported!
+                  .contains('client_secret_basic')
+              ? HttpAuthMethod.basicHeader
+              : HttpAuthMethod.formUrlencodedBody);
+  @override
+  CodeChallengeMethod get codeChallengeMethod =>
+      openIdConfig.codeChallengeMethodsSupported == null
+          ? super.codeChallengeMethod
+          : (openIdConfig.codeChallengeMethodsSupported!.contains('S256')
+              ? CodeChallengeMethod.S256
+              : CodeChallengeMethod.plain);
+  @override
+  List<GrantType> get supportedFlows => openIdConfig.grantTypesSupported!
+      .map(
+        (e) {
+          return e == 'implicit'
+              ? GrantType.tokenImplicit
+              : GrantType.values
+                  .cast<GrantType?>()
+                  .firstWhere((g) => g?.value == e, orElse: () => null);
+        },
+      )
+      .whereType<GrantType>()
+      .toList();
+
+  /// Retrieves the user information given an authenticated [client]
+  /// and the [token] from [tokenEndpoint].
+  static Future<Result<OpenIdClaims, GetUserError>> getOpenIdConnectUser({
+    required TokenResponse token,
+    required String clientId,
+    required String? jwksUri,
+    required String issuer,
+  }) async {
+    final jwt = JsonWebToken.unverified(token.id_token!);
+    final claims = OpenIdClaims.fromJson(jwt.claims.toJson());
+
+    final keyStore = JsonWebKeyStore();
+    if (jwksUri != null) {
+      keyStore.addKeySetUrl(Uri.parse(jwksUri));
+    }
+
+    if (!await jwt.verify(keyStore)) {
+      return Err(
+        GetUserError(
+          token: token,
+          response: null,
+          message: 'Could not verify the idToken',
+        ),
+      );
+    }
+    final errors = claims
+        .validate(
+          expiryTolerance: const Duration(seconds: 30),
+          clientId: clientId,
+          issuer: Uri.parse(issuer),
+          // TODO: should be use it from token?
+          nonce: token.nonce,
+        )
+        .toList();
+
+    if (errors.isNotEmpty) {
+      return Err(
+        GetUserError(
+          token: token,
+          response: null,
+          message: 'Could not validate the idToken claims',
+          sourceError: errors,
+        ),
+      );
+    }
+    return Ok(claims);
+  }
+
+  static Future<OpenIdConfiguration> retrieveConfiguration(
+    String wellKnown,
+  ) async {
+    final client = HttpClient();
+    final responseMetadata = await client.get(Uri.parse(wellKnown));
+
+    if (responseMetadata.statusCode != 200) {
+      throw Error();
+    }
+    final json = jsonDecode(responseMetadata.body) as Map;
+    final config = OpenIdConfiguration.fromJson(json);
+    return config;
+  }
+
+  /// If this provider supports OpenIDConnect and has a configuration endpoint
+  // final String? wellKnownOpenIdEndpoint;
+
+  // OpenIdConfiguration? _openIdConfig;
+  // OpenIdConfiguration? get openIdConfig => _openIdConfig;
+  // bool get pendingRetrieveOpenIdConfig =>
+  //     openIdConfig == null && wellKnownOpenIdEndpoint != null;
+
+  // ///
+  // FutureOr<OpenIdConfiguration?> retrieveOpenIdConfig() {
+  //   if (!pendingRetrieveOpenIdConfig) {
+  //     return openIdConfig;
+  //   }
+  //   return retrieveConfiguration(wellKnownOpenIdEndpoint!).then((value) {
+  //     _openIdConfig = value;
+  //     return value;
+  //   });
+  // }
 }
 
 enum HttpAuthMethod {
