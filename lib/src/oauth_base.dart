@@ -38,15 +38,15 @@ enum HttpAuthMethod {
   /// Header: "Authorization: Basic <credentials>",
   /// where credentials is the Base64 encoding of ID and password
   /// joined by a single colon :. "your_client_id:your_client_secret"
-  basic,
+  basicHeader,
 
   /// Header: "Content-Type: application/x-www-form-urlencoded"
   /// Body: "client_id=your_client_id&client_secret=your_client_secret"
-  formUrlencoded
+  formUrlencodedBody
 }
 
 abstract class UrlParams {
-  /// Returns a Map with the url query parameters
+  /// Returns a Map with the url query parameters represented by this
   Map<String, String?> toJson();
 }
 
@@ -58,8 +58,11 @@ class AuthParams implements UrlParams {
     required this.redirect_uri,
     required this.scope,
     required this.state,
+    this.nonce,
     this.code_challenge,
     this.code_challenge_method,
+    this.show_dialog,
+    this.otherParams,
   });
 
   final String client_id;
@@ -72,6 +75,18 @@ class AuthParams implements UrlParams {
   final String? code_challenge;
   final String? code_challenge_method;
 
+  final String? nonce;
+
+  /// Whether or not to force the user to approve the app again
+  /// if they’ve already done so. If false (default), a user who has
+  /// already approved the application may be automatically redirected
+  /// to the URI specified by redirect_uri. If true, the user will not be
+  /// automatically redirected and will have to approve the app again.
+  /// Providers: spotify
+  final String? show_dialog;
+
+  final Map<String, String?>? otherParams;
+
   @override
   Map<String, String?> toJson() => {
         'client_id': client_id,
@@ -79,9 +94,12 @@ class AuthParams implements UrlParams {
         'redirect_uri': redirect_uri,
         'scope': scope,
         'state': state,
+        'nonce': nonce,
         if (code_challenge != null) 'code_challenge': code_challenge,
         if (code_challenge_method != null)
           'code_challenge_method': code_challenge_method,
+        if (show_dialog != null) 'show_dialog': show_dialog,
+        ...?otherParams
       };
 }
 
@@ -107,15 +125,15 @@ mixin AuthParamsBaseMixin implements AuthParams {
 
 enum GrantType {
   /// response_type=code
-  authorization_code('authorization_code'),
+  authorizationCode('authorization_code'),
 
   /// response_type=code
-  refresh_token('refresh_token'),
+  refreshToken('refresh_token'),
 
   /// deviceAuthorizationEndpoint
-  device_code('urn:ietf:params:oauth:grant-type:device_code'),
+  deviceCode('urn:ietf:params:oauth:grant-type:device_code'),
   password('password'),
-  client_credentials('client_credentials'),
+  clientCredentials('client_credentials'),
 
   /// response_type=token and grant_type=null
   tokenImplicit('token'),
@@ -136,16 +154,18 @@ class TokenParams implements UrlParams {
     required this.redirect_uri,
     required this.grant_type,
     this.code_verifier,
+    this.otherParams,
   });
 
   const TokenParams.refreshToken({
     required this.client_id,
     required this.client_secret,
     required String refreshToken,
+    this.otherParams,
   })  : code = refreshToken,
         redirect_uri = '',
         code_verifier = null,
-        grant_type = GrantType.refresh_token;
+        grant_type = GrantType.refreshToken;
 
   /// The authorization code that is returned from the initial request.
   final String code;
@@ -167,22 +187,31 @@ class TokenParams implements UrlParams {
   /// authorization_code, refresh_token, token or password
   final GrantType grant_type;
 
+  /// The code verifier When using a code_challenge to retrieve the
+  /// authorization code in Proof Key for Code Exchange (PKCE).
   final String? code_verifier;
+
+  /// Other parameters to be sent to the token endpoint
+  final Map<String, String?>? otherParams;
 
   @override
   Map<String, String> toJson() => {
         'client_id': client_id,
         'client_secret': client_secret,
         'grant_type': grant_type.value,
-        if (grant_type == GrantType.authorization_code)
+        if (grant_type == GrantType.authorizationCode)
           'code': code
-        else if (grant_type == GrantType.refresh_token)
+        else if (grant_type == GrantType.refreshToken)
           'refresh_token': code,
-        if (grant_type == GrantType.authorization_code ||
+        if (grant_type == GrantType.authorizationCode ||
             // TODO: check flow for GrantType.password
             grant_type == GrantType.password)
           'redirect_uri': redirect_uri,
         if (code_verifier != null) 'code_verifier': code_verifier!,
+        if (otherParams != null)
+          ...Map.fromEntries(
+            otherParams!.entries.where((element) => element.value != null),
+          ).cast()
       };
 }
 
@@ -202,8 +231,14 @@ mixin TokenParamsBaseMixin implements TokenParams {
   GrantType get grant_type => baseTokenParams.grant_type;
 }
 
+DateTime parseExpiresAt(Map<dynamic, dynamic> json) =>
+    json['expires_at'] != null
+        ? DateTime.parse(json['expires_at'] as String)
+        : DateTime.now().add(Duration(seconds: json['expires_in'] as int));
+
+/// The parsed body of the token OAuth2 endpoint
 class TokenResponse {
-  ///
+  /// The parsed body of the token OAuth2 endpoint
   const TokenResponse({
     required this.access_token,
     required this.expires_in,
@@ -211,11 +246,18 @@ class TokenResponse {
     required this.scope,
     required this.token_type,
     required this.refresh_token,
+    required this.expires_at,
     this.state,
+    this.rawJson,
+    this.nonce,
   });
 
-  ///
-  factory TokenResponse.fromJson(Map<dynamic, dynamic> json) => TokenResponse(
+  /// Parses the token response body
+  factory TokenResponse.fromJson(
+    Map<dynamic, dynamic> json, {
+    String? nonce,
+  }) =>
+      TokenResponse(
         access_token: json['access_token'] as String,
         expires_in: json['expires_in'] as int,
         id_token: json['id_token'] as String?,
@@ -223,6 +265,9 @@ class TokenResponse {
         token_type: json['token_type'] as String,
         refresh_token: json['refresh_token'] as String?,
         state: json['state'] as String?,
+        expires_at: parseExpiresAt(json),
+        rawJson: json.cast(),
+        nonce: nonce,
       );
 
   /// A token that can be sent to a Google API.
@@ -234,6 +279,9 @@ class TokenResponse {
 
   /// The remaining lifetime of the access token in seconds.
   final int expires_in;
+
+  /// The date where the [access_token] expires. Computed from [expires_in]
+  final DateTime expires_at;
 
   /// The scopes of access granted by the access_token expressed as a
   /// list of space-delimited, case-sensitive strings.
@@ -249,4 +297,11 @@ class TokenResponse {
 
   /// TODO: for implicint flow
   final String? state;
+
+  /// The JSON map with the values retrieved from the endpoint.
+  final Map<String, Object?>? rawJson;
+
+  // TODO: should be save it here?
+  /// The nonce sent to the provider to verify the [id_token]
+  final String? nonce;
 }
