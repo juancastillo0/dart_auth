@@ -13,8 +13,12 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
   /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/authorization-code
   /// https://developer.twitter.com/en/docs/authentication/guides/v2-authentication-mapping
   const TwitterProvider({
+    super.providerId = ImplementedProviders.twitter,
     required super.clientId,
     required super.clientSecret,
+    super.config = const OAuthProviderConfig(
+      scope: 'users.read tweet.read offline.access',
+    ),
   }) : super(
           // TODO: response_type=code&code_challenge=dwdwa&code_challenge_method=plain
           authorizationEndpoint: 'https://twitter.com/i/oauth2/authorize',
@@ -36,13 +40,8 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
         GrantType.clientCredentials,
       ];
 
-  @override
-  String get defaultScopes => 'users.read tweet.read offline.access';
-
-  // url: "https://api.twitter.com/2/users/me",
-  // user.fields: profile_image_url
-  // https://developer.twitter.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me
-
+  /// The default user fields for url: "https://api.twitter.com/2/users/me",
+  /// https://developer.twitter.com/en/docs/twitter-api/users/lookup/api-reference/get-users-me
   static const defaultUserFields =
       'created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,verified_type,withheld';
 
@@ -93,6 +92,8 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
     );
   }
 
+  /// Get user email https://stackoverflow.com/questions/22627083/can-we-get-email-id-from-twitter-oauth-api
+  /// https://developer.twitter.com/en/docs/twitter-api/v1/accounts-and-users/manage-account-settings/api-reference/get-account-verify_credentials
   @override
   AuthUser<TwitterUserData> parseUser(Map<String, Object?> json) {
     final user = TwitterUser.fromJson(json['user']! as Map);
@@ -101,8 +102,8 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
     return AuthUser(
       emailIsVerified: verifyCredentials.email != null,
       phoneIsVerified: false,
-      provider: SupportedProviders.twitter,
-      userAppId: user.id,
+      providerId: providerId,
+      providerUserId: user.id,
       email: verifyCredentials.email,
       name: user.name,
       profilePicture: user.profile_image_url ??
@@ -117,13 +118,16 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
   }
 }
 
-/// Get user email https://stackoverflow.com/questions/22627083/can-we-get-email-id-from-twitter-oauth-api
+/// https://developer.twitter.com/en/docs/twitter-api/data-dictionary/object-model/user
 /// https://developer.twitter.com/en/docs/twitter-api/v1/accounts-and-users/manage-account-settings/api-reference/get-account-verify_credentials
-
 class TwitterUserData {
+  /// https://developer.twitter.com/en/docs/twitter-api/data-dictionary/object-model/user
   final TwitterUser user;
+
+  /// https://developer.twitter.com/en/docs/twitter-api/v1/accounts-and-users/manage-account-settings/api-reference/get-account-verify_credentials
   final TwitterVerifyCredentials verifyCredentials;
 
+  /// https://developer.twitter.com/en/docs/twitter-api/data-dictionary/object-model/user
   const TwitterUserData({
     required this.verifyCredentials,
     required this.user,

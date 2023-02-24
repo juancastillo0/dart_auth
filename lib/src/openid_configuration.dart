@@ -329,6 +329,7 @@ class OpenIdConfiguration {
   /// security context. It accepts postMessage requests from the relevant RP
   /// iframe and uses postMessage to post back the login status of the End-User at
   /// the OP.
+  /// https://openid.net/specs/openid-connect-session-1_0.html
   final String? checkSessionIframe;
 
   /// REQUIRED for openid-connect-session. URL at the OP to which an RP can
