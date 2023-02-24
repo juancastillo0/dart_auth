@@ -161,7 +161,7 @@ abstract class OAuthProvider<U> {
       Uri.parse(deviceAuthorizationEndpoint!),
       body: {
         'client_id': clientId,
-        'scope': scope ?? defaultScopes,
+        'scope': scope ?? config.scope,
         if (redirectUri != null) 'redirect_uri': redirectUri,
         ...?otherParams,
       },
@@ -176,37 +176,32 @@ abstract class OAuthProvider<U> {
     required String deviceCode,
     Map<String, String?>? otherParams,
   }) async {
-    final response = await client.post(
-      Uri.parse(tokenEndpoint),
-      body: {
+    return sendTokenHttpPost(
+      client,
+      {
         'grant_type': GrantType.deviceCode.value,
         'device_code': deviceCode,
         'client_id': clientId,
         ...?otherParams,
       },
     );
-    final jsonData = jsonDecode(response.body) as Map<String, Object?>;
-    if (response.statusCode == 200) {
-      return Ok(TokenResponse.fromJson(jsonData));
-    } else {
-      return Err(OAuthErrorResponse.fromJson(jsonData));
-    }
   }
 
   Stream<Result<TokenResponse, OAuthErrorResponse>> subscribeToDeviceCodeState(
-    HttpClient client,
-    DeviceCodeResponse deviceCode, {
+    HttpClient client, {
+    required String deviceCode,
+    required Duration interval,
     Map<String, String?>? otherParams,
   }) {
     final controller =
         StreamController<Result<TokenResponse, OAuthErrorResponse>>();
 
-    Duration duration = Duration(seconds: deviceCode.interval);
+    Duration duration = interval;
     Timer timer;
     Future<void> callback() async {
       final response = await pollDeviceCodeToken(
         client,
-        deviceCode: deviceCode.deviceCode,
+        deviceCode: deviceCode,
         otherParams: otherParams,
       );
       if (controller.isClosed) return;
@@ -233,8 +228,40 @@ abstract class OAuthProvider<U> {
     return controller.stream;
   }
 
+  Future<Result<TokenResponse, OAuthErrorResponse>> getClientCredentials(
+    HttpClient client, {
+    String? scope,
+    Map<String, String?>? otherParams,
+  }) async {
+    return sendTokenHttpPost(client, {
+      'grant_type': GrantType.clientCredentials.value,
+      if (scope != null) 'scope': scope,
+      ...?otherParams,
+    });
+  }
+
+  Future<Result<TokenResponse, OAuthErrorResponse>>
+      getResourceOwnerPasswordCredentials(
+    HttpClient client, {
+    required String username,
+    required String password,
+    String? scope,
+    Map<String, String?>? otherParams,
+  }) async {
+    return sendTokenHttpPost(client, {
+      'grant_type': GrantType.password.value,
+      'username': username,
+      'password': password,
+      if (scope != null) 'scope': scope,
+      ...?otherParams,
+    });
+  }
+
+  // TODO: JWT bearer flow
+
   Future<ParsedResponse> sendHttpPost(
     HttpClient client,
+    Uri uri,
     Map<String, String?> params,
   ) async {
     if (authMethod == HttpAuthMethod.formUrlencodedBody) {
@@ -242,7 +269,7 @@ abstract class OAuthProvider<U> {
       params['client_secret'] = clientSecret;
     }
     final response = await client.post(
-      Uri.parse(tokenEndpoint),
+      uri,
       headers: {
         Headers.accept: '${Headers.appJson}, ${Headers.appFormUrlEncoded}',
         Headers.contentType: Headers.appFormUrlEncoded,
@@ -262,6 +289,29 @@ abstract class OAuthProvider<U> {
     } catch (_) {}
 
     return ParsedResponse(response, parsedBody);
+  }
+
+  Future<Result<TokenResponse, OAuthErrorResponse>> sendTokenHttpPost(
+    HttpClient client,
+    Map<String, String?> params,
+  ) async {
+    final parsedResponse = await sendHttpPost(
+      client,
+      Uri.parse(tokenEndpoint),
+      params,
+    );
+
+    Object? parsedBody = parsedResponse.parsedBody;
+    if (parsedBody is List) {
+      parsedBody = parsedBody[0];
+    }
+
+    final jsonData = parsedBody! as Map<String, Object?>;
+    if (parsedResponse.response.statusCode == 200) {
+      return Ok(TokenResponse.fromJson(jsonData));
+    } else {
+      return Err(OAuthErrorResponse.fromJson(jsonData));
+    }
   }
 }
 

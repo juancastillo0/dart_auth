@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 import 'package:oauth/oauth.dart';
 
@@ -18,10 +16,12 @@ class OAuthFlow<U> {
     String? loginHint,
     Map<String, String?>? otherParams,
     String? scope,
+    String? state,
     OAuthResponseType responseType = OAuthResponseType.code,
+    String? sessionId,
   }) async {
-    scope ??= provider.defaultScopes;
-    final state = generateStateToken();
+    scope ??= provider.config.scope;
+    state ??= generateStateToken();
     final nonce = scope.split(RegExp('[ ,]')).contains('openid')
         ? generateStateToken()
         : null;
@@ -50,18 +50,21 @@ class OAuthFlow<U> {
       codeVerifier: challenge?.codeVerifier,
       nonce: nonce,
       responseType: responseType,
+      sessionId: sessionId,
     );
-    await persistence.setState(state, jsonEncode(stateMode.toJson()));
+    // TODO: should we use jwt?
+    // TODO: maybe allow more meta data?
+    await persistence.setState(state, stateMode);
     return uri;
   }
 
   Future<Result<TokenResponse, AuthResponseError>> handleRedirectUri({
-    required Uri uri,
+    required Map<String, Object?> queryParams,
     // TODO: not necessary for implicit
-    required String redirectUri,
+    required String? redirectUri,
     Map<String, String?>? otherParams,
   }) async {
-    final data = AuthRedirectResponse.fromJson(uri.queryParameters);
+    final data = AuthRedirectResponse.fromJson(queryParams);
     if (data.error != null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.endpointError));
     }
@@ -70,19 +73,19 @@ class OAuthFlow<U> {
     if (state == null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.noState));
     }
-    final stateData = await persistence.getState(state);
-    if (stateData == null) {
+    final stateModel = await persistence.getState(state);
+    if (stateModel == null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.notFoundState));
     }
-    final stateModel = AuthStateModel.fromJson(
-      jsonDecode(stateData) as Map<String, Object?>,
-    );
     final grantType = stateModel.responseType.grantType;
 
     final TokenResponse token;
     HttpResponse? responseToken;
     if (grantType == GrantType.tokenImplicit) {
-      token = TokenResponse.fromJson(uri.queryParameters);
+      token = TokenResponse.fromJson(
+        queryParams,
+        nonce: stateModel.nonce,
+      );
     } else {
       if (code == null) {
         return Err(
@@ -91,9 +94,6 @@ class OAuthFlow<U> {
       }
       final params = provider.mapTokenParamsToQueryParams(
         TokenParams(
-          // TODO: remove these params
-          client_id: provider.clientId,
-          client_secret: provider.clientSecret,
           code: code,
           grant_type: grantType,
           redirect_uri: redirectUri,
@@ -101,7 +101,11 @@ class OAuthFlow<U> {
           otherParams: otherParams,
         ),
       );
-      final parsedResponse = await provider.sendHttpPost(client, params);
+      final parsedResponse = await provider.sendHttpPost(
+        client,
+        Uri.parse(provider.tokenEndpoint),
+        params,
+      );
       responseToken = parsedResponse.response;
       final tokenBody = parsedResponse.parsedBody;
 
@@ -196,12 +200,14 @@ class AuthStateModel {
   final String? nonce;
   final OAuthResponseType responseType;
   final DateTime createdAt;
+  final String? sessionId;
 
   AuthStateModel({
     required this.responseType,
     required this.createdAt,
     this.codeVerifier,
     this.nonce,
+    this.sessionId,
   });
 
   Map<String, dynamic> toJson() {
@@ -210,6 +216,7 @@ class AuthStateModel {
       'codeVerifier': codeVerifier,
       'nonce': nonce,
       'responseType': responseType.toJson(),
+      'sessionId': sessionId,
     };
   }
 
@@ -219,6 +226,7 @@ class AuthStateModel {
       responseType: OAuthResponseType.fromJson(map['responseType'] as String),
       codeVerifier: map['codeVerifier'] as String?,
       nonce: map['nonce'] as String?,
+      sessionId: map['sessionId'] as String?,
     );
   }
 }

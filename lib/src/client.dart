@@ -1,15 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:oauth/oauth.dart';
 
-class OAuth2Client extends http.BaseClient {
-  final String clientId;
-  final String clientSecret;
-  final String tokenEndpoint;
+class OAuth2Client<U> extends http.BaseClient {
+  final OAuthProvider<U> provider;
   final String? scope;
 
+  String get accessToken => _accessToken;
   String _accessToken;
   DateTime? _accessTokenExpiration;
   String? _refreshToken;
@@ -18,9 +16,7 @@ class OAuth2Client extends http.BaseClient {
 
   ///
   OAuth2Client({
-    required this.clientId,
-    required this.clientSecret,
-    required this.tokenEndpoint,
+    required this.provider,
     required String accessToken,
     required DateTime? accessTokenExpiration,
     required String? refreshToken,
@@ -31,23 +27,19 @@ class OAuth2Client extends http.BaseClient {
         _refreshToken = refreshToken,
         _innerClient = innerClient ?? http.Client();
 
-  factory OAuth2Client.fromProvider(
-    OAuthProvider<dynamic> provider,
-    TokenResponse token, {
+  factory OAuth2Client.fromTokenResponse(
+    OAuthProvider<U> provider,
+    TokenResponse tokenResponse, {
     http.Client? innerClient,
   }) =>
       OAuth2Client(
-        accessToken: token.access_token,
-        accessTokenExpiration: token.expires_at,
-        refreshToken: token.refresh_token,
-        clientId: provider.clientId,
-        clientSecret: provider.clientSecret,
-        tokenEndpoint: provider.tokenEndpoint,
-        scope: token.scope,
+        provider: provider,
+        accessToken: tokenResponse.access_token,
+        accessTokenExpiration: tokenResponse.expires_at,
+        refreshToken: tokenResponse.refresh_token,
+        scope: tokenResponse.scope,
         innerClient: innerClient,
       );
-
-  String get accessToken => _accessToken;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -60,7 +52,9 @@ class OAuth2Client extends http.BaseClient {
 
   Future<String> _getAccessToken() async {
     if (_accessTokenExpiration != null &&
-        _accessTokenExpiration!.isAfter(DateTime.now())) {
+        _accessTokenExpiration!
+            .subtract(const Duration(seconds: 30))
+            .isAfter(DateTime.now())) {
       return _accessToken;
     }
 
@@ -69,27 +63,17 @@ class OAuth2Client extends http.BaseClient {
       throw Exception('No refresh token available');
     }
     // Exchange the refresh token for a new access token.
-    final response = await _innerClient.post(
-      Uri.parse(tokenEndpoint),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization':
-            'Basic ${base64.encode(utf8.encode('$clientId:$clientSecret'))}',
-      },
-      body: {
-        'grant_type': 'refresh_token',
-        'refresh_token': _refreshToken,
-        if (scope != null) 'scope': scope,
-      },
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to refresh access token: ${response.body}');
-    }
-    final tokenResponse = json.decode(response.body) as Map<String, dynamic>;
-    _accessToken = tokenResponse['access_token'] as String;
-    _accessTokenExpiration = DateTime.now()
-        .add(Duration(seconds: tokenResponse['expires_in'] as int));
-    _refreshToken = tokenResponse['refresh_token'] as String;
+    final response = await provider.sendTokenHttpPost(_innerClient, {
+      'grant_type': GrantType.refreshToken.value,
+      'refresh_token': _refreshToken,
+      if (scope != null) 'scope': scope,
+    });
+    if (response.isErr()) throw response.unwrapErr();
+
+    final tokenResponse = response.unwrap();
+    _accessToken = tokenResponse.access_token;
+    _accessTokenExpiration = tokenResponse.expires_at;
+    _refreshToken = tokenResponse.refresh_token ?? _refreshToken;
 
     return _accessToken;
   }
