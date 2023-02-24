@@ -11,5 +11,10 @@ dependencies:
   shelf:
   oauth2: ^2.0.1
   pointycastle: ^3.6.2
+  shelf_web_socket: ^1.0.0
+  web_socket_channel: ^2.3.0
   oauth:
     path: ..
+
+dev_dependencies:
+  test: ^1.23.1
