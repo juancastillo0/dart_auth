@@ -13,6 +13,8 @@ dependencies:
   openid_client: ^0.4.7
   jose: ^0.3.3
   oxidized: ^5.3.0
+  argon2: ^1.0.1
+  meta: ^1.9.0
 
 dev_dependencies:
   test: ^1.21.0
