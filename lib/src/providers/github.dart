@@ -10,6 +10,8 @@ import 'package:oauth/src/providers/github_token.dart';
 class GithubProvider extends OAuthProvider<GithubToken> {
   /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
   const GithubProvider({
+    super.providerId = ImplementedProviders.github,
+    super.config = const GithubProviderConfig(scope: 'read:user user:email'),
     required super.clientId,
     required super.clientSecret,
   }) : super(
@@ -22,9 +24,6 @@ class GithubProvider extends OAuthProvider<GithubToken> {
               'https://api.github.com/applications/$clientId/token',
           deviceAuthorizationEndpoint: 'https://github.com/login/device/code',
         );
-
-  @override
-  String get defaultScopes => 'read:user user:email';
 
   @override
   List<GrantType> get supportedFlows => const [
@@ -83,8 +82,8 @@ class GithubProvider extends OAuthProvider<GithubToken> {
     final user = token.user!;
 
     return AuthUser(
-      provider: SupportedProviders.github,
-      userAppId: user.id.toString(),
+      providerId: providerId,
+      providerUserId: user.id.toString(),
       emailIsVerified: user.email != null,
       email: user.email,
       name: user.name,
@@ -100,23 +99,13 @@ class GithubProvider extends OAuthProvider<GithubToken> {
 // scope = read:user user:email
 
 /// GET https://github.com/login/oauth/authorize
-class GithubOAuthAuthorize {
+class GithubProviderConfig implements OAuthProviderConfig {
   /// GET https://github.com/login/oauth/authorize
-  const GithubOAuthAuthorize({
-    required this.client_id,
-    this.redirect_uri,
-    this.scope,
-    this.state,
+  const GithubProviderConfig({
+    required this.scope,
     this.login,
     this.allow_signup,
   });
-
-  ///  The client ID you received from GitHub when you registered.
-  final String client_id;
-
-  /// The URL in your application where users will be sent after authorization.
-  /// See details below about redirect urls.
-  final String? redirect_uri;
 
   /// Suggests a specific account to use for signing in and authorizing the app.
   /// A space-delimited list of scopes. If not provided, scope defaults to an
@@ -128,11 +117,8 @@ class GithubOAuthAuthorize {
   /// already performed the web flow twice and has authorized one token with
   /// user scope and another token with repo scope, a third web flow that does
   /// not provide a scope will receive a token with user and repo scope.
-  final String? scope;
-
-  /// An unguessable random string. It is used to protect against cross-site
-  /// request forgery attacks.
-  final String? state;
+  @override
+  final String scope;
 
   /// Suggests a specific account to use for signing in and authorizing the app.
   final String? login;
@@ -141,78 +127,16 @@ class GithubOAuthAuthorize {
   /// for GitHub during the OAuth flow. The default is true.
   /// Use false when a policy prohibits signups.
   final String? allow_signup;
-}
 
-/// REDIRECT GET https://github.com/login/oauth/authorize
-class GithubOAuthAuthorizeRedirected {
-  /// REDIRECT GET https://github.com/login/oauth/authorize
-  const GithubOAuthAuthorizeRedirected({
-    required this.code,
-    required this.state,
-  });
-  final String code;
-  final String state;
-}
-
-/// POST https://github.com/login/oauth/access_token
-class GithubOAuthAccessTokenPayload implements TokenParams {
-  /// POST https://github.com/login/oauth/access_token
-  const GithubOAuthAccessTokenPayload({
-    required this.client_id,
-    required this.client_secret,
-    required this.code,
-    required this.redirect_uri,
-  });
-
-  /// The client ID you received from GitHub for your OAuth App.
   @override
-  final String client_id;
+  Map<String, String?>? baseAuthParams() => {
+        'scope': scope,
+        'login': login,
+        'allow_signup': allow_signup,
+      };
 
-  /// The client secret you received from GitHub for your OAuth App.
   @override
-  final String client_secret;
-
-  /// The code you received as a response to Step 1.
-  @override
-  final String code;
-
-  /// (Optional) The URL in your application where users are sent after authorization.
-  @override
-  final String /*?*/ redirect_uri;
-}
-
-/// RESPONSE POST https://github.com/login/oauth/access_token
-class GithubOAuthAccessTokenResponse {
-  /// RESPONSE POST https://github.com/login/oauth/access_token
-  const GithubOAuthAccessTokenResponse({
-    required this.access_token,
-    required this.token_type,
-    required this.scope,
-  });
-
-  /// @example "gho_16C7e42F292c6912E7710c838347Ae178B4a"
-  final String access_token;
-
-  /// @example "bearer"
-  final String token_type;
-
-  /// @example "repo,gist"
-  final String scope;
-}
-
-/// POST https://github.com/login/device/code
-class DeviceCode {
-  /// POST https://github.com/login/device/code
-  const DeviceCode({
-    required this.client_id,
-    required this.scope,
-  });
-
-  /// Required. The client ID you received from GitHub for your app.
-  final String client_id;
-
-  /// The scope that your app is requesting access to.
-  final String scope;
+  Map<String, String?>? baseTokenParams() => null;
 }
 
 class DeviceCodeResponse {
@@ -243,6 +167,8 @@ class DeviceCodeResponse {
   /// The default is 900 seconds or 15 minutes.
   final int expiresIn;
 
+  /// The date where the [deviceCode] and [userCode] expire.
+  /// Serialized as an ISO date time. Computed from [expiresIn].
   final DateTime expiresAt;
 
   /// The minimum number of seconds that must pass before you can make a new
@@ -270,7 +196,8 @@ class DeviceCodeResponse {
     return DeviceCodeResponse(
       deviceCode: json['device_code'] as String,
       userCode: json['user_code'] as String,
-      verificationUri: json['verification_uri'] as String,
+      verificationUri:
+          (json['verification_uri'] ?? json['verification_url']) as String,
       expiresIn: json['expires_in'] as int,
       interval: json['interval'] as int,
       message: json['message'] as String?,
@@ -311,25 +238,6 @@ class DeviceCodeResponse {
 
 /// Your device will show the user verification code and
 /// prompt the user to enter the code at https://github.com/login/device.
-
-/// POST https://github.com/login/oauth/access_token
-class GithubOAuthAccessTokenPayloadDevice {
-  /// POST https://github.com/login/oauth/access_token
-  const GithubOAuthAccessTokenPayloadDevice({
-    required this.client_id,
-    required this.device_code,
-    required this.grant_type,
-  });
-
-  /// The client ID you received from GitHub for your OAuth App.
-  final String client_id;
-
-  /// The device verification code you received from the POST https://github.com/login/device/code request.
-  final String device_code;
-
-  /// The grant type must be urn:ietf:params:oauth:grant-type:device_code.
-  final String grant_type;
-}
 
 /// Error codes for the device flow
 enum DeviceFlowError {
@@ -373,7 +281,13 @@ enum DeviceFlowError {
 
   /// Device flow has not been enabled in the app's settings.
   /// For more information, see "Device flow."
-  device_flow_disabled,
+  device_flow_disabled;
+
+  /// Whether the device flow has finished.
+  /// If this is true, we should stop polling.
+  static bool isDeviceFlowFinished(String error) =>
+      error != DeviceFlowError.slow_down.name &&
+      error != DeviceFlowError.authorization_pending.name;
 }
 
 // generated-dart-fixer-json{"from":"./github_email.schema.json","kind":"schema","md5Hash":"33otMXuVAM4DyJBAxMBFgA=="}
@@ -441,6 +355,5 @@ class GithubEmail {
     }}";
   }
 }
-
 
 // generated-dart-fixer-end{"jsonKeyCase":"snake_case","md5Hash":"+yoEqmeJgxjYMIGerbn5Eg=="}

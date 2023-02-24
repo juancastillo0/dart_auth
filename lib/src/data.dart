@@ -60,8 +60,8 @@ T matchProvider<T>(
 class AuthUser<T> {
   ///
   const AuthUser({
-    required this.provider,
-    required this.userAppId,
+    required this.providerId,
+    required this.providerUserId,
     this.name,
     this.profilePicture,
     this.email,
@@ -73,8 +73,8 @@ class AuthUser<T> {
     required this.providerUser,
   });
 
-  final SupportedProviders provider;
-  final String userAppId;
+  final String providerId;
+  final String providerUserId;
   final String? name;
   final String? profilePicture;
   final String? email;
@@ -86,16 +86,16 @@ class AuthUser<T> {
   final T providerUser;
 
   static AuthUser<OpenIdClaims> fromClaims(
-    SupportedProviders provider,
-    OpenIdClaims claims,
-  ) =>
+    OpenIdClaims claims, {
+    required String providerId,
+  }) =>
       AuthUser(
         emailIsVerified: claims.emailVerified ?? false,
         phoneIsVerified: claims.phoneNumberVerified ?? false,
-        provider: provider,
+        providerId: providerId,
         providerUser: claims,
         rawUserData: claims.toJson(),
-        userAppId: claims.subject,
+        providerUserId: claims.subject,
         email: claims.email,
         name: claims.name,
         openIdClaims: claims,
@@ -104,16 +104,15 @@ class AuthUser<T> {
       );
 
   Map<String, Object?> toJson() => {
-        ...rawUserData,
-        'provider': provider.name,
-        'userAppId': userAppId,
+        'providerId': providerId,
+        'providerUserId': providerUserId,
         'name': name,
         'profilePicture': profilePicture,
         'email': email,
         'emailIsVerified': emailIsVerified,
         'phone': phone,
         'phoneIsVerified': phoneIsVerified,
-        'rawUserData': rawUserData,
+        ...rawUserData,
       };
 }
 

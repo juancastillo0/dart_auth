@@ -1,4 +1,4 @@
-class OAuthErrorResponse {
+class OAuthErrorResponse implements Exception {
   ///
   OAuthErrorResponse({
     this.error,
@@ -30,6 +30,16 @@ class OAuthErrorResponse {
 
   /// The raw JSON object or additional data for the error.
   final Map<String, Object?>? jsonData;
+
+  @override
+  String toString() {
+    return 'OAuthErrorResponse(${{
+      ...?jsonData,
+      'error': error,
+      'error_description': errorDescription,
+      'error_uri': errorUri,
+    }..removeWhere((key, value) => value == null)})';
+  }
 
   /// The request is missing a required parameter, includes an
   /// unsupported parameter value (other than grant type),

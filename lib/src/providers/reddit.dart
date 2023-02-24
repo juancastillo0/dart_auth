@@ -8,6 +8,9 @@ import 'package:oauth/src/providers/reddit_user.dart';
 class RedditProvider extends OAuthProvider<RedditUser> {
   /// https://github.com/reddit-archive/reddit/wiki/OAuth2
   const RedditProvider({
+    super.providerId = ImplementedProviders.reddit,
+    super.config =
+        const RedditAuthParams(duration: RedditAuthDuration.permanent),
     required super.clientId,
     required super.clientSecret,
   }) : super(
@@ -27,7 +30,13 @@ class RedditProvider extends OAuthProvider<RedditUser> {
       ];
 
   @override
-  String get defaultScopes => 'identity';
+  Map<String, String?> mapAuthParamsToQueryParams(AuthParams params) {
+    final values = super.mapAuthParamsToQueryParams(params);
+    if (params.response_type == 'token') {
+      values['duration'] = RedditAuthDuration.temporary.value;
+    }
+    return values;
+  }
 
   @override
   Future<Result<AuthUser<RedditUser>, GetUserError>> getUser(
@@ -49,10 +58,10 @@ class RedditProvider extends OAuthProvider<RedditUser> {
     return AuthUser(
       emailIsVerified: user.hasVerifiedEmail ?? false,
       phoneIsVerified: false,
-      provider: SupportedProviders.reddit,
+      providerId: providerId,
       providerUser: user,
       rawUserData: userData,
-      userAppId: user.id,
+      providerUserId: user.id,
       name: user.name,
     );
   }
@@ -62,15 +71,12 @@ class RedditProvider extends OAuthProvider<RedditUser> {
   /// https://www.reddit.com/dev/api/#GET_api_v1_me
 }
 
-class RedditAuthParams with AuthParamsBaseMixin {
+class RedditAuthParams implements OAuthProviderConfig {
   ///
-  RedditAuthParams({
-    required this.baseAuthParams,
+  const RedditAuthParams({
     required this.duration,
+    this.scope = 'identity',
   });
-
-  @override
-  final AuthParams baseAuthParams;
 
   /// Indicates whether or not your app needs a permanent token.
   /// All bearer tokens expire after 1 hour. If you indicate you need permanent
@@ -91,12 +97,18 @@ class RedditAuthParams with AuthParamsBaseMixin {
   /// modposts, modwiki, mysubreddits, privatemessages, read, report, save,
   /// submit, subscribe, vote, wikiedit, wikiread.
   @override
-  String get scope => baseAuthParams.scope;
+  final String scope;
 
   @override
   Map<String, String?> toJson() {
-    return {...baseAuthParams.toJson(), 'duration': duration.value};
+    return {'duration': duration.value};
   }
+
+  @override
+  Map<String, String?>? baseAuthParams() => toJson();
+
+  @override
+  Map<String, String?>? baseTokenParams() => null;
 }
 
 enum RedditAuthDuration {

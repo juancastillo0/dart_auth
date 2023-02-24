@@ -7,6 +7,8 @@ import 'package:oauth/providers.dart';
 class SpotifyProvider extends OAuthProvider<SpotifyUser> {
   /// https://developer.spotify.com/documentation/general/guides/authorization/
   const SpotifyProvider({
+    super.providerId = ImplementedProviders.spotify,
+    super.config = const SpotifyAuthParams(),
     required super.clientId,
     required super.clientSecret,
   }) : super(
@@ -24,10 +26,6 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
         GrantType.tokenImplicit,
         GrantType.clientCredentials
       ];
-
-  /// https://developer.spotify.com/documentation/general/guides/authorization/scopes/
-  @override
-  String get defaultScopes => 'user-read-private user-read-email';
 
   /// https://developer.spotify.com/documentation/web-api/reference/#/operations/get-current-users-profile
   @override
@@ -56,9 +54,9 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
     return AuthUser(
       emailIsVerified: true,
       phoneIsVerified: false,
-      provider: SupportedProviders.spotify,
+      providerId: providerId,
       rawUserData: userData,
-      userAppId: user.id,
+      providerUserId: user.id,
       email: user.email,
       name: user.display_name,
       providerUser: user,
@@ -66,29 +64,32 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
   }
 }
 
-class SpotifyAuthParams with AuthParamsBaseMixin {
+class SpotifyAuthParams implements OAuthProviderConfig {
   ///
-  SpotifyAuthParams({
-    required this.show_dialog,
-    required this.baseAuthParams,
+  const SpotifyAuthParams({
+    this.showDialog,
+    this.scope = 'user-read-private user-read-email',
   });
+
+  @override
+  final String scope;
 
   /// Whether or not to force the user to approve the app again
   /// if they’ve already done so. If false (default), a user who has
   /// already approved the application may be automatically redirected
   /// to the URI specified by redirect_uri. If true, the user will not be
   /// automatically redirected and will have to approve the app again.
-  @override
-  final String? show_dialog;
+  final String? showDialog;
 
-  @override
-  final AuthParams baseAuthParams;
-
-  @override
   Map<String, String?> toJson() => {
-        ...baseAuthParams.toJson(),
-        if (show_dialog != null) 'show_dialog': show_dialog,
+        if (showDialog != null) 'show_dialog': showDialog,
       };
+
+  @override
+  Map<String, String?> baseAuthParams() => toJson();
+
+  @override
+  Map<String, String?>? baseTokenParams() => null;
 }
 
 // generated-dart-fixer-json{"from":"./spotify_user.json","kind":"document","md5Hash":"bwRgfxBCMZof20X38WRhcg=="}

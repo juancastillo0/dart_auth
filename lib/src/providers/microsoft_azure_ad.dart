@@ -9,10 +9,13 @@ import 'package:oauth/providers.dart';
 export 'package:oauth/src/openid_claims.dart';
 
 /// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
+/// https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app
 class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   /// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
   /// TODO: https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#send-a-sign-out-request
   MicrosoftProvider({
+    super.providerId = ImplementedProviders.microsoft,
+    super.config = const MicrosoftAuthParams(),
     required super.openIdConfig,
     required super.clientId,
     required super.clientSecret,
@@ -21,6 +24,7 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   static Future<MicrosoftProvider> retrieve({
     required String clientId,
     required String clientSecret,
+    OAuthProviderConfig config = const MicrosoftAuthParams(),
 
     /// The {tenant} value in the path of the request can be used to
     /// control who can sign into the application. Valid values are common,
@@ -31,15 +35,13 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     MicrosoftTenant tenant = MicrosoftTenant.common,
   }) async =>
       MicrosoftProvider(
+        config: config,
         openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
           'https://login.microsoftonline.com/${tenant.value}/v2.0/.well-known/openid-configuration',
         ),
         clientId: clientId,
         clientSecret: clientSecret,
       );
-
-  @override
-  String get defaultScopes => 'openid email profile offline_access';
 
   @override
   List<GrantType> get supportedFlows => const [
@@ -73,15 +75,15 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   @override
   AuthUser<OpenIdClaims> parseUser(Map<String, Object?> userData) {
     return AuthUser.fromClaims(
-      SupportedProviders.microsoft,
       OpenIdClaims.fromJson(userData),
+      providerId: providerId,
     );
   }
 }
 
 /// scopes https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
 // openid, email, profile, and offline_access
-class MicrosoftAuthParams {
+class MicrosoftAuthParams implements OAuthProviderConfig {
   /// 	recommended	Specifies how the identity platform should return the
   /// requested token to your app.
   ///
@@ -95,20 +97,20 @@ class MicrosoftAuthParams {
   /// Supported when requesting a code.
   final String? response_mode;
 
-  /// 	recommended	A value included in the request that is also returned in the
-  /// token response. It can be a string of any content that you wish.
-  /// A randomly generated unique value is typically used for preventing
-  /// cross-site request forgery attacks. The value can also encode information
-  /// about the user's state in the app before the authentication request occurred.
-  /// For instance, it could encode the page or view they were on.
-  final String state;
+  // /// 	recommended	A value included in the request that is also returned in the
+  // /// token response. It can be a string of any content that you wish.
+  // /// A randomly generated unique value is typically used for preventing
+  // /// cross-site request forgery attacks. The value can also encode information
+  // /// about the user's state in the app before the authentication request occurred.
+  // /// For instance, it could encode the page or view they were on.
+  // final String state;
 
-  /// 	Required	A value generated and sent by your app in its request for an ID
-  /// token. The same nonce value is included in the ID token returned to your
-  /// app by the Microsoft identity platform. To mitigate token replay attacks,
-  /// your app should verify the nonce value in the ID token is the same value
-  /// it sent when requesting the token. The value is typically a unique, random string.
-  final String nonce;
+  // /// 	Required	A value generated and sent by your app in its request for an ID
+  // /// token. The same nonce value is included in the ID token returned to your
+  // /// app by the Microsoft identity platform. To mitigate token replay attacks,
+  // /// your app should verify the nonce value in the ID token is the same value
+  // /// it sent when requesting the token. The value is typically a unique, random string.
+  // final String nonce;
 
   /// 	optional	Indicates the type of user interaction that is required. Valid
   /// values are login, none, consent, and select_account.
@@ -139,32 +141,32 @@ class MicrosoftAuthParams {
   /// by extracting the tid from a previous sign-in.
   final String? domain_hint;
 
+  /// https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-configure-app-expose-web-apis
+  @override
+  final String scope;
+
+  ///
   const MicrosoftAuthParams({
     this.response_mode,
-    required this.state,
-    required this.nonce,
     this.prompt,
     this.login_hint,
     this.domain_hint,
+    this.scope = 'openid email profile offline_access',
   });
 // generated-dart-fixer-start{"md5Hash":"gqML1LJrqwodSSXvVzIaiA=="}
 
   factory MicrosoftAuthParams.fromJson(Map json) {
     return MicrosoftAuthParams(
       response_mode: json['response_mode'] as String?,
-      state: json['state'] as String,
-      nonce: json['nonce'] as String,
       prompt: json['prompt'] as String?,
       login_hint: json['login_hint'] as String?,
       domain_hint: json['domain_hint'] as String?,
     );
   }
 
-  Map<String, Object?> toJson() {
+  Map<String, String?> toJson() {
     return {
       'response_mode': response_mode,
-      'state': state,
-      'nonce': nonce,
       'prompt': prompt,
       'login_hint': login_hint,
       'domain_hint': domain_hint,
@@ -175,13 +177,17 @@ class MicrosoftAuthParams {
   String toString() {
     return "MicrosoftAuthParams${{
       "response_mode": response_mode,
-      "state": state,
-      "nonce": nonce,
       "prompt": prompt,
       "login_hint": login_hint,
       "domain_hint": domain_hint,
     }}";
   }
+
+  @override
+  Map<String, String?>? baseAuthParams() => toJson();
+
+  @override
+  Map<String, String?>? baseTokenParams() => null;
 }
 
 // generated-dart-fixer-end{"md5Hash":"gqML1LJrqwodSSXvVzIaiA=="}

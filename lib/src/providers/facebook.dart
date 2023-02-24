@@ -8,8 +8,13 @@ import 'package:oauth/src/providers/facebook_user.dart';
 class FacebookProvider extends OAuthProvider<FacebookUser> {
   /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
   const FacebookProvider({
+    super.providerId = ImplementedProviders.facebook,
+    // comma separated scopes
+    super.config =
+        const OAuthProviderConfig(scope: 'openid,public_profile,email'),
     required super.clientId,
     required super.clientSecret,
+    // required for device code flow
     this.appId,
     this.clientToken,
   }) : super(
@@ -43,7 +48,7 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
       Uri.parse(deviceAuthorizationEndpoint!),
       body: {
         'access_token': '$appId|$clientToken',
-        'scope': scope ?? defaultScopes,
+        'scope': scope ?? config.scope,
         if (redirectUri != null) 'redirect_uri': redirectUri,
         ...?otherParams,
       },
@@ -75,9 +80,6 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
   }
 
   // S256 and plain and id_token for OpenID Connect
-  // comma separated scopes
-  @override
-  String get defaultScopes => 'openid,public_profile,email';
 
   // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/
 
@@ -87,10 +89,10 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
   HttpAuthMethod get authMethod => HttpAuthMethod.formUrlencodedBody;
 
   @override
-  List<GrantType> get supportedFlows => const [
+  List<GrantType> get supportedFlows => [
         GrantType.authorizationCode,
         GrantType.clientCredentials,
-        GrantType.deviceCode
+        if (appId != null && clientToken != null) GrantType.deviceCode
       ];
 
   /// id,first_name,last_name,middle_name,name,name_format,picture,short_name,email,install_type,installed,is_guest_user
@@ -136,10 +138,10 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     return AuthUser(
       emailIsVerified: true,
       phoneIsVerified: false,
-      provider: SupportedProviders.facebook,
+      providerId: providerId,
       providerUser: user,
       rawUserData: userData,
-      userAppId: user.id,
+      providerUserId: user.id,
       email: user.email,
       name: user.name,
       profilePicture: user.profile_pic ?? user.picture.data.url,

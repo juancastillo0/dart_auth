@@ -10,6 +10,9 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
   /// https://developer.apple.com/documentation/sign_in_with_apple/configuring_your_environment_for_sign_in_with_apple
   /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_js/incorporating_sign_in_with_apple_into_other_platforms
   AppleProvider({
+    super.providerId = ImplementedProviders.apple,
+    // TODO: openid shows up in the .well-known/openid-configuration, but not in the docs , response_type='code id_token' shows in the docs, but not in the configuration
+    super.config = const AppleAuthParams(scope: 'openid name email'),
     required super.clientId,
     required super.clientSecret,
   }) : super(
@@ -54,10 +57,6 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
 
   // TODO: webhooks https://developer.apple.com/documentation/sign_in_with_apple/processing_changes_for_sign_in_with_apple_accounts
 
-  // TODO: openid shows up in the .well-known/openid-configuration, but not in the docs , response_type='code id_token' shows in the docs, but not in the configuration
-  @override
-  String get defaultScopes => 'openid name email';
-
   @override
   Future<Result<AuthUser<AppleClaims>, GetUserError>> getUser(
     HttpClient client,
@@ -79,10 +78,10 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
     return AuthUser(
       emailIsVerified: appleClaims.email_verified,
       phoneIsVerified: false,
-      provider: SupportedProviders.apple,
+      providerId: providerId,
       providerUser: appleClaims,
       rawUserData: userData,
-      userAppId: appleClaims.sub,
+      providerUserId: appleClaims.sub,
       email: appleClaims.email,
       name: appleClaims.aud,
       openIdClaims: OpenIdClaims.fromJson(userData),
@@ -90,45 +89,46 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
   }
 }
 
+enum AuthResponseMode { query, fragment, form_post }
+
 /// The only error code that might be returned is user_cancelled_authorize.
 /// This error code is returned if the user clicks Cancel during the web flow.
-class AppleAuthParams {
+class AppleAuthParams implements OAuthProviderConfig {
   /// The type of response mode expected. Valid values are query, fragment, and form_post.
   /// If you requested any scopes, the value must be form_post.
-  final String response_mode;
+  final AuthResponseMode response_mode;
 
   /// Required. The type of response requested. Valid values are code and id_token.
   /// You can request only code, or both code and id_token.
   /// Requesting only id_token is unsupported. When requesting id_token,
   /// response_mode must be either fragment or form_post.
-  final String response_type;
+  // final String response_type;
 
   /// The amount of user information requested from Apple. Valid values are name and email.
   /// You can request one, both, or none. Use space separation and percent-encoding
   /// for multiple scopes; for example, "scope=name%20email".
+  @override
   final String scope;
 
   /// The only error code that might be returned is user_cancelled_authorize.
   /// This error code is returned if the user clicks Cancel during the web flow.
   const AppleAuthParams({
-    required this.response_mode,
-    required this.response_type,
     required this.scope,
+    this.response_mode = AuthResponseMode.form_post,
   });
 // generated-dart-fixer-start{"md5Hash":"E9GuA529+G8V/Q+R/24WCA=="}
 
   factory AppleAuthParams.fromJson(Map json) {
     return AppleAuthParams(
-      response_mode: json['response_mode'] as String,
-      response_type: json['response_type'] as String,
+      response_mode:
+          AuthResponseMode.values.byName(json['response_mode'] as String),
       scope: json['scope'] as String,
     );
   }
 
-  Map<String, Object?> toJson() {
+  Map<String, String?> toJson() {
     return {
-      'response_mode': response_mode,
-      'response_type': response_type,
+      'response_mode': response_mode.name,
       'scope': scope,
     };
   }
@@ -137,10 +137,15 @@ class AppleAuthParams {
   String toString() {
     return "AppleAuthParams${{
       "response_mode": response_mode,
-      "response_type": response_type,
       "scope": scope,
     }}";
   }
+
+  @override
+  Map<String, String?>? baseAuthParams() => toJson();
+
+  @override
+  Map<String, String?>? baseTokenParams() => null;
 }
 
 // generated-dart-fixer-end{"md5Hash":"E9GuA529+G8V/Q+R/24WCA=="}

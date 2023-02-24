@@ -4,11 +4,19 @@ import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
 /// https://discord.com/developers/docs/topics/oauth2
+/// https://discord.com/developers/applications
 class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
   /// https://discord.com/developers/docs/topics/oauth2
+  /// https://discord.com/developers/applications
   const DiscordProvider({
+    super.providerId = ImplementedProviders.discord,
     required super.clientId,
     required super.clientSecret,
+
+    /// https://discord.com/developers/docs/topics/oauth2#webhooks Send messages to a channel
+    /// scopes -> webhook.incoming
+    /// https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes
+    super.config = const OAuthProviderConfig(scope: 'identify email'),
   }) : super(
           authorizationEndpoint: 'https://discord.com/oauth2/authorize',
           tokenEndpoint: 'https://discord.com/api/oauth2/token',
@@ -22,13 +30,6 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
         GrantType.tokenImplicit,
         GrantType.clientCredentials
       ];
-
-  /// https://discord.com/developers/docs/topics/oauth2#webhooks Send messages to a channel
-  /// scopes -> webhook.incoming
-
-  /// https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes
-  @override
-  String get defaultScopes => 'identify email';
 
   @override
   Future<Result<AuthUser<DiscordOAuth2Me>, GetUserError>> getUser(
@@ -57,9 +58,9 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
     return AuthUser(
       emailIsVerified: discordUser.verified ?? false,
       phoneIsVerified: false,
-      provider: SupportedProviders.discord,
+      providerId: providerId,
       rawUserData: userData,
-      userAppId: discordUser.id,
+      providerUserId: discordUser.id,
       email: discordUser.email,
       name: discordUser.username,
       providerUser: discordData,
