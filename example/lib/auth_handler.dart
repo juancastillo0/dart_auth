@@ -49,8 +49,13 @@ Handler makeHandler(Config config) {
       return handler.getOAuthState(request);
     } else if (RegExp('oauth/subscribe').hasMatch(path)) {
       return handler.handlerWebSocketOAuthStateSubscribe(request);
+      // TODO: maybe use /token instead?
     } else if (path == 'jwt/refresh') {
       return handler.refreshAuthToken(request);
+    } else if (path == 'jwt/revoke') {
+      return handler.revokeAuthToken(request);
+    } else if (path == 'user/me') {
+      return handler.getUserMeInfo(request);
     }
     return Response.ok('Request for "${request.url}"');
   }
@@ -127,7 +132,26 @@ class AuthHandler {
       redirectUri: '${config.baseRedirectUri}',
     );
     return authenticated.when(
-      err: (err) => Response.ok('<html><body></body></html>'),
+      err: (err) {
+        switch (err.kind) {
+          case AuthResponseErrorKind.endpointError:
+            // TODO: edit state session?
+            return Response.ok(null);
+          case AuthResponseErrorKind.noState:
+          case AuthResponseErrorKind.noCode:
+          case AuthResponseErrorKind.notFoundState:
+          case AuthResponseErrorKind.invalidState:
+            return Response.badRequest(
+              body: jsonEncode({'kind': err.kind.name}),
+              headers: jsonHeader,
+            );
+          case AuthResponseErrorKind.tokenResponseError:
+            return Response.internalServerError(
+              body: jsonEncode({'kind': err.kind.name}),
+              headers: jsonHeader,
+            );
+        }
+      },
       ok: (token) async {
         final user = await onUserAuthenticated(
           token,
@@ -136,13 +160,13 @@ class AuthHandler {
         );
 
         return user.when(
-          err: (err) => Response.ok('<html><body></body></html>'),
+          err: (err) => Response.internalServerError(
+            body: jsonEncode({'message': err.message}),
+            headers: jsonHeader,
+          ),
           ok: (user) async {
             // TODO: redirect for GETs?
-            return Response.ok(
-              jsonEncode(user),
-              headers: jsonHeader,
-            );
+            return Response.ok(null);
           },
         );
       },
@@ -244,7 +268,7 @@ class AuthHandler {
       ).toJson(),
     );
     return Response.ok(
-      {'url': url.toString(), 'accessToken': jwt},
+      jsonEncode({'url': url.toString(), 'accessToken': jwt}),
       headers: jsonHeader,
     );
   }
@@ -275,7 +299,7 @@ class AuthHandler {
       ).toJson(),
     );
     return Response.ok(
-      {'device': deviceCode.toJson(), 'accessToken': jwt},
+      jsonEncode({'device': deviceCode.toJson(), 'accessToken': jwt}),
       headers: jsonHeader,
     );
   }
@@ -342,7 +366,7 @@ class AuthHandler {
     //   providerId: providerInstance.providerId,
     // );
     return Response.ok(
-      {'refreshToken': refreshToken},
+      jsonEncode({'refreshToken': refreshToken}),
       headers: jsonHeader,
     );
   }
@@ -497,6 +521,47 @@ class AuthHandler {
       isClosed = true;
     });
     return handler(request);
+  }
+
+  Future<UserClaims> authenticatedUserOrThrow(Request request) async {
+    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    if (claims == null ||
+        claims.meta == null ||
+        UserMetaClaims.fromJson(claims.meta!).userId == null) {
+      throw Response.unauthorized(null);
+    }
+    return claims;
+  }
+
+  Future<Response> revokeAuthToken(Request request) async {
+    final claims = await authenticatedUserOrThrow(request);
+
+    final session = await config.persistence.getValidSession(claims.sessionId);
+    if (session == null) return Response.ok(null);
+    await config.persistence.saveSession(
+      session.copyWith(endedAt: DateTime.now()),
+    );
+    // TODO: revoke provider token
+    return Response.ok(null);
+  }
+
+  Future<Response> getUserMeInfo(Request request) async {
+    final claims = await authenticatedUserOrThrow(request);
+    final fields = request.url.queryParametersAll['fields'] ?? [];
+
+    final user = await config.persistence
+        .getUserById(UserId(claims.userId, UserIdKind.innerId));
+    if (user == null) return Response.notFound(null);
+
+    final payload = user.toJson();
+    if (fields.contains('sessions')) {
+      final sessions = await config.persistence
+          .getUserSessions(user.userId, onlyValid: false);
+      // TODO: map sessions and remove refreshToken
+      payload['sessions'] = sessions;
+    }
+
+    return Response.ok(jsonEncode(payload), headers: jsonHeader);
   }
 }
 
