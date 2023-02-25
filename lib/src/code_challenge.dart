@@ -1,4 +1,4 @@
-import 'dart:convert' show base64Encode, base64UrlEncode, utf8;
+import 'dart:convert' show base64UrlEncode, utf8;
 import 'dart:math' show Random;
 
 import 'package:crypto/crypto.dart' show sha256;
@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart' show sha256;
 /// Create an anti-forgery state token
 String generateStateToken({int size = 48, Random? random}) {
   final r = random ?? Random.secure();
-  return base64Encode(List.generate(size, (_) => r.nextInt(256)));
+  return base64UrlEncode(List.generate(size, (_) => r.nextInt(256)));
 }
 
 enum CodeChallengeMethod {
