@@ -81,7 +81,7 @@ class AppCredentialsConfig {
     );
   }
 
-  Future<Map<String, OAuthProvider>> providersMap() async {
+  Future<Map<String, OAuthProvider>> providersMap({HttpClient? client}) async {
     final providerList = <OAuthProvider>[
       if (discord != null)
         DiscordProvider(
@@ -103,11 +103,13 @@ class AppCredentialsConfig {
         await GoogleProvider.retrieve(
           clientId: google!.clientId,
           clientSecret: google!.clientSecret,
+          client: client,
         ),
       if (microsoft != null)
         await MicrosoftProvider.retrieve(
           clientId: microsoft!.clientId,
           clientSecret: microsoft!.clientSecret,
+          client: client,
         ),
       if (reddit != null)
         RedditProvider(
@@ -124,6 +126,7 @@ class AppCredentialsConfig {
           // TODO: TwitchProvider.retrieve?
           openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
             TwitchProvider.wellKnownOpenIdEndpoint,
+            client: client,
           ),
           clientId: twitch!.clientId,
           clientSecret: twitch!.clientSecret,

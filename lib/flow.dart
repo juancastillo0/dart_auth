@@ -134,7 +134,7 @@ class OAuthFlow<U> {
     //   token: token,
     //   claims: claims,
     // );
-    if (token.state != state) {
+    if (grantType == GrantType.tokenImplicit && token.state != state) {
       return Err(
         AuthResponseError(
           data,

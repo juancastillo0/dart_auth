@@ -9,9 +9,9 @@ export 'package:oauth/src/code_challenge.dart';
 export 'package:oauth/src/response_models.dart';
 
 class Headers {
-  static const contentType = 'Content-Type';
-  static const accept = 'Accept';
-  static const authorization = 'Authorization';
+  static const contentType = 'content-type';
+  static const accept = 'accept';
+  static const authorization = 'authorization';
   static const appJson = 'application/json';
   static const appFormUrlEncoded = 'application/x-www-form-urlencoded';
 }

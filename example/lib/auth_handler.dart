@@ -126,7 +126,8 @@ class AuthHandler {
     final providerInstance = getProvider(request).throwErr();
 
     final body = await parseBodyOrUrlData(request) as Map<String, Object?>;
-    final flow = OAuthFlow(providerInstance, config.persistence);
+    final flow =
+        OAuthFlow(providerInstance, config.persistence, client: config.client);
     final authenticated = await flow.handleRedirectUri(
       queryParams: body,
       redirectUri: '${config.baseRedirectUri}',
@@ -243,7 +244,8 @@ class AuthHandler {
         !providerInstance.supportedFlows.contains(GrantType.tokenImplicit)) {
       return Response.badRequest();
     }
-    final flow = OAuthFlow(providerInstance, config.persistence);
+    final flow =
+        OAuthFlow(providerInstance, config.persistence, client: config.client);
     final state = generateStateToken();
     final sessionId = generateStateToken();
     final url = await flow.getAuthorizeUri(
