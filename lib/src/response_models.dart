@@ -1,19 +1,38 @@
+import 'package:oauth/oauth.dart';
+
 class OAuthErrorResponse implements Exception {
   ///
   OAuthErrorResponse({
+    required this.response,
     this.error,
     this.errorDescription,
     this.errorUri,
     this.jsonData,
   });
 
-  factory OAuthErrorResponse.fromJson(Map<dynamic, dynamic> json) =>
+  factory OAuthErrorResponse.fromResponse(ParsedResponse response) {
+    final parsedBody = response.parsedBody;
+    if (parsedBody is Map) {
+      return OAuthErrorResponse.fromJson(parsedBody, response.response);
+    } else {
+      return OAuthErrorResponse(response: response.response);
+    }
+  }
+
+  factory OAuthErrorResponse.fromJson(
+    Map<dynamic, dynamic> json,
+    HttpResponse? response,
+  ) =>
       OAuthErrorResponse(
+        response: response,
         jsonData: json.cast(),
         error: json['error'] as String?,
         errorDescription: json['error_description'] as String?,
         errorUri: json['error_uri'] as String?,
       );
+
+  /// The original response from the endpoint
+  final HttpResponse? response;
 
   /// See error code.
   final String? error;
@@ -38,6 +57,9 @@ class OAuthErrorResponse implements Exception {
       'error': error,
       'error_description': errorDescription,
       'error_uri': errorUri,
+      'status_code': response?.statusCode,
+      'status_code_description': response?.reasonPhrase,
+      'request': response?.request,
     }..removeWhere((key, value) => value == null)})';
   }
 
@@ -100,6 +122,20 @@ class AuthRedirectResponse implements OAuthErrorResponse {
         errorDescription: json['error_description'] as String?,
         errorUri: json['error_uri'] as String?,
       );
+
+  Map<String, Object?> toJson() {
+    return {
+      ...?jsonData,
+      'code': code,
+      'state': state,
+      'error': error,
+      'error_description': errorDescription,
+      'error_uri': errorUri,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  @override
+  HttpResponse? get response => null;
 
   /// See error code.
   @override

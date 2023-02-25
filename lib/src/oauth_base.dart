@@ -283,7 +283,7 @@ abstract class OAuthProvider<U> {
     try {
       if (response.headers[Headers.contentType] == Headers.appFormUrlEncoded) {
         parsedBody = Uri.splitQueryString(response.body);
-      } else {
+      } else if (response.body.isNotEmpty) {
         parsedBody = jsonDecode(response.body);
       }
     } catch (_) {}
@@ -306,11 +306,10 @@ abstract class OAuthProvider<U> {
       parsedBody = parsedBody[0];
     }
 
-    final jsonData = parsedBody! as Map<String, Object?>;
-    if (parsedResponse.response.statusCode == 200) {
-      return Ok(TokenResponse.fromJson(jsonData));
+    if (parsedResponse.isSuccess) {
+      return Ok(TokenResponse.fromJson(parsedBody! as Map));
     } else {
-      return Err(OAuthErrorResponse.fromJson(jsonData));
+      return Err(OAuthErrorResponse.fromResponse(parsedResponse));
     }
   }
 }
@@ -318,6 +317,13 @@ abstract class OAuthProvider<U> {
 class ParsedResponse {
   final HttpResponse response;
   final Object? parsedBody;
+
+  bool get isSuccess =>
+      response.statusCode >= 200 && response.statusCode <= 299;
+  bool get isClientError =>
+      response.statusCode >= 400 && response.statusCode <= 499;
+  bool get isServerError =>
+      response.statusCode >= 500 && response.statusCode <= 599;
 
   ParsedResponse(this.response, this.parsedBody);
 }
@@ -368,8 +374,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
       .whereType<GrantType>()
       .toList();
 
-  /// Retrieves the user information given an authenticated [client]
-  /// and the [token] from [tokenEndpoint].
+  /// Retrieves and validates the user information given a [token]'s id_token.
   static Future<Result<OpenIdClaims, GetUserError>> getOpenIdConnectUser({
     required TokenResponse token,
     required String clientId,
@@ -395,6 +400,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     }
     final errors = claims
         .validate(
+          // TODO: tolerance
           expiryTolerance: const Duration(seconds: 30),
           clientId: clientId,
           issuer: Uri.parse(issuer),
@@ -417,9 +423,10 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
   }
 
   static Future<OpenIdConfiguration> retrieveConfiguration(
-    String wellKnown,
-  ) async {
-    final client = HttpClient();
+    String wellKnown, {
+    HttpClient? client,
+  }) async {
+    client ??= HttpClient();
     final responseMetadata = await client.get(Uri.parse(wellKnown));
 
     if (responseMetadata.statusCode != 200) {
@@ -710,6 +717,21 @@ class TokenResponse {
         rawJson: json.cast(),
         nonce: nonce,
       );
+
+  Map<String, Object?> toJson() {
+    return {
+      ...?rawJson,
+      'access_token': access_token,
+      'expires_in': expires_in,
+      'id_token': id_token,
+      'scope': scope,
+      'token_type': token_type,
+      'refresh_token': refresh_token,
+      'state': state,
+      'expires_at': expires_at.toIso8601String(),
+      'nonce': nonce,
+    }..removeWhere((key, value) => value == null);
+  }
 
   /// A token that can be sent to a Google API.
   final String access_token;

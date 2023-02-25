@@ -109,11 +109,8 @@ class OAuthFlow<U> {
       responseToken = parsedResponse.response;
       final tokenBody = parsedResponse.parsedBody;
 
-      if (responseToken.statusCode != 200 || tokenBody == null) {
-        OAuthErrorResponse? error;
-        try {
-          error = OAuthErrorResponse.fromJson(tokenBody! as Map);
-        } catch (_) {}
+      if (!parsedResponse.isSuccess || tokenBody == null) {
+        final error = OAuthErrorResponse.fromResponse(parsedResponse);
         return Err(
           AuthResponseError(
             data,

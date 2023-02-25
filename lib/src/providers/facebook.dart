@@ -76,7 +76,7 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     if (response.statusCode == 200) {
       return Ok(TokenResponse.fromJson(jsonData));
     } else {
-      return Err(FacebookDeviceError.fromJson(jsonData));
+      return Err(FacebookDeviceError.fromJson(jsonData, response: response));
     }
   }
 
@@ -85,6 +85,11 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
   // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/
 
   // Cancellation webhook
+
+  /// https://www.facebook.com/v16.0/dialog/oauth?auth_type=rerequest&display=popup
+
+  /// https://developers.facebook.com/docs/permissions/reference
+  /// scope -> openid public_profile email
 
   @override
   HttpAuthMethod get authMethod => HttpAuthMethod.formUrlencodedBody;
@@ -150,17 +155,14 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
   }
 }
 
-/// https://www.facebook.com/v16.0/dialog/oauth?auth_type=rerequest&display=popup
-
-/// https://developers.facebook.com/docs/permissions/reference
-/// scope -> openid public_profile email
-
 class FacebookDeviceError implements OAuthErrorResponse {
   final String message;
   final String errorUserTitle;
   final String errorUserMsg;
   final int code;
   final int errorSubcode;
+  @override
+  final HttpResponse? response;
   @override
   final Map<String, Object?>? jsonData;
 
@@ -172,12 +174,14 @@ class FacebookDeviceError implements OAuthErrorResponse {
     required this.code,
     required this.errorSubcode,
     this.jsonData,
+    this.response,
   });
 
 // generated-dart-fixer-start{"md5Hash":"CAq8hN4ZjTsahS+sBdQs1w==","jsonKeyCase":"snake_case"}
 
-  factory FacebookDeviceError.fromJson(Map json) {
+  factory FacebookDeviceError.fromJson(Map json, {HttpResponse? response}) {
     return FacebookDeviceError(
+      response: response,
       message: json['message'] as String,
       errorUserTitle: json['error_user_title'] as String,
       errorUserMsg: json['error_user_msg'] as String,
