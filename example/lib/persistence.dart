@@ -63,7 +63,21 @@ class InMemoryPersistance extends Persistence {
         prevUser.authUsers[index] = user;
       }
       // add info from new provider
-      mapAppUser[userId] = AppUser.merge(userId, prevUser.authUsers);
+      mapAppUser[userId] = AppUser.merge(
+        userId,
+        prevUser.authUsers,
+        base: prevUser,
+      );
     }
+  }
+
+  @override
+  Future<List<UserSession>> getUserSessions(
+    String userId, {
+    required bool onlyValid,
+  }) async {
+    return mapSession.values
+        .where((s) => s.userId == userId && (!onlyValid || s.isValid))
+        .toList();
   }
 }

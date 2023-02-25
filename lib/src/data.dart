@@ -192,8 +192,11 @@ class AppUser {
     required this.authUsers,
   });
 
-  // TODO: merge with base AppUser
-  factory AppUser.merge(String userId, List<AuthUser<dynamic>> authUsers) {
+  factory AppUser.merge(
+    String userId,
+    List<AuthUser<dynamic>> authUsers, {
+    AppUser? base,
+  }) {
     final list = authUsers.cast<AuthUser<dynamic>?>();
     final email = list.firstWhere(
       (auth) => auth!.emailIsVerified && auth.email != null,
@@ -213,18 +216,63 @@ class AppUser {
     );
     return AppUser(
       userId: userId,
-      emailIsVerified: email != null,
-      phoneIsVerified: phone != null,
-      email: email?.email,
-      phone: phone?.phone,
-      name: name?.name,
-      profilePicture: profilePicture?.profilePicture,
+      emailIsVerified: base != null && base.emailIsVerified || email != null,
+      phoneIsVerified: base != null && base.phoneIsVerified || phone != null,
+      email: base == null
+          ? email?.email
+          : (base.emailIsVerified ? base.email : email?.email ?? base.email),
+      phone: base == null
+          ? phone?.phone
+          : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
+      name: base?.name ?? name?.name,
+      profilePicture: base?.profilePicture ?? profilePicture?.profilePicture,
       authUsers: authUsers,
+    );
+  }
+
+  factory AppUser.fromJson(
+    Map<String, Object?> json,
+    Map<String, OAuthProvider<dynamic>> providers,
+  ) {
+    return AppUser(
+      userId: json['userId']! as String,
+      emailIsVerified: json['emailIsVerified']! as bool,
+      phoneIsVerified: json['phoneIsVerified']! as bool,
+      authUsers: (json['authUsers']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map((e) {
+        final provider = providers[e['providerId']];
+        if (provider == null) {
+          throw FormatException(
+            e['providerId'] == null
+                ? 'No "providerId" in ${AuthUser} json payload.'
+                : 'Provider id "${e['providerId']}" not found.',
+          );
+        }
+        return provider.parseUser(e);
+      }).toList(),
+      name: json['name'] as String?,
+      profilePicture: json['profilePicture'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
     );
   }
 
   Iterable<UserId> userIds() => [UserId(userId, UserIdKind.innerId)]
       .followedBy(authUsers.expand((auth) => auth.userIds()));
+
+  Map<String, Object?> toJson() {
+    return {
+      'userId': userId,
+      'name': name,
+      'profilePicture': profilePicture,
+      'email': email,
+      'emailIsVerified': emailIsVerified,
+      'phone': phone,
+      'phoneIsVerified': phoneIsVerified,
+      'authUsers': authUsers,
+    };
+  }
 }
 
 class AuthUser<T> {
