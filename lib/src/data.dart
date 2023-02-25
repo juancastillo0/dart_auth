@@ -14,19 +14,33 @@ abstract class Persistence {
   /// Saves a [session] when the user has signed in or registered.
   Future<void> saveSession(UserSession session);
 
-  /// Returns a any (valid or not valid) session with [sessionId].
+  /// Returns any (valid or not valid) session with [sessionId].
   Future<UserSession?> getAnySession(String sessionId);
 
   /// Returns a valid session with [sessionId].
   Future<UserSession?> getValidSession(String sessionId) =>
-      getAnySession(sessionId)
-          .then((value) => value?.endedAt == null ? value : null);
+      getAnySession(sessionId).then(
+        (s) => s == null || !s.isValid ? null : s,
+      );
+
+  /// Returns user session for [userId].
+  /// If [onlyValid] is true, only valid sessions will be returned.
+  Future<List<UserSession>> getUserSessions(
+    String userId, {
+    required bool onlyValid,
+  });
 
   /// Saves a [user] and associates it with a [userId]
-  Future<void> saveUser(String userId, AuthUser user);
+  Future<void> saveUser(String userId, AuthUser<Object?> user);
 
-  /// Retrieves users by ids. The array should have the same length.
+  /// Retrieves users by [ids]. A user is null if it was not found
+  /// for the id in the given index.
+  /// The returned array should have the same length as [ids].
   Future<List<AppUser?>> getUsersById(List<UserId> ids);
+
+  /// Retrieves a user by [id].
+  Future<AppUser?> getUserById(UserId id) =>
+      getUsersById([id]).then((value) => value.first);
 }
 
 @immutable
@@ -79,7 +93,31 @@ class UserSession {
     this.meta,
     this.endedAt,
   });
+
+  /// Whether the session is valid
+  bool get isValid => endedAt == null;
+
 // generated-dart-fixer-start{"md5Hash":"UR44W1AtB7vHXyyYToVCGQ=="}
+
+  UserSession copyWith({
+    String? refreshToken,
+    String? deviceId,
+    bool deviceIdToNull = false,
+    Map<String, Object?>? meta,
+    bool metaToNull = false,
+    DateTime? endedAt,
+    bool endedAtToNull = false,
+  }) {
+    return UserSession(
+      refreshToken: refreshToken ?? this.refreshToken,
+      sessionId: sessionId,
+      userId: userId,
+      createdAt: createdAt,
+      deviceId: deviceId ?? (deviceIdToNull ? null : this.deviceId),
+      endedAt: endedAt ?? (endedAtToNull ? null : this.endedAt),
+      meta: meta ?? (metaToNull ? null : this.meta),
+    );
+  }
 
   factory UserSession.fromJson(Map json) {
     return UserSession(
@@ -333,6 +371,12 @@ class AuthUser<T> {
         phone: claims.phoneNumber,
         profilePicture: claims.picture?.toString(),
       );
+
+  static AuthUser<U> fromJson<U>(
+    Map<String, Object?> json,
+    OAuthProvider<U> provider,
+  ) =>
+      provider.parseUser(json);
 
   Map<String, Object?> toJson() => {
         'providerId': providerId,
