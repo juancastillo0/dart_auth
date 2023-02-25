@@ -33,14 +33,19 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
               ),
         );
 
+  static const wellKnownOpenIdEndpoint =
+      'https://accounts.google.com/.well-known/openid-configuration';
+
   static Future<GoogleProvider> retrieve({
     required String clientId,
     required String clientSecret,
     OAuthProviderConfig? config,
+    HttpClient? client,
   }) async =>
       GoogleProvider(
         openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
-          'https://accounts.google.com/.well-known/openid-configuration',
+          wellKnownOpenIdEndpoint,
+          client: client,
         ),
         clientId: clientId,
         clientSecret: clientSecret,
@@ -246,6 +251,10 @@ class GoogleAuthParams implements OAuthProviderConfig {
 /// The redirect_uri passed in the authorization request does not match an
 /// authorized redirect URI for the OAuth client ID.
 /// Review authorized redirect URIs in the Google API Console Credentials page.
+/// - unsupported_token_type:  The authorization server does not support
+///  the revocation of the presented token type.  That is, the
+///  client tried to revoke an access token on a server not
+///  supporting this feature.
 typedef GoogleAuthError = String;
 
 class GoogleTokenParams {

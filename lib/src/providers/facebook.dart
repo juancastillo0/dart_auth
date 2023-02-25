@@ -2,7 +2,8 @@ import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth/src/providers/facebook_user.dart';
+
+export 'package:oauth/src/providers/facebook_user.dart';
 
 /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
 class FacebookProvider extends OAuthProvider<FacebookUser> {

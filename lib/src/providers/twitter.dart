@@ -2,8 +2,9 @@ import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth/src/providers/twitter_user.dart';
-import 'package:oauth/src/providers/twitter_verify_credentials.dart';
+
+export 'package:oauth/src/providers/twitter_user.dart';
+export 'package:oauth/src/providers/twitter_verify_credentials.dart';
 
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/user-access-token
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/authorization-code

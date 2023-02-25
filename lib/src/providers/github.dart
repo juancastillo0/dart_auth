@@ -4,7 +4,8 @@ import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth/src/providers/github_token.dart';
+
+export 'package:oauth/src/providers/github_token.dart';
 
 /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
 class GithubProvider extends OAuthProvider<GithubToken> {

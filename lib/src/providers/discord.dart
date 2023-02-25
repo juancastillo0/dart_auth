@@ -68,6 +68,7 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
   }
 }
 
+/// https://discord.com/api/oauth2/@me
 class DiscordOAuth2Me {
   /// the current application
   final DiscordApplication application;
@@ -81,7 +82,7 @@ class DiscordOAuth2Me {
   /// object	the user who has authorized, if the user has authorized with the identify scope
   final DiscordUser? user;
 
-  ///
+  /// https://discord.com/api/oauth2/@me
   const DiscordOAuth2Me({
     required this.application,
     required this.scopes,

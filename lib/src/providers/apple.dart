@@ -48,6 +48,9 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
           ),
         );
 
+  static const wellKnownOpenIdEndpoint =
+      'https://appleid.apple.com/.well-known/openid-configuration';
+
   @override
   List<GrantType> get supportedFlows => const [
         // code id_token

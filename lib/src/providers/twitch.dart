@@ -161,36 +161,3 @@ class TwitchUser {
 
 // generated-dart-fixer-end{"md5Hash":"BUhsGd5FysUYNlJ20+hYuA=="}
 
-/// https://id.twitch.tv/oauth2/.well-known/openid-configuration
-final twitchConfig = {
-  'authorization_endpoint': 'https://id.twitch.tv/oauth2/authorize',
-  'claims_parameter_supported': true,
-  'claims_supported': [
-    'aud',
-    'exp',
-    'sub',
-    'email_verified',
-    'picture',
-    'updated_at',
-    'iat',
-    'iss',
-    'azp',
-    'email',
-    'preferred_username'
-  ],
-  'id_token_signing_alg_values_supported': ['RS256'],
-  'issuer': 'https://id.twitch.tv/oauth2',
-  'jwks_uri': 'https://id.twitch.tv/oauth2/keys',
-  'response_types_supported': [
-    'id_token',
-    'code',
-    'token',
-    'code id_token',
-    'token id_token'
-  ],
-  'scopes_supported': ['openid'],
-  'subject_types_supported': ['public'],
-  'token_endpoint': 'https://id.twitch.tv/oauth2/token',
-  'token_endpoint_auth_methods_supported': ['client_secret_post'],
-  'userinfo_endpoint': 'https://id.twitch.tv/oauth2/userinfo'
-};

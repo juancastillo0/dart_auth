@@ -21,6 +21,11 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     required super.clientSecret,
   });
 
+  static String wellKnownOpenIdEndpoint({
+    MicrosoftTenant tenant = MicrosoftTenant.common,
+  }) =>
+      'https://login.microsoftonline.com/${tenant.value}/v2.0/.well-known/openid-configuration';
+
   static Future<MicrosoftProvider> retrieve({
     required String clientId,
     required String clientSecret,
@@ -33,11 +38,13 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     /// provide the tenant identifier to sign them into the resource tenant.
     /// For more information, see Endpoints.
     MicrosoftTenant tenant = MicrosoftTenant.common,
+    HttpClient? client,
   }) async =>
       MicrosoftProvider(
         config: config,
         openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
-          'https://login.microsoftonline.com/${tenant.value}/v2.0/.well-known/openid-configuration',
+          wellKnownOpenIdEndpoint(tenant: tenant),
+          client: client,
         ),
         clientId: clientId,
         clientSecret: clientSecret,
@@ -72,6 +79,26 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     return result.map((claims) => parseUser(claims.toJson()));
   }
 
+  // Supported claims:
+  // "sub",
+  // "iss",
+  // "cloud_instance_name",
+  // "cloud_instance_host_name",
+  // "cloud_graph_host_name",
+  // "msgraph_host",
+  // "aud",
+  // "exp",
+  // "iat",
+  // "auth_time",
+  // "acr",
+  // "nonce",
+  // "preferred_username",
+  // "name",
+  // "tid",
+  // "ver",
+  // "at_hash",
+  // "c_hash",
+  // "email"
   @override
   AuthUser<OpenIdClaims> parseUser(Map<String, Object?> userData) {
     return AuthUser.fromClaims(

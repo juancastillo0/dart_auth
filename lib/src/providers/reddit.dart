@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth/src/providers/reddit_user.dart';
+
+export 'package:oauth/src/providers/reddit_user.dart';
 
 /// https://github.com/reddit-archive/reddit/wiki/OAuth2
 class RedditProvider extends OAuthProvider<RedditUser> {
