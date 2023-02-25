@@ -33,6 +33,25 @@ class GithubProvider extends OAuthProvider<GithubToken> {
       ];
 
   @override
+  Future<Result<ParsedResponse, OAuthErrorResponse>> revokeToken(
+    HttpClient client, {
+    required String token,
+    required bool isRefreshToken,
+  }) async {
+    final response = await sendHttpPost(
+      client,
+      Uri.parse(revokeTokenEndpoint!),
+      // github uses access_token instead of token
+      {'access_token': token},
+    );
+    if (response.isSuccess) {
+      return Ok(response);
+    } else {
+      return Err(OAuthErrorResponse.fromResponse(response));
+    }
+  }
+
+  @override
   Future<Result<AuthUser<GithubToken>, GetUserError>> getUser(
     HttpClient client,
     TokenResponse token,

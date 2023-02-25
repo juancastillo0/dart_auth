@@ -259,6 +259,27 @@ abstract class OAuthProvider<U> {
 
   // TODO: JWT bearer flow
 
+  Future<Result<ParsedResponse, OAuthErrorResponse>?> revokeToken(
+    HttpClient client, {
+    required String token,
+    required bool isRefreshToken,
+  }) async {
+    if (revokeTokenEndpoint == null) return null;
+    final response = await sendHttpPost(
+      client,
+      Uri.parse(revokeTokenEndpoint!),
+      {
+        'token': token,
+        'token_type_hint': isRefreshToken ? 'refresh_token' : 'access_token'
+      },
+    );
+    if (response.isSuccess) {
+      return Ok(response);
+    } else {
+      return Err(OAuthErrorResponse.fromResponse(response));
+    }
+  }
+
   Future<ParsedResponse> sendHttpPost(
     HttpClient client,
     Uri uri,
