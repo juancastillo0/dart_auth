@@ -4,12 +4,11 @@ import 'dart:convert' show jsonDecode, jsonEncode;
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+import 'package:oauth_example/main.dart';
+import 'package:oauth_example/shelf_helpers.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'main.dart';
-import 'shelf_helpers.dart';
 
 extension ThrowErr<O extends Object, E extends Object> on Result<O, E> {
   /// throws [E] if this is an [Err], else it returns [O] if it is [Ok].
@@ -24,7 +23,7 @@ extension ThrowErr<O extends Object, E extends Object> on Result<O, E> {
 
 Handler makeHandler(Config config) {
   final handler = AuthHandler(config);
-  final pIdRegExp = '/?([a-zA-Z_-]+)?';
+  const pIdRegExp = '/?([a-zA-Z_-]+)?';
 
   Future<Response> handleRequest(Request request) async {
     final path = request.url.path;
@@ -130,7 +129,7 @@ class AuthHandler {
         OAuthFlow(providerInstance, config.persistence, client: config.client);
     final authenticated = await flow.handleRedirectUri(
       queryParams: body,
-      redirectUri: '${config.baseRedirectUri}',
+      redirectUri: config.baseRedirectUri,
     );
     return authenticated.when(
       err: (err) {
@@ -157,7 +156,7 @@ class AuthHandler {
         final user = await onUserAuthenticated(
           token,
           providerInstance,
-          sessionId: null,
+          sessionId: token.stateModel!.sessionId!,
         );
 
         return user.when(
@@ -177,28 +176,35 @@ class AuthHandler {
   Future<Result<UserSession, GetUserError>> onUserAuthenticated<U>(
     TokenResponse token,
     OAuthProvider<U> providerInstance, {
-    required String? sessionId,
+    required String sessionId,
   }) async {
-    final wrongSessionError = Err<UserSession, GetUserError>(GetUserError(
-      token: token,
-      response: null,
-      message: 'Wrong session',
-    ));
-    if (token.state != null) {
-      final stateData = await config.persistence.getState(token.state!);
-      final stateSessionId = stateData?.sessionId;
-      sessionId ??= stateSessionId;
-      if (stateSessionId == null || stateSessionId != sessionId) {
-        return wrongSessionError;
+    // TODO: make transaction
+    final session = await config.persistence.getAnySession(sessionId);
+    if (session != null) {
+      if (session.isValid) {
+        return Ok(session);
       }
+      return Err(
+        GetUserError(
+          token: token,
+          response: null,
+          message: 'Session revoked',
+        ),
+      );
     }
-    if (sessionId == null) {
-      return wrongSessionError;
-    }
-    final result = await providerInstance.getUser(config.client, token);
+    final result = await providerInstance.getUser(
+      // TODO: improve this
+      OAuthClient.fromTokenResponse(
+        providerInstance,
+        token,
+        innerClient: config.client,
+      ),
+      token,
+    );
 
     return result.andThenAsync((user) async {
-      final users = await config.persistence.getUsersById(user.userIds());
+      final List<AppUser?> users =
+          await config.persistence.getUsersById(user.userIds());
       // TODO: casting error whereType<Map<String, Object?>>() does not throw
       final found = users.whereType<AppUser>().toList();
       final userIds = found.map((e) => e.userId).toSet();
@@ -213,18 +219,20 @@ class AuthHandler {
         await config.persistence.saveUser(userId, user);
       } else {
         // error multiple users
-        return Err(GetUserError(
-          token: token,
-          response: null,
-          message: 'Multiple users with same credentials',
-        ));
+        return Err(
+          GetUserError(
+            token: token,
+            response: null,
+            message: 'Multiple users with same credentials',
+          ),
+        );
       }
 
       final userSession = UserSession(
         refreshToken: makeRefreshToken(
           userId: userId,
           providerId: user.providerId,
-          sessionId: sessionId!,
+          sessionId: sessionId,
         ),
         sessionId: sessionId,
         userId: userId,
@@ -252,7 +260,7 @@ class AuthHandler {
       redirectUri:
           '${config.baseRedirectUri}/oauth/callback/${providerInstance.providerId}',
       // TODO: other params
-      loginHint: request.url.queryParameters["loginHint"],
+      loginHint: request.url.queryParameters['loginHint'],
       state: state,
       sessionId: sessionId,
       responseType:
@@ -282,7 +290,7 @@ class AuthHandler {
     final deviceCode = await providerInstance.getDeviceCode(
       config.client,
       // TODO: when do we need to send the redirectUri? here or in polling?
-      redirectUri: '${config.baseRedirectUri}',
+      redirectUri: config.baseRedirectUri,
     );
     if (deviceCode == null) {
       // The provider does not support it
@@ -318,7 +326,7 @@ class AuthHandler {
 
     final claims = await config.jwtMaker.getUserClaims(ctx(request));
     if (claims?.meta == null) {
-      return Response.unauthorized(null);
+      return Response.forbidden(null);
     }
     final meta = UserMetaClaims.fromJson(claims!.meta!);
     final providerInstance = config.allProviders[meta.providerId];
@@ -340,7 +348,7 @@ class AuthHandler {
           deviceCode: meta.deviceCode!,
         );
         if (result.isErr()) {
-          return Response.ok(
+          return Response.unauthorized(
             // TODO: improve and standardize error
             jsonEncode({'error': result.unwrapErr().error}),
             headers: jsonHeader,
@@ -480,7 +488,8 @@ class AuthHandler {
                       //   providerId: provider.providerId,
                       // );
                       return sendAndClose(
-                          {'refreshToken': session.refreshToken});
+                        {'refreshToken': session.refreshToken},
+                      );
                     },
                   );
                 },
@@ -490,13 +499,13 @@ class AuthHandler {
           try {
             await channel.sink.done;
           } finally {
-            subs.cancel();
+            await subs.cancel();
           }
         } else {
           // fetch persisted state
           final startTime = DateTime.now();
-          const duration = const Duration(seconds: 3);
-          void timerCallback() async {
+          const duration = Duration(seconds: 1);
+          Future<void> timerCallback() async {
             final session =
                 await config.persistence.getValidSession(claims.sessionId);
             if (channel.closeCode != null || isClosed) {
