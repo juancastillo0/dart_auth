@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 export 'package:oxidized/oxidized.dart';
 
+export 'src/client.dart';
 export 'src/data.dart';
 export 'src/jwt_and_sessions.dart';
 export 'src/oauth_base.dart';

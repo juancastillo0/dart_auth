@@ -14,6 +14,8 @@ export './src/providers/twitch.dart';
 export './src/providers/twitter.dart';
 
 class ImplementedProviders {
+  const ImplementedProviders._();
+
   /// Provider id for [AppleProvider]
   static const apple = 'apple';
 

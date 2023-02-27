@@ -3,11 +3,10 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:oauth/oauth.dart';
 
-class OAuth2Client<U> extends http.BaseClient {
+class OAuthClient<U> extends http.BaseClient {
   final OAuthProvider<U> provider;
   final String? scope;
 
-  String get accessToken => _accessToken;
   String _accessToken;
   DateTime? _accessTokenExpiration;
   String? _refreshToken;
@@ -15,7 +14,7 @@ class OAuth2Client<U> extends http.BaseClient {
   final http.Client _innerClient;
 
   ///
-  OAuth2Client({
+  OAuthClient({
     required this.provider,
     required String accessToken,
     required DateTime? accessTokenExpiration,
@@ -27,12 +26,12 @@ class OAuth2Client<U> extends http.BaseClient {
         _refreshToken = refreshToken,
         _innerClient = innerClient ?? http.Client();
 
-  factory OAuth2Client.fromTokenResponse(
+  factory OAuthClient.fromTokenResponse(
     OAuthProvider<U> provider,
     TokenResponse tokenResponse, {
     http.Client? innerClient,
   }) =>
-      OAuth2Client(
+      OAuthClient(
         provider: provider,
         accessToken: tokenResponse.access_token,
         accessTokenExpiration: tokenResponse.expires_at,
@@ -43,9 +42,9 @@ class OAuth2Client<U> extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final accessToken = await _getAccessToken();
-    if (request.headers['Authorization'] == null) {
-      request.headers['Authorization'] = 'Bearer $accessToken';
+    if (request.headers[Headers.authorization] == null) {
+      final accessToken = await _getAccessToken();
+      request.headers[Headers.authorization] = 'Bearer $accessToken';
     }
     return _innerClient.send(request);
   }
