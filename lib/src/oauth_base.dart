@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert' show base64Encode, jsonDecode, utf8;
 
+import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 import 'package:oauth/src/openid_configuration.dart';
@@ -165,6 +166,7 @@ abstract class OAuthProvider<U> {
         if (redirectUri != null) 'redirect_uri': redirectUri,
         ...?otherParams,
       },
+      headers: {Headers.accept: Headers.appJson},
     );
     final jsonData = jsonDecode(response.body) as Map<String, Object?>;
     return DeviceCodeResponse.fromJson(jsonData);
@@ -426,7 +428,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
           clientId: clientId,
           issuer: Uri.parse(issuer),
           // TODO: should be use it from token?
-          nonce: token.nonce,
+          nonce: token.stateModel?.nonce,
         )
         .toList();
 
@@ -718,13 +720,13 @@ class TokenResponse {
     required this.expires_at,
     this.state,
     this.rawJson,
-    this.nonce,
+    this.stateModel,
   });
 
   /// Parses the token response body
   factory TokenResponse.fromJson(
     Map<dynamic, dynamic> json, {
-    String? nonce,
+    AuthStateModel? stateModel,
   }) =>
       TokenResponse(
         access_token: json['access_token'] as String,
@@ -736,7 +738,7 @@ class TokenResponse {
         state: json['state'] as String?,
         expires_at: parseExpiresAt(json),
         rawJson: json.cast(),
-        nonce: nonce,
+        stateModel: stateModel,
       );
 
   Map<String, Object?> toJson() {
@@ -750,7 +752,7 @@ class TokenResponse {
       'refresh_token': refresh_token,
       'state': state,
       'expires_at': expires_at.toIso8601String(),
-      'nonce': nonce,
+      // TODO: stateModel
     }..removeWhere((key, value) => value == null);
   }
 
@@ -787,5 +789,6 @@ class TokenResponse {
 
   // TODO: should be save it here?
   /// The nonce sent to the provider to verify the [id_token]
-  final String? nonce;
+  // final String? nonce;
+  final AuthStateModel? stateModel;
 }

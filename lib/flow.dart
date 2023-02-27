@@ -51,6 +51,7 @@ class OAuthFlow<U> {
       nonce: nonce,
       responseType: responseType,
       sessionId: sessionId,
+      providerId: provider.providerId,
     );
     // TODO: should we use jwt?
     // TODO: maybe allow more meta data?
@@ -76,6 +77,8 @@ class OAuthFlow<U> {
     final stateModel = await persistence.getState(state);
     if (stateModel == null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.notFoundState));
+    } else if (stateModel.providerId != provider.providerId) {
+      return Err(AuthResponseError(data, AuthResponseErrorKind.invalidState));
     }
     final grantType = stateModel.responseType.grantType;
 
@@ -84,7 +87,7 @@ class OAuthFlow<U> {
     if (grantType == GrantType.tokenImplicit) {
       token = TokenResponse.fromJson(
         queryParams,
-        nonce: stateModel.nonce,
+        stateModel: stateModel,
       );
     } else {
       if (code == null) {
@@ -122,7 +125,7 @@ class OAuthFlow<U> {
       }
       token = TokenResponse.fromJson(
         (tokenBody is List ? tokenBody[0] : tokenBody) as Map,
-        nonce: stateModel.nonce,
+        stateModel: stateModel,
       );
     }
     // TODO: validate token https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
@@ -134,15 +137,6 @@ class OAuthFlow<U> {
     //   token: token,
     //   claims: claims,
     // );
-    if (grantType == GrantType.tokenImplicit && token.state != state) {
-      return Err(
-        AuthResponseError(
-          data,
-          AuthResponseErrorKind.invalidState,
-          response: responseToken,
-        ),
-      );
-    }
     return Ok(token);
   }
 }
@@ -198,10 +192,12 @@ class AuthStateModel {
   final OAuthResponseType responseType;
   final DateTime createdAt;
   final String? sessionId;
+  final String providerId;
 
   AuthStateModel({
     required this.responseType,
     required this.createdAt,
+    required this.providerId,
     this.codeVerifier,
     this.nonce,
     this.sessionId,
@@ -211,6 +207,7 @@ class AuthStateModel {
     return {
       'createdAt': createdAt.toIso8601String(),
       'codeVerifier': codeVerifier,
+      'providerId': providerId,
       'nonce': nonce,
       'responseType': responseType.toJson(),
       'sessionId': sessionId,
@@ -221,6 +218,7 @@ class AuthStateModel {
     return AuthStateModel(
       createdAt: DateTime.parse(map['createdAt'] as String),
       responseType: OAuthResponseType.fromJson(map['responseType'] as String),
+      providerId: map['providerId'] as String,
       codeVerifier: map['codeVerifier'] as String?,
       nonce: map['nonce'] as String?,
       sessionId: map['sessionId'] as String?,
