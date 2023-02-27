@@ -108,8 +108,42 @@ MockClient createMockClient({
   required Map<String, OAuthProvider<dynamic>> allProviders,
   required Map<String, ProviderClientMock> allProvidersMocks,
 }) {
+  final userEndpoints = {
+    ImplementedProviders.discord: ['https://discord.com/api/oauth2/@me'],
+    ImplementedProviders.facebook: ['https://graph.facebook.com/v16.0/me'],
+    ImplementedProviders.github: [
+      'https://api.github.com/applications/${allProviders[ImplementedProviders.github]!.clientId}/token',
+      'https://api.github.com/user/emails',
+    ],
+    ImplementedProviders.reddit: [
+      'https://oauth.reddit.com/api/v1/me?raw_json=1'
+    ],
+    ImplementedProviders.spotify: ['https://api.spotify.com/v1/me'],
+    ImplementedProviders.twitter: [
+      'https://api.twitter.com/1.1/account/verify_credentials.json',
+      'https://api.twitter.com/2/users/me',
+    ],
+  }.map((key, value) => MapEntry(key, value.map(Uri.parse).toList()));
+
   return MockClient(
     (request) async {
+      if (request.method == 'GET' ||
+          request.headers[Headers.accept] == 'application/vnd.github+json') {
+        // get user endpoints
+
+        final providerId = userEndpoints.entries
+            .firstWhere(
+              (element) => element.value.any(
+                (uri) => request.url.toString().startsWith(uri.toString()),
+              ),
+            )
+            .key;
+        final providerMock = allProvidersMocks[providerId]!;
+        final provider = allProviders[providerId]!;
+
+        return _handleGetUserEndpoint(request, provider, providerMock);
+      }
+
       expect(request.method, 'POST');
       expect(
         request.headers[Headers.contentType],
@@ -403,3 +437,90 @@ MockClient createMockClient({
     },
   );
 }
+
+Response _handleGetUserEndpoint(
+  Request request,
+  OAuthProvider<dynamic> provider,
+  ProviderClientMock providerMock,
+) {
+  final isGithubUser = provider is GithubProvider &&
+      !request.url.toString().startsWith('https://api.github.com/user/emails');
+  if (provider is GithubProvider) {
+    expect(request.method, isGithubUser ? 'POST' : 'GET');
+    expect(
+      request.headers[Headers.accept],
+      'application/vnd.github+json',
+    );
+  } else {
+    expect(request.headers[Headers.accept], Headers.appJson);
+  }
+
+  /// Authorizaiton header
+  final authorization = request.headers[Headers.authorization]!.split(' ');
+  expect(authorization, hasLength(2));
+
+  final String accessToken;
+  if (isGithubUser) {
+    expect(authorization[0], 'Basic');
+    expect(
+      utf8.decode(base64Decode(authorization[1])).split(':'),
+      [provider.clientId, provider.clientSecret],
+    );
+    expect(
+      request.headers[Headers.contentType],
+      // TODO: maybe use from url y github supports it
+      '${Headers.appJson}; charset=utf-8',
+    );
+    accessToken = (jsonDecode(request.body) as Map)['access_token'] as String;
+  } else {
+    expect(authorization[0], 'Bearer');
+    accessToken = authorization[1];
+  }
+  final tokenInfo = providerMock.tokens[accessToken];
+  expect(tokenInfo!.tokenKind, 'access_token');
+  final grantType = tokenInfo.grantType;
+
+  // nonce is only for id_token, at the moment we do not use endpoints
+  final user = mockUser(
+    provider,
+    nonce: 'NONE',
+    grantType: grantType,
+  );
+  final Object? jsonData;
+  if (provider is TwitterProvider) {
+    final twitterUser = user as AuthUser<TwitterUserData>;
+    if (request.url
+        .toString()
+        .startsWith('https://api.twitter.com/2/users/me')) {
+      jsonData = twitterUser.providerUser.user.toJson();
+    } else {
+      jsonData = twitterUser.providerUser.verifyCredentials.toJson();
+    }
+  } else if (provider is GithubProvider) {
+    final githubUser = user as AuthUser<GithubToken>;
+    if (request.url
+        .toString()
+        .startsWith('https://api.github.com/user/emails')) {
+      jsonData = [
+        GithubEmail(
+          email: githubUser.email!,
+          primary: true,
+          verified: true,
+          visibility: 'public',
+        ).toJson()
+      ];
+    } else {
+      jsonData = githubUser.providerUser.toJson();
+    }
+  } else {
+    jsonData = user.toJson();
+  }
+  return Response(jsonEncode(jsonData), 200, headers: jsonHeader);
+}
+
+const facebookDeviceErrorAuthorizationPending =
+    '{"error":{"message":"This request requires the user to take a pending action","code":31,"error_subcode":1349174,"error_user_title":"Device Login Authorization Pending","error_user_msg":"User has not yet authorized your application. Continue polling."}}';
+const facebookDeviceErrorSlowDown =
+    '{"error":{"message":"User request limit reached","code":17,"error_subcode":1349172,"error_user_title":"OAuth Device Excessive Polling","error_user_msg":"Your device is polling too frequently. Space your requests with a minium interval of 5 seconds."}}';
+const facebookDeviceErrorSessionExpired =
+    '{"error":{"message":"The session has expired""code":463,"error_subcode":1349152, "error_user_title":"Activation Code Expired","error_user_msg":"The code you entered has expired. Please go back to your device for a new code and try again."}}';
