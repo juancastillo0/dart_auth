@@ -20,9 +20,9 @@ linter:
     omit_local_variable_types: false
     unnecessary_brace_in_string_interps: false
     sort_constructors_first: false
+    cascade_invocations: false
     constant_identifier_names: false
     non_constant_identifier_names: false
-    cascade_invocations: false
 
 # analyzer:
 #   exclude:

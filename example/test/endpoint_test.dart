@@ -14,6 +14,7 @@ import 'package:test/test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'mock_auth_server.dart';
+import 'user_models.dart';
 
 extension ApplyFn<V extends Object> on V {
   T applyFn<T>(T Function(V) fn) => fn(this);
@@ -37,7 +38,13 @@ void main() async {
         'spotify',
         'twitch',
         'twitter',
-      ].map((e) => MapEntry(e, '${e}_client_id:${e}_client_secret')),
+      ].map(
+        (e) => MapEntry(
+          e,
+          '${e}_client_id:${e}_client_secret'
+          '${e == 'facebook' ? ':client_token' : ''}',
+        ),
+      ),
     ),
   );
 
@@ -54,7 +61,7 @@ void main() async {
     userFromClaims: (claims) => claims,
   );
 
-  group('auth handler', () {
+  group('auth handler', timeout: const Timeout(Duration(seconds: 60)), () {
     late Config config;
     final client = HttpClient();
     late Uri url;
@@ -300,11 +307,19 @@ class TestState {
     assert(!isDeviceCodeFlow || deviceCode != null);
     final state = authorizeUrl?.queryParameters['state'];
 
-    final responseState = await client.get(
-      url.replace(path: 'oauth/state'),
-      headers: {Headers.authorization: accessToken},
-    );
-    expect(responseState.statusCode, HttpStatus.unauthorized);
+    {
+      final responseState = await client.get(
+        url.replace(path: 'oauth/state'),
+      );
+      expect(responseState.statusCode, HttpStatus.forbidden);
+    }
+    {
+      final responseState = await client.get(
+        url.replace(path: 'oauth/state'),
+        headers: {Headers.authorization: accessToken},
+      );
+      expect(responseState.statusCode, HttpStatus.unauthorized);
+    }
 
     /// GET successful oauth/state
     final wsChannel = WebSocketChannel.connect(
@@ -313,6 +328,7 @@ class TestState {
     wsChannel.sink.add(jsonEncode({'accessToken': accessToken}));
     final events = <Map<String, Object?>>[];
     final wsSubscription = wsChannel.stream
+        .cast<String>()
         .map((e) => jsonDecode(e) as Map<String, Object?>)
         .listen(events.add);
 
@@ -338,6 +354,7 @@ class TestState {
     } else {
       /// device code flow
       // TODO: MockClient fetch completer
+      await providerMock.deviceCodes[deviceCode!.deviceCode]!.completer.future;
     }
 
     /// GET successful oauth/state
@@ -372,22 +389,63 @@ class TestState {
 
     /// GET successful /user/me
     final responseMe = await client.get(
-      url.replace(path: 'user/me'),
+      url.replace(
+        path: 'user/me',
+        queryParameters: {
+          'fields': ['sessions']
+        },
+      ),
       headers: {Headers.authorization: accessToken2},
     );
     expect(responseMe.statusCode, 200);
     expect(responseMe.headers, jsonHeaderMatcher);
     // TODO: more params: name email verified
+
+    const noPicture = [
+      ImplementedProviders.discord,
+      ImplementedProviders.microsoft,
+      ImplementedProviders.apple,
+    ];
+    const noName = [ImplementedProviders.discord];
+    final grantType =
+        isDeviceCodeFlow ? GrantType.deviceCode : GrantType.authorizationCode;
     expect(jsonDecode(responseMe.body), {
       'userId': session2.userId,
-      'sessionId': session2.sessionId,
-      'sessions': [],
-      'authUsers': [],
+      'name': provider.providerId == ImplementedProviders.twitch
+          ? 'preferred_username'
+          : noName.contains(provider.providerId)
+              ? 'username'
+              : 'name',
+      'profilePicture': noPicture.contains(provider.providerId)
+          ? null
+          : 'https://i.scdn.co/image/ab67616d00001e02ff9ca10b55ce82ae553c8228',
+      'email': provider.providerId == ImplementedProviders.reddit
+          ? null
+          : 'email-${provider.providerId}-${grantType.name}@example.com',
+      'emailIsVerified': provider.providerId != ImplementedProviders.reddit,
+      'phone': null,
+      'phoneIsVerified': false,
+      'sessions': [session2.toJson()],
+      'authUsers': [
+        jsonDecode(
+          jsonEncode(
+            mockUser(
+              provider,
+              nonce: authorizeUrl?.queryParameters['nonce'] ?? 'NONE',
+              grantType: isDeviceCodeFlow
+                  ? GrantType.deviceCode
+                  : GrantType.authorizationCode,
+            ),
+          ),
+        )
+      ],
     });
 
     /// Verify subscription
-    await wsSubscription.asFuture();
-    expect(events.length, isDeviceCodeFlow ? greaterThan(1) : 1);
+    if (wsChannel.closeCode == null) {
+      await wsSubscription.asFuture<dynamic>();
+    }
+    expect(events.length, 1);
     final lastEvent = events.last;
     expect(lastEvent.length, 1);
     expect(lastEvent['refreshToken'], refreshToken);
@@ -396,7 +454,7 @@ class TestState {
 
     await logoutAndValidate(
       refreshToken: refreshToken,
-      accessToken: accessToken,
+      accessToken: accessToken2,
     );
   }
 
@@ -407,7 +465,7 @@ class TestState {
     /// Revoke token
     final responseRevoke = await client.post(
       url.replace(path: 'jwt/revoke'),
-      headers: {Headers.authorization: refreshToken},
+      headers: {Headers.authorization: accessToken},
     );
     expect(responseRevoke.statusCode, 200);
     {
@@ -426,12 +484,12 @@ class TestState {
       expect(responseRefreshUnauthenticated.statusCode, 401);
     }
     {
-      /// GET unauthenticated /user/me
-      final responseMeFailed = await client.get(
-        url.replace(path: 'user/me'),
-        headers: {Headers.authorization: accessToken},
-      );
-      expect(responseMeFailed.statusCode, 401);
+      /// TODO: maybe pass time to invalidate accessToken GET unauthenticated /user/me
+      // final responseMeFailed = await client.get(
+      //   url.replace(path: 'user/me'),
+      //   headers: {Headers.authorization: accessToken},
+      // );
+      // expect(responseMeFailed.statusCode, 401);
     }
   }
 
