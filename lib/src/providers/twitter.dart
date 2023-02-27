@@ -60,7 +60,12 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
           include_email: true,
           include_entities: false,
           skip_status: false,
-        ).toJson(),
+        ).toJson().map(
+              (key, value) => MapEntry(
+                key,
+                value != null ? '${value as bool}' : null,
+              ),
+            ),
       ),
       headers: {
         'Accept': 'application/json',

@@ -44,8 +44,10 @@ class RedditProvider extends OAuthProvider<RedditUser> {
     HttpClient client,
     TokenResponse token,
   ) async {
-    final response = await client
-        .get(Uri.parse('https://oauth.reddit.com/api/v1/me?raw_json=1'));
+    final response = await client.get(
+      Uri.parse('https://oauth.reddit.com/api/v1/me?raw_json=1'),
+      headers: {Headers.accept: Headers.appJson},
+    );
     if (response.statusCode != 200) {
       return Err(GetUserError(token: token, response: response));
     }
@@ -64,6 +66,7 @@ class RedditProvider extends OAuthProvider<RedditUser> {
       rawUserData: userData,
       providerUserId: user.id,
       name: user.name,
+      profilePicture: user.iconImg,
     );
   }
 

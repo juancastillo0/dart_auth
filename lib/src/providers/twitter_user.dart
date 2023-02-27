@@ -145,7 +145,7 @@ class TwitterUser {
       'url': url,
       'description': description,
       'verified': verified,
-      'verified_type': verified_type,
+      'verified_type': verified_type?.name,
       'entities': entities,
       'profile_image_url': profile_image_url,
       'public_metrics': public_metrics,

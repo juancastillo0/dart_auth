@@ -101,6 +101,9 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   // "email"
   @override
   AuthUser<OpenIdClaims> parseUser(Map<String, Object?> userData) {
+    if (userData['email'] != null && userData['email_verified'] == null) {
+      userData['email_verified'] = true;
+    }
     return AuthUser.fromClaims(
       OpenIdClaims.fromJson(userData),
       providerId: providerId,

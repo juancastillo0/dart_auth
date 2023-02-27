@@ -1,4 +1,6 @@
 /// https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration
+// ignore_for_file: prefer_single_quotes
+
 const microsoftConfig = {
   "token_endpoint":
       "https://login.microsoftonline.com/common/oauth2/v2.0/token",

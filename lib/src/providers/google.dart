@@ -93,7 +93,7 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
       email: googleClaims.email,
       name: googleClaims.name,
       openIdClaims: OpenIdClaims.fromJson(userData),
-      profilePicture: googleClaims.picture ?? googleClaims.profile,
+      profilePicture: googleClaims.picture,
     );
   }
 }
@@ -321,7 +321,9 @@ class GoogleClaims {
   ///
   factory GoogleClaims.fromJson(Map<dynamic, dynamic> map) {
     return GoogleClaims(
-      aud: map['aud'] as String,
+      aud: map['aud'] is String
+          ? [map['aud'] as String]
+          : (map['aud'] as Iterable).map((e) => e as String).toList(),
       exp: map['exp'] as int,
       iat: map['iat'] as int,
       iss: map['iss'] as String,
@@ -347,7 +349,7 @@ class GoogleClaims {
 
   /// The audience that this ID token is intended for.
   /// It must be one of the OAuth 2.0 client IDs of your application.
-  final String aud;
+  final List<String> aud;
 
   /// Expiration time on or after which the ID token must not be accepted.
   /// Represented in Unix time (integer seconds).

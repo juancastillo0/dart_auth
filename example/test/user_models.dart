@@ -1,153 +1,173 @@
+// ignore_for_file: prefer_single_quotes
+
+import 'dart:convert' show jsonDecode, jsonEncode;
+
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+
+Map<String, Object?> _cycleJson(Object? object) {
+  return jsonDecode(jsonEncode(object)) as Map<String, Object?>;
+}
 
 AuthUser<U> mockUser<U>(
   OAuthProvider<U> provider, {
   required String nonce,
+  required GrantType grantType,
 }) {
-  final id = 'id';
-  final numId = 1;
-  final name = 'name';
-  final preferred_username = "preferred_username";
-  final username = 'username';
-  final email = 'email@example.com';
-  final createdAt = DateTime.now().subtract(const Duration(days: 2 * 356));
-  final updatedAt = DateTime.now().subtract(const Duration(days: 356));
-  final issuedAt = DateTime.now();
+  final issuedAt = DateTime.parse('2024-02-26T01:11:25.319538');
+  final id = 'id-${grantType.name}';
+  final numId = grantType.hashCode;
+  const name = 'name';
+  const preferred_username = 'preferred_username';
+  const username = 'username';
+  final email = 'email-${provider.providerId}-${grantType.name}@example.com';
+  final createdAt = issuedAt.subtract(const Duration(days: 2 * 356));
+  final updatedAt = issuedAt.subtract(const Duration(days: 356));
   final iat = issuedAt.millisecondsSinceEpoch ~/ 1000;
-  final expires = DateTime.now().add(const Duration(days: 365));
+  final expires = issuedAt.add(const Duration(days: 365));
   final exp = expires.millisecondsSinceEpoch ~/ 1000;
-  final emailVerified = true;
-  final picture =
+  const emailVerified = true;
+  const picture =
       'https://i.scdn.co/image/ab67616d00001e02ff9ca10b55ce82ae553c8228';
-  final locale = 'en-US';
-  final profileUrl = '';
+  const locale = 'en-US';
+  const profileUrl = '';
 
   return matchProvider(
     provider,
     other: (p) => throw Exception('unsupported ${p.providerId}'),
     discord: (p) => p.parseUser(
-      DiscordOAuth2Me(
-        application: DiscordApplication(
-          id: id,
-          name: name,
-          description: 'description',
-          bot_public: false,
-          bot_require_code_grant: true,
-          verify_key: 'verify_key',
-        ),
-        expires: expires,
-        scopes: provider.defaultScopes,
-        user: DiscordUser(
-          id: id,
-          username: username,
-          discriminator: 'disc',
-          mfa_enabled: false,
-          email: email,
-          verified: emailVerified,
-          locale: locale,
-          premium_type: 0,
-        ),
-      ).toJson(),
-    ),
-    facebook: (p) => p.parseUser(
-      FacebookUser(
-        id: id,
-        first_name: 'first_name',
-        last_name: 'last_name',
-        name: name,
-        // TODO:
-        name_format: 'name_format',
-        short_name: name,
-        picture: FacebookPictureNode(
-          data: FacebookPicture(
-            height: 100,
-            is_silhouette: true,
-            url: picture,
-            width: 100,
+      _cycleJson(
+        DiscordOAuth2Me(
+          application: DiscordApplication(
+            id: id,
+            name: name,
+            description: 'description',
+            bot_public: false,
+            bot_require_code_grant: true,
+            verify_key: 'verify_key',
+          ),
+          expires: expires,
+          scopes: provider.defaultScopes,
+          user: DiscordUser(
+            id: id,
+            username: username,
+            discriminator: 'disc',
+            mfa_enabled: false,
+            email: email,
+            verified: emailVerified,
+            locale: locale,
+            premium_type: 0,
           ),
         ),
-        email: email,
-        profile_pic: picture,
-      ).toJson(),
+      ),
+    ),
+    facebook: (p) => p.parseUser(
+      _cycleJson(
+        FacebookUser(
+          id: id,
+          first_name: 'first_name',
+          last_name: 'last_name',
+          name: name,
+          // TODO:
+          name_format: 'name_format',
+          short_name: name,
+          picture: const FacebookPictureNode(
+            data: FacebookPicture(
+              height: 100,
+              is_silhouette: true,
+              url: picture,
+              width: 100,
+            ),
+          ),
+          email: email,
+          profile_pic: picture,
+        ),
+      ),
     ),
     github: (p) => p.parseUser(
-      GithubToken(
-        id: numId,
-        url: 'url',
-        token: 'token',
-        expires_at: expires,
-        app: GithubTokenApp(
-          client_id: provider.clientId,
-          name: name,
-          url: 'url',
-        ),
-        updated_at: updatedAt,
-        created_at: issuedAt,
-        user: GithubTokenUser(
-          login: username,
+      _cycleJson(
+        GithubToken(
           id: numId,
-          node_id: id, // MDQ6VXNlcjE=
-          avatar_url: 'https://github.com/images/error/octocat_happy.gif',
-          url: 'https://api.github.com/users/octocat',
-          html_url: 'https://github.com/octocat',
-          followers_url: 'https://api.github.com/users/octocat/followers',
-          following_url:
-              'https://api.github.com/users/octocat/following{/other_user}',
-          gists_url: 'https://api.github.com/users/octocat/gists{/gist_id}',
-          starred_url:
-              'https://api.github.com/users/octocat/starred{/owner}{/repo}',
-          subscriptions_url:
-              'https://api.github.com/users/octocat/subscriptions',
-          organizations_url: 'https://api.github.com/users/octocat/orgs',
-          repos_url: 'https://api.github.com/users/octocat/repos',
-          events_url: 'https://api.github.com/users/octocat/events{/privacy}',
-          received_events_url:
-              'https://api.github.com/users/octocat/received_events',
-          type: 'User',
-          site_admin: false,
-          email: email,
-          name: name,
+          url: 'url',
+          token: 'token',
+          expires_at: expires,
+          app: GithubTokenApp(
+            client_id: provider.clientId,
+            name: name,
+            url: 'url',
+          ),
+          updated_at: updatedAt,
+          created_at: issuedAt,
+          user: GithubTokenUser(
+            login: username,
+            id: numId,
+            node_id: id, // MDQ6VXNlcjE=
+            avatar_url:
+                picture, // 'https://github.com/images/error/octocat_happy.gif',
+            url: 'https://api.github.com/users/octocat',
+            html_url: 'https://github.com/octocat',
+            followers_url: 'https://api.github.com/users/octocat/followers',
+            following_url:
+                'https://api.github.com/users/octocat/following{/other_user}',
+            gists_url: 'https://api.github.com/users/octocat/gists{/gist_id}',
+            starred_url:
+                'https://api.github.com/users/octocat/starred{/owner}{/repo}',
+            subscriptions_url:
+                'https://api.github.com/users/octocat/subscriptions',
+            organizations_url: 'https://api.github.com/users/octocat/orgs',
+            repos_url: 'https://api.github.com/users/octocat/repos',
+            events_url: 'https://api.github.com/users/octocat/events{/privacy}',
+            received_events_url:
+                'https://api.github.com/users/octocat/received_events',
+            type: 'User',
+            site_admin: false,
+            email: email,
+            name: name,
+          ),
         ),
-      ).toJson(),
+      ),
     ),
     google: (p) => p.parseUser(
-      GoogleClaims(
-        aud: provider.clientId,
-        exp: exp,
-        iat: iat,
-        iss: 'https://accounts.google.com',
-        sub: 'sub',
-        nonce: nonce,
-        email: email,
-        name: name,
-        picture: picture,
-        email_verified: emailVerified.toString(),
-        locale: locale,
-        profile: profileUrl,
-      ).toJson(),
+      _cycleJson(
+        GoogleClaims(
+          aud: [provider.clientId],
+          exp: exp,
+          iat: iat,
+          iss: 'https://accounts.google.com',
+          sub: id,
+          nonce: nonce,
+          email: email,
+          name: name,
+          picture: picture,
+          email_verified: emailVerified.toString(),
+          locale: locale,
+          profile: profileUrl,
+        ),
+      ),
     ),
     microsoft: (p) => p.parseUser({
-      "sub": id,
-      "iss": p.openIdConfig.issuer.toString(),
-      "aud": [p.clientId],
-      "exp": exp,
-      "iat": iat,
-      "auth_time": iat,
+      'sub': id,
+      'iss': p.openIdConfig.issuer.toString(),
+      // TODO: azp is not natively supported by microsoft
+      'azp': p.clientId,
+      'aud': [p.clientId],
+      'exp': exp,
+      'iat': iat,
+      'auth_time': iat,
       // "acr": "",
-      "nonce": nonce,
-      "preferred_username": preferred_username,
-      "name": name,
+      'nonce': nonce,
+      'preferred_username': preferred_username,
+      'name': name,
       // "tid": "",
       // "ver": "",
       // "at_hash": "",
       // "c_hash": "",
-      "email": email,
+      'email': email,
       //
-      "cloud_instance_name": "",
-      "cloud_instance_host_name": "",
-      "cloud_graph_host_name": "",
-      "msgraph_host": "",
+      'cloud_instance_name': '',
+      'cloud_instance_host_name': '',
+      'cloud_graph_host_name': '',
+      'msgraph_host': '',
     }),
     reddit: (p) => p.parseUser(
       RedditUser(
@@ -160,29 +180,31 @@ AuthUser<U> mockUser<U>(
       ).toJson(),
     ),
     spotify: (p) => p.parseUser(
-      SpotifyUser(
-        country: 'US',
-        display_name: preferred_username,
-        email: email,
-        explicit_content: SpotifyExplicitContent(
-          filter_enabled: true,
-          filter_locked: true,
-        ),
-        external_urls: SpotifyExternalUrls(spotify: profileUrl),
-        followers: SpotifyFollowers(total: 0, href: 'href'),
-        href: profileUrl,
-        id: id,
-        images: [
-          SpotifyUserImage(
-            url: picture,
-            height: 100,
-            width: 100,
+      _cycleJson(
+        SpotifyUser(
+          country: 'US',
+          display_name: name,
+          email: email,
+          explicit_content: const SpotifyExplicitContent(
+            filter_enabled: true,
+            filter_locked: true,
           ),
-        ],
-        product: 'free',
-        type: 'user',
-        uri: profileUrl,
-      ).toJson(),
+          external_urls: const SpotifyExternalUrls(spotify: profileUrl),
+          followers: const SpotifyFollowers(total: 0, href: 'href'),
+          href: profileUrl,
+          id: id,
+          images: [
+            const SpotifyUserImage(
+              url: picture,
+              height: 100,
+              width: 100,
+            ),
+          ],
+          product: 'free',
+          type: 'user',
+          uri: profileUrl,
+        ),
+      ),
     ),
     twitch: (p) => p.parseUser(
       TwitchUser(
@@ -194,22 +216,32 @@ AuthUser<U> mockUser<U>(
         updatedAt: updatedAt,
         issuedAt: issuedAt,
         expiresAt: expires,
-      ).toJson(),
+      ).toJson()
+        ..['nonce'] = nonce
+        ..['azp'] = provider.clientId
+        ..['aud'] = [provider.clientId]
+        ..['iss'] = p.openIdConfig.issuer,
     ),
-    twitter: (p) => p.parseUser(TwitterUserData(
-      user: TwitterUser(
-        id: id,
-        name: name,
-        username: username,
-        url: profileUrl,
-        profile_image_url: picture,
-        created_at: createdAt,
-        verified: false,
-        verified_type: TwitterVerifiedType.none,
+    twitter: (p) => p.parseUser(
+      _cycleJson(
+        TwitterUserData(
+          user: TwitterUser(
+            id: id,
+            name: name,
+            username: username,
+            url: profileUrl,
+            profile_image_url: picture,
+            created_at: createdAt,
+            verified: false,
+            verified_type: TwitterVerifiedType.none,
+          ),
+          verifyCredentials: TwitterVerifyCredentials.fromJson({
+            ...twitterVerifyCredentialsJson,
+            'email': email,
+          }),
+        ),
       ),
-      verifyCredentials:
-          TwitterVerifyCredentials.fromJson(twitterVerifyCredentialsJson),
-    ).toJson()),
+    ),
   ) as AuthUser<U>;
 }
 

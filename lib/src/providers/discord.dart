@@ -69,6 +69,33 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
 }
 
 /// https://discord.com/api/oauth2/@me
+///
+/// ```json
+/// {
+///   "application": {
+///     "id": "159799960412356608",
+///     "name": "AIRHORN SOLUTIONS",
+///     "icon": "f03590d3eb764081d154a66340ea7d6d",
+///     "description": "",
+///     "hook": true,
+///     "bot_public": true,
+///     "bot_require_code_grant": false,
+///     "verify_key": "c8cde6a3c8c6e49d86af3191287b3ce255872be1fff6dc285bdb420c06a2c3c8"
+///   },
+///   "scopes": [
+///     "guilds.join",
+///     "identify"
+///   ],
+///   "expires": "2021-01-23T02:33:17.017000+00:00",
+///   "user": {
+///     "id": "268473310986240001",
+///     "username": "Discord",
+///     "avatar": "f749bb0cbeeb26ef21eca719337d20f1",
+///     "discriminator": "0001",
+///     "public_flags": 131072
+///   }
+/// }
+/// ```
 class DiscordOAuth2Me {
   /// the current application
   final DiscordApplication application;
@@ -128,6 +155,21 @@ class DiscordOAuth2Me {
 
 typedef DiscordSnowflake = String;
 
+/// ```json
+/// {
+///   "id": "80351110224678912",
+///   "username": "Nelly",
+///   "discriminator": "1337",
+///   "avatar": "8342729096ea3675442027381ff50dfe",
+///   "verified": true,
+///   "email": "nelly@discord.com",
+///   "flags": 64,
+///   "banner": "06c16474723fe537c283b8efa61a30c8",
+///   "accent_color": 16711680,
+///   "premium_type": 1,
+///   "public_flags": 64
+/// }
+/// ```
 class DiscordUser {
   /// the user's id	identify
   final DiscordSnowflake id;
@@ -208,9 +250,9 @@ class DiscordUser {
       locale: json['locale'] as String?,
       verified: json['verified'] as bool?,
       email: json['email'] as String?,
-      flags: json['flags'] as int,
-      premium_type: json['premium_type'] as int,
-      public_flags: json['public_flags'] as int,
+      flags: json['flags'] as int?,
+      premium_type: json['premium_type'] as int?,
+      public_flags: json['public_flags'] as int?,
     );
   }
 
@@ -369,11 +411,11 @@ class DiscordApplication {
       team: json['team'] == null
           ? null
           : DiscordTeam.fromJson((json['team'] as Map).cast()),
-      guild_id: json['guild_id'] as String,
-      primary_sku_id: json['primary_sku_id'] as String,
+      guild_id: json['guild_id'] as String?,
+      primary_sku_id: json['primary_sku_id'] as String?,
       slug: json['slug'] as String?,
       cover_image: json['cover_image'] as String?,
-      flags: json['flags'] as int,
+      flags: json['flags'] as int?,
       tags: json['tags'] == null
           ? null
           : (json['tags'] as Iterable).map((v) => v as String).toList(),

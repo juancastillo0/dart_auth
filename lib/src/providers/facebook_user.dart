@@ -217,16 +217,18 @@ class FacebookUser {
               .map((v) => FacebookExperience.fromJson((v as Map).cast()))
               .toList(),
       link: json['link'] as String?,
-      location:
-          (json['location'] as Map).map((k, v) => MapEntry(k as String, v)),
+      location: json['location'] == null
+          ? null
+          : (json['location'] as Map).map((k, v) => MapEntry(k as String, v)),
       shared_login_upgrade_required_by:
           json['shared_login_upgrade_required_by'] == null
               ? null
               : DateTime.parse(
                   json['shared_login_upgrade_required_by'] as String,
                 ),
-      hometown:
-          (json['hometown'] as Map).map((k, v) => MapEntry(k as String, v)),
+      hometown: json['hometown'] == null
+          ? null
+          : (json['hometown'] as Map).map((k, v) => MapEntry(k as String, v)),
       favorite_athletes: json['favorite_athletes'] == null
           ? null
           : (json['favorite_athletes'] as Iterable)
@@ -245,8 +247,10 @@ class FacebookUser {
       meeting_for: json['meeting_for'] == null
           ? null
           : (json['meeting_for'] as Iterable).map((v) => v as String).toList(),
-      payment_pricepoints: (json['payment_pricepoints'] as Map)
-          .map((k, v) => MapEntry(k as String, v)),
+      payment_pricepoints: json['payment_pricepoints'] == null
+          ? null
+          : (json['payment_pricepoints'] as Map)
+              .map((k, v) => MapEntry(k as String, v)),
       profile_pic: json['profile_pic'] as String?,
       quotes: json['quotes'] as String?,
       significant_other: json['significant_other'] == null

@@ -44,7 +44,7 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
     if (response.statusCode != 200) {
       return Err(GetUserError(response: response, token: token));
     }
-    final userData = jsonDecode(response.body) as Map<String, Object>;
+    final userData = jsonDecode(response.body) as Map<String, Object?>;
     return Ok(parseUser(userData));
   }
 
@@ -60,6 +60,7 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
       email: user.email,
       name: user.display_name,
       providerUser: user,
+      profilePicture: user.images.isNotEmpty ? user.images[0].url : null,
     );
   }
 }

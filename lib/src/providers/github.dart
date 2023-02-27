@@ -1,6 +1,6 @@
 // ignore_for_file: non_constant_identifier_names, constant_identifier_names
 
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
@@ -42,6 +42,7 @@ class GithubProvider extends OAuthProvider<GithubToken> {
       client,
       Uri.parse(revokeTokenEndpoint!),
       // github uses access_token instead of token
+      // TODO: test this, maybe we should use json
       {'access_token': token},
     );
     if (response.isSuccess) {
@@ -56,16 +57,17 @@ class GithubProvider extends OAuthProvider<GithubToken> {
     HttpClient client,
     TokenResponse token,
   ) async {
+    // Maybe use https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28
     final response = await client.post(
       Uri.parse('https://api.github.com/applications/$clientId/token'),
       headers: {
+        Headers.contentType: Headers.appJson,
         'Accept': 'application/vnd.github+json',
         'Authorization': basicAuthHeader(),
         'X-GitHub-Api-Version': '2022-11-28'
       },
-      body: {
-        'access_token': token.access_token,
-      },
+      // TODO: test and maybe use Headers.appFormUrlEncoded
+      body: jsonEncode({'access_token': token.access_token}),
     );
     if (response.statusCode != 200) {
       return Err(GetUserError(response: response, token: token));
