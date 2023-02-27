@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart';
@@ -11,10 +13,11 @@ import 'package:pointycastle/digests/sha256.dart';
 import 'package:test/test.dart';
 
 import 'open_id_connect_configs.dart';
+import 'user_models.dart';
 
 class ProviderClientMock {
   final OAuthProvider provider;
-  final tokens = <String, MapEntry<String, TokenResponse>>{};
+  final tokens = <String, TokenResponseTest>{};
   final codeToAuthorizeUri = <String, Uri>{};
   final deviceCodes = <String, DeviceCodeResponseTest>{};
 
@@ -23,10 +26,20 @@ class ProviderClientMock {
   ProviderClientMock(this.provider);
 }
 
+class TokenResponseTest {
+  final String tokenKind;
+  final GrantType grantType;
+  final TokenResponse response;
+
+  TokenResponseTest(this.tokenKind, this.grantType, this.response);
+}
+
 class DeviceCodeResponseTest {
   final String scope;
   final DeviceCodeResponse response;
   final String? redirectUri;
+  int numPollingRequests = 0;
+  final completer = Completer<void>();
 
   DeviceCodeResponseTest({
     required this.scope,
@@ -36,19 +49,19 @@ class DeviceCodeResponseTest {
 }
 
 const _testJsonWebKey = {
-  "kty": "RSA",
-  "n":
-      "29eNx9JsZ5hSfJEonriDodxQMWm0TqpHEi3lveiMz1sirtGVkfbLt8F1hF-Nik40W9suT9ftiWENs4sGWYCBlxbO0cO6cUDBnVDVfr8vQVATuqv7B7nyUNdxaelg9GYdBDS1LcvFASsUtdbmfJujmDwXQna0HKl4-2ltq8XNwjTKP_pRnOv5MZOboJYdNnrYp7s03mwcy60aAUVZ7mo3U_3w3Blb_aiifeoeCmUG9xw_-ATbeXs-eW-xOr9y46qS5JWpMUR2GWInj-Tu-ilQncBknv1dhhfa6khP95OWvGSB6-GWveqpe-4N2DpcLyQXl-lIsB8En_KBwN3T77kRIw==",
-  "e": "AQAB",
-  "d":
-      "iOSDk78S47s0-f5Fxfftd5fBk9NXhHiBgu9zlLq_G8uLIEK_mUGNfyIHNGNvtoSWE_C6uNsjPZ1is79JN-hOSa_ZH0N60FTbe0M_fgo8ubXMYzv-N8RxACf3plS9m9IOFXVgsGCnjt-tqMFliog76WrZrPhPlV1uSVdQBFtKkbe4GiWE5qLqZ9Q_6VES9E3OdHS1uBh5ef28YJ0ju4iCaZ6m93WpOSciUpQMMrcir2nzhB48622-uBtJedK43BpELtB-HSCxyg8AY0Ym_LijhLSV5e3l0m2JjeTqIyjx6jXvyBNmyMIJnLbnt7kvQMWCzOBFQgtCgxPDTGPFJHQUYQ==",
-  "p":
-      "7Ze2PzDlpbIcyjsl3w01ML_jzn9r9k2KN57w8rJ65QJ7qfVuEUwQTWUCMl0A-jGEmEe3C1VDLe3OxP0BbDX_sJzIOi3HB_1r9qWyCjHlI02p8eqOZ5QJszBtJ44ViMm9o6WRGFnyYxd12EV-2NGimmwsum6l8ILPXSO6ulkJLpM=",
-  "q":
-      "7N_JExEvShb-YCTZthA5mbbUFI7mpYIP2W4etAAbRXuWr5-47nlCmDi28p3rUJZQavh9iFD3oealNcFYTzDIBVJX5ptdEUzEli-7pwfKU4hoO7lSTOUxcQ5e9_U-nSf0nHT6o_2ZjGbwHHBoEw7JLLWU7wxRSN5irmCBxUhdnTE=",
-  "alg": "RS256",
-  "use": "sig",
-  "keyOperations": ["sign", "verify"]
+  'kty': 'RSA',
+  'n':
+      '29eNx9JsZ5hSfJEonriDodxQMWm0TqpHEi3lveiMz1sirtGVkfbLt8F1hF-Nik40W9suT9ftiWENs4sGWYCBlxbO0cO6cUDBnVDVfr8vQVATuqv7B7nyUNdxaelg9GYdBDS1LcvFASsUtdbmfJujmDwXQna0HKl4-2ltq8XNwjTKP_pRnOv5MZOboJYdNnrYp7s03mwcy60aAUVZ7mo3U_3w3Blb_aiifeoeCmUG9xw_-ATbeXs-eW-xOr9y46qS5JWpMUR2GWInj-Tu-ilQncBknv1dhhfa6khP95OWvGSB6-GWveqpe-4N2DpcLyQXl-lIsB8En_KBwN3T77kRIw==',
+  'e': 'AQAB',
+  'd':
+      'iOSDk78S47s0-f5Fxfftd5fBk9NXhHiBgu9zlLq_G8uLIEK_mUGNfyIHNGNvtoSWE_C6uNsjPZ1is79JN-hOSa_ZH0N60FTbe0M_fgo8ubXMYzv-N8RxACf3plS9m9IOFXVgsGCnjt-tqMFliog76WrZrPhPlV1uSVdQBFtKkbe4GiWE5qLqZ9Q_6VES9E3OdHS1uBh5ef28YJ0ju4iCaZ6m93WpOSciUpQMMrcir2nzhB48622-uBtJedK43BpELtB-HSCxyg8AY0Ym_LijhLSV5e3l0m2JjeTqIyjx6jXvyBNmyMIJnLbnt7kvQMWCzOBFQgtCgxPDTGPFJHQUYQ==',
+  'p':
+      '7Ze2PzDlpbIcyjsl3w01ML_jzn9r9k2KN57w8rJ65QJ7qfVuEUwQTWUCMl0A-jGEmEe3C1VDLe3OxP0BbDX_sJzIOi3HB_1r9qWyCjHlI02p8eqOZ5QJszBtJ44ViMm9o6WRGFnyYxd12EV-2NGimmwsum6l8ILPXSO6ulkJLpM=',
+  'q':
+      '7N_JExEvShb-YCTZthA5mbbUFI7mpYIP2W4etAAbRXuWr5-47nlCmDi28p3rUJZQavh9iFD3oealNcFYTzDIBVJX5ptdEUzEli-7pwfKU4hoO7lSTOUxcQ5e9_U-nSf0nHT6o_2ZjGbwHHBoEw7JLLWU7wxRSN5irmCBxUhdnTE=',
+  'alg': 'RS256',
+  'use': 'sig',
+  'keyOperations': ['sign', 'verify']
 };
 
 final _jwkKey = JsonWebKey.fromJson(_testJsonWebKey);
@@ -61,14 +74,19 @@ String createIdToken(Map<String, Object?> claims) {
   return jws.toCompactSerialization();
 }
 
-/// 'data:eyJrZXlzIjpbeyJrdHkiOiJSU0EiLCJuIjoiMjllTng5SnNaNWhTZkpFb25yaURvZHhRTVdtMFRxcEhFaTNsdmVpTXoxc2lydEdWa2ZiTHQ4RjFoRi1OaWs0MFc5c3VUOWZ0aVdFTnM0c0dXWUNCbHhiTzBjTzZjVURCblZEVmZyOHZRVkFUdXF2N0I3bnlVTmR4YWVsZzlHWWRCRFMxTGN2RkFTc1V0ZGJtZkp1am1Ed1hRbmEwSEtsNC0ybHRxOFhOd2pUS1BfcFJuT3Y1TVpPYm9KWWRObnJZcDdzMDNtd2N5NjBhQVVWWjdtbzNVXzN3M0JsYl9haWlmZW9lQ21VRzl4d18tQVRiZVhzLWVXLXhPcjl5NDZxUzVKV3BNVVIyR1dJbmotVHUtaWxRbmNCa252MWRoaGZhNmtoUDk1T1d2R1NCNi1HV3ZlcXBlLTROMkRwY0x5UVhsLWxJc0I4RW5fS0J3TjNUNzdrUkl3PT0iLCJlIjoiQVFBQiIsImFsZyI6IlJTMjU2IiwidXNlIjoic2lnIiwia2V5T3BlcmF0aW9ucyI6WyJzaWduIiwidmVyaWZ5Il19XX0='
-final _jwkUri = 'data:${base64Encode(
-  utf8.encode(jsonEncode({
-    'keys': [
-      Map.fromEntries(_testJsonWebKey.entries
-          .where((e) => const ["kty", "n", "e", "alg", "use"].contains(e.key)))
-    ]
-  })),
+/// 'data:application/json;charset=utf-8;base64,eyJrZXlzIjpbeyJrdHkiOiJSU0EiLCJuIjoiMjllTng5SnNaNWhTZkpFb25yaURvZHhRTVdtMFRxcEhFaTNsdmVpTXoxc2lydEdWa2ZiTHQ4RjFoRi1OaWs0MFc5c3VUOWZ0aVdFTnM0c0dXWUNCbHhiTzBjTzZjVURCblZEVmZyOHZRVkFUdXF2N0I3bnlVTmR4YWVsZzlHWWRCRFMxTGN2RkFTc1V0ZGJtZkp1am1Ed1hRbmEwSEtsNC0ybHRxOFhOd2pUS1BfcFJuT3Y1TVpPYm9KWWRObnJZcDdzMDNtd2N5NjBhQVVWWjdtbzNVXzN3M0JsYl9haWlmZW9lQ21VRzl4d18tQVRiZVhzLWVXLXhPcjl5NDZxUzVKV3BNVVIyR1dJbmotVHUtaWxRbmNCa252MWRoaGZhNmtoUDk1T1d2R1NCNi1HV3ZlcXBlLTROMkRwY0x5UVhsLWxJc0I4RW5fS0J3TjNUNzdrUkl3PT0iLCJlIjoiQVFBQiIsImFsZyI6IlJTMjU2IiwidXNlIjoic2lnIiwia2V5T3BlcmF0aW9ucyI6WyJzaWduIiwidmVyaWZ5Il19XX0='
+final _jwkUri = 'data:application/json;charset=utf-8;base64,${base64Encode(
+  utf8.encode(
+    jsonEncode({
+      'keys': [
+        Map.fromEntries(
+          _testJsonWebKey.entries.where(
+            (e) => const ["kty", "n", "e", "alg", "use"].contains(e.key),
+          ),
+        )
+      ]
+    }),
+  ),
 )}';
 
 final jwkOverrideClient = MockClient((request) async {
@@ -95,18 +113,16 @@ MockClient createMockClient({
       expect(request.method, 'POST');
       expect(
         request.headers[Headers.contentType],
-        Headers.appFormUrlEncoded + '; charset=utf-8',
-      );
-      expect(
-        request.headers[Headers.accept],
-        '${Headers.appJson}, ${Headers.appFormUrlEncoded}',
+        '${Headers.appFormUrlEncoded}; charset=utf-8',
       );
       final authorization = request.headers[Headers.authorization];
       final data = Uri.splitQueryString(request.body);
       expect(data.values.where((e) => e == 'null'), isEmpty);
 
+      final isFacebookDeviceFlow =
+          data['access_token'] == 'facebook_client_id|client_token';
       final String clientId;
-      final String clientSecret;
+      final String? clientSecret;
       if (authorization != null) {
         final authSplit = authorization.split(' ');
         expect(authSplit[0], 'Basic');
@@ -116,21 +132,21 @@ MockClient createMockClient({
         clientId = split[0];
         clientSecret = split[1];
       } else {
-        clientId = data['client_id']!;
-        clientSecret = data['client_secret']!;
+        if (isFacebookDeviceFlow) {
+          clientId = 'facebook_client_id';
+        } else {
+          clientId = data['client_id']!;
+        }
+        clientSecret = data['client_secret'];
       }
 
       final providerId = clientId.replaceFirst('_client_id', '');
-      expect(providerId, clientSecret.replaceFirst('_client_secret', ''));
+      if (clientSecret != null) {
+        expect(providerId, clientSecret.replaceFirst('_client_secret', ''));
+      }
       final provider = allProviders[providerId]!;
       final providerMock = allProvidersMocks[providerId]!;
 
-      expect(
-        provider.authMethod,
-        authorization != null
-            ? HttpAuthMethod.basicHeader
-            : HttpAuthMethod.formUrlencodedBody,
-      );
       final response =
           'code refresh_token device_code username token access_token'
               .split(' ')
@@ -153,9 +169,38 @@ MockClient createMockClient({
           ? RegExp(r'^[a-z_-]+|[a-z_-]+(,[a-z_-]+)+$')
           : RegExp(r'^[a-z_-]+|[a-z_-]+( [a-z_-]+)+$');
 
-      if (request.url.path == tokenEndpoint.path) {
-        final grantType =
-            GrantType.values.firstWhere((v) => v.value == data['grant_type']!);
+      final isDeviceAuthorizationUrl =
+          request.url.path == deviceAuthorizationEndpoint?.path;
+      if (isDeviceAuthorizationUrl) {
+        expect(clientSecret, isNull);
+        expect(request.headers[Headers.accept], Headers.appJson);
+      } else if (isFacebookDeviceFlow) {
+        expect(clientSecret, isNull);
+        // TODO: shold we use Headers.appFormUrlEncoded?
+        expect(request.headers[Headers.accept], Headers.appJson);
+      } else {
+        expect(clientSecret, isNotNull);
+        expect(
+          request.headers[Headers.accept],
+          '${Headers.appJson}, ${Headers.appFormUrlEncoded}',
+        );
+        expect(
+          provider.authMethod,
+          authorization != null
+              ? HttpAuthMethod.basicHeader
+              : HttpAuthMethod.formUrlencodedBody,
+        );
+      }
+
+      if (request.url.path == tokenEndpoint.path ||
+          (isFacebookDeviceFlow &&
+              request.url.toString().startsWith(
+                    'https://graph.facebook.com/v16.0/device/login_status',
+                  ))) {
+        final grantType = isFacebookDeviceFlow
+            ? GrantType.deviceCode
+            : GrantType.values
+                .firstWhere((v) => v.value == data['grant_type']!);
 
         bool sendRefreshToken = true;
         String scope;
@@ -176,7 +221,8 @@ MockClient createMockClient({
             /// check code_verifier
             expect(data['code_verifier'], isA<String>());
             final digest = SHA256Digest().process(
-                Uint8List.fromList(utf8.encode(data['code_verifier']!)));
+              Uint8List.fromList(utf8.encode(data['code_verifier']!)),
+            );
             expect(
               base64UrlEncode(digest).replaceAll('=', ''),
               authUrl.queryParameters['code_challenge'],
@@ -188,19 +234,46 @@ MockClient createMockClient({
             final refreshToken = data['refresh_token'];
             expect(refreshToken, isA<String>());
             final value = providerMock.tokens[refreshToken]!;
-            expect(value.key, 'refresh_token');
-            scope = value.value.scope;
+            expect(value.tokenKind, 'refresh_token');
+            scope = value.response.scope;
             sendRefreshToken = false;
             break;
           case GrantType.deviceCode:
-            final deviceCode = data['device_code'];
+            final deviceCode =
+                isFacebookDeviceFlow ? data['code'] : data['device_code'];
             expect(deviceCode, isA<String>());
 
             // TODO: is it necessary on the header?
-            expect(data['client_id'], clientId);
+            if (!isFacebookDeviceFlow) expect(data['client_id'], clientId);
             // TODO: maybe send a keep polling or slow down response?
 
             final deviceCodeData = providerMock.deviceCodes[deviceCode]!;
+            if (deviceCodeData.numPollingRequests < 2) {
+              deviceCodeData.numPollingRequests++;
+              if (deviceCodeData.numPollingRequests == 1) {
+                return Response(
+                  isFacebookDeviceFlow
+                      ? facebookDeviceErrorAuthorizationPending
+                      : jsonEncode({
+                          'error': DeviceFlowError.authorization_pending.name,
+                        }),
+                  HttpStatus.unauthorized,
+                  headers: jsonHeader,
+                );
+              } else {
+                Future<dynamic>.delayed(
+                  Duration.zero,
+                  deviceCodeData.completer.complete,
+                );
+                return Response(
+                  isFacebookDeviceFlow
+                      ? facebookDeviceErrorSlowDown
+                      : jsonEncode({'error': DeviceFlowError.slow_down.name}),
+                  HttpStatus.tooManyRequests,
+                  headers: jsonHeader,
+                );
+              }
+            }
             scope = deviceCodeData.scope;
             break;
           case GrantType.password:
@@ -229,10 +302,11 @@ MockClient createMockClient({
               ? createIdToken({
                   // TODO: additional data specific for providers
                   // TODO: nonce and wrong nonce
-                  'nonce': providerMock.codeToAuthorizeUri[data['code']]!
-                      .queryParameters['nonce']!,
+                  // 'nonce': providerMock.codeToAuthorizeUri[data['code']]!
+                  //     .queryParameters['nonce']!,
                   'azp': clientId,
                   'aud': [clientId],
+                  // TODO: FacebookProvider with openid scope
                   'iss':
                       (provider as OpenIdConnectProvider).openIdConfig.issuer,
                   'sub': '',
@@ -241,6 +315,14 @@ MockClient createMockClient({
                           .millisecondsSinceEpoch ~/
                       1000,
                   'iat': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                  ...mockUser(
+                    provider,
+                    grantType: grantType,
+                    nonce: grantType == GrantType.deviceCode
+                        ? 'NONE'
+                        : providerMock.codeToAuthorizeUri[data['code']]!
+                            .queryParameters['nonce']!,
+                  ).openIdClaims!.toJson(),
                 })
               : null,
           scope: scope,
@@ -250,19 +332,21 @@ MockClient createMockClient({
         );
 
         providerMock.tokens[tokenResponse.access_token] =
-            MapEntry('access_token', tokenResponse);
+            TokenResponseTest('access_token', grantType, tokenResponse);
         if (sendRefreshToken) {
           providerMock.tokens[tokenResponse.refresh_token!] =
-              MapEntry('refresh_token', tokenResponse);
+              TokenResponseTest('refresh_token', grantType, tokenResponse);
         }
         return Response(
           jsonEncode(tokenResponse.toJson()..remove('expires_at')),
           200,
           headers: jsonHeader,
         );
-      } else if (request.url.path == deviceAuthorizationEndpoint?.path) {
+      } else if (isDeviceAuthorizationUrl) {
         expect(data['scope'], provider.config.scope);
-        expect(data['client_id'], clientId);
+        if (!isFacebookDeviceFlow) {
+          expect(data['client_id'], clientId);
+        }
 
         final deviceCode = generateStateToken();
         final deviceCodeModel = DeviceCodeResponse(
