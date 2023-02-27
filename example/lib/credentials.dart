@@ -3,8 +3,7 @@ import 'dart:io';
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-
-import 'cypher.dart';
+import 'package:oauth_example/cypher.dart';
 
 class AppCredentialsConfig {
   final AppCredentialsItem? discord;
@@ -44,8 +43,9 @@ class AppCredentialsConfig {
       utf8.decode(base64Decode(Platform.environment['APP_CREDENTIALS']!)),
     );
 
-    final credentials =
-        AppCredentialsConfig.fromJson(jsonDecode(decryptedJson.data));
+    final credentials = AppCredentialsConfig.fromJson(
+      jsonDecode(decryptedJson.data) as Map<String, Object?>,
+    );
     return credentials;
   }
 
@@ -92,7 +92,7 @@ class AppCredentialsConfig {
         FacebookProvider(
           clientId: facebook!.clientId,
           clientSecret: facebook!.clientSecret,
-          // TODO: appId and clientToken
+          clientToken: facebook!.clientToken,
         ),
       if (github != null)
         GithubProvider(
@@ -151,10 +151,21 @@ class AppCredentialsItem {
   final String clientId;
   final String clientSecret;
 
-  AppCredentialsItem(this.clientId, this.clientSecret);
+  /// For facebook device code flow
+  final String? clientToken;
+
+  AppCredentialsItem(
+    this.clientId,
+    this.clientSecret, {
+    this.clientToken,
+  });
 
   factory AppCredentialsItem.fromString(String data) {
     final split = data.split(':');
-    return AppCredentialsItem(split[0], split[1]);
+    return AppCredentialsItem(
+      split[0],
+      split[1],
+      clientToken: split.length > 2 ? split[2] : null,
+    );
   }
 }

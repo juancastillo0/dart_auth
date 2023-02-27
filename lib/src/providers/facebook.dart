@@ -9,15 +9,14 @@ export 'package:oauth/src/providers/facebook_user.dart';
 class FacebookProvider extends OAuthProvider<FacebookUser> {
   /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
   const FacebookProvider({
-    super.providerId = ImplementedProviders.facebook,
-    // comma separated scopes
-    super.config =
-        const OAuthProviderConfig(scope: 'openid,public_profile,email'),
+    // same as appId
     required super.clientId,
     required super.clientSecret,
     // required for device code flow
-    this.appId,
-    this.clientToken,
+    required this.clientToken,
+    super.providerId = ImplementedProviders.facebook,
+    // comma separated scopes, TODO: 'openid,public_profile,email'
+    super.config = const OAuthProviderConfig(scope: 'public_profile,email'),
   }) : super(
           authorizationEndpoint: 'https://www.facebook.com/v16.0/dialog/oauth',
           tokenEndpoint: 'https://graph.facebook.com/v16.0/oauth/access_token',
@@ -31,7 +30,6 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
         );
 
   final String? clientToken;
-  final String? appId;
 
   @override
   Future<DeviceCodeResponse?> getDeviceCode(
@@ -40,19 +38,18 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     String? redirectUri,
     Map<String, String?>? otherParams,
   }) async {
-    if (appId == null ||
-        clientToken == null ||
-        deviceAuthorizationEndpoint == null) {
+    if (clientToken == null || deviceAuthorizationEndpoint == null) {
       return null;
     }
     final response = await client.post(
       Uri.parse(deviceAuthorizationEndpoint!),
       body: {
-        'access_token': '$appId|$clientToken',
+        'access_token': '$clientId|$clientToken',
         'scope': scope ?? config.scope,
         if (redirectUri != null) 'redirect_uri': redirectUri,
         ...?otherParams,
       },
+      headers: {Headers.accept: Headers.appJson},
     );
     final jsonData = jsonDecode(response.body) as Map<String, Object?>;
     return DeviceCodeResponse.fromJson(jsonData);
@@ -67,22 +64,28 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     final response = await client.post(
       Uri.parse('https://graph.facebook.com/v16.0/device/login_status'),
       body: {
-        'access_token': '$appId|$clientToken',
+        'access_token': '$clientId|$clientToken',
         'code': deviceCode,
         ...?otherParams,
       },
+      headers: {Headers.accept: Headers.appJson},
     );
     final jsonData = jsonDecode(response.body) as Map<String, Object?>;
     if (response.statusCode == 200) {
       return Ok(TokenResponse.fromJson(jsonData));
     } else {
-      return Err(FacebookDeviceError.fromJson(jsonData, response: response));
+      return Err(
+        FacebookDeviceError.fromJson(
+          jsonData['error']! as Map,
+          response: response,
+        ),
+      );
     }
   }
 
   // S256 and plain and id_token for OpenID Connect
 
-  // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/
+  // TODO: https://developers.facebook.com/docs/graph-api/securing-requests%20/ appsecret_proof
 
   // Cancellation webhook
 
@@ -98,7 +101,7 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
   List<GrantType> get supportedFlows => [
         GrantType.authorizationCode,
         GrantType.clientCredentials,
-        if (appId != null && clientToken != null) GrantType.deviceCode
+        if (clientToken != null) GrantType.deviceCode
       ];
 
   /// id,first_name,last_name,middle_name,name,name_format,picture,short_name,email,install_type,installed,is_guest_user
@@ -114,10 +117,7 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     // TODO: should we use https://developers.facebook.com/docs/facebook-login/guides/advanced/oidc-token?
     final response = await client.get(
       Uri.parse('https://graph.facebook.com/v16.0/me?fields=$fields'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${token.access_token}',
-      },
+      headers: {Headers.accept: Headers.appJson},
     );
     if (response.statusCode != 200) {
       return Err(GetUserError(token: token, response: response));
