@@ -31,11 +31,17 @@ Handler ctxMiddleware(Handler next) {
       );
     }
 
-    final response = next(newRequest);
-    if (response is Response) {
-      return mapResponse(response);
+    try {
+      final response = next(newRequest);
+      if (response is Response) {
+        return mapResponse(response);
+      }
+      return response
+          .then(mapResponse)
+          .onError<Response>((error, stackTrace) => error);
+    } on Response catch (e) {
+      return e;
     }
-    return response.then(mapResponse);
   };
 }
 
