@@ -74,7 +74,7 @@ enum UserIdKind {
 }
 
 /// A user session, persisted when the user is signed in.
-class UserSession {
+class UserSession implements SerializableToJson {
   final String sessionId;
   final String refreshToken;
   final String userId;
@@ -135,6 +135,7 @@ class UserSession {
     );
   }
 
+  @override
   Map<String, Object?> toJson() {
     return {
       'deviceId': deviceId,
@@ -208,7 +209,7 @@ T matchProvider<T>(
   return other(provider);
 }
 
-class AppUser {
+class AppUser implements SerializableToJson {
   final String userId;
   final String? name;
   final String? profilePicture;
@@ -299,6 +300,7 @@ class AppUser {
   Iterable<UserId> userIds() => [UserId(userId, UserIdKind.innerId)]
       .followedBy(authUsers.expand((auth) => auth.userIds()));
 
+  @override
   Map<String, Object?> toJson() {
     return {
       'userId': userId,
@@ -313,7 +315,7 @@ class AppUser {
   }
 }
 
-class AuthUser<T> {
+class AuthUser<T> implements SerializableToJson {
   ///
   const AuthUser({
     required this.providerId,
@@ -378,6 +380,7 @@ class AuthUser<T> {
   ) =>
       provider.parseUser(json);
 
+  @override
   Map<String, Object?> toJson() => {
         'providerId': providerId,
         'providerUserId': providerUserId,
@@ -430,4 +433,36 @@ Result<T, E> tryCatch<T extends Object, E extends Object>(
   } catch (e, s) {
     return Err(catchFunction(e, s));
   }
+}
+
+Result<T, ErrorWithStackTrace> Function(P) tryCatchWrap<P, T extends Object>(
+  T Function(P) tryFunction,
+) {
+  return (P param) {
+    try {
+      return Ok(tryFunction(param));
+    } catch (e, s) {
+      return Err(ErrorWithStackTrace(e, s));
+    }
+  };
+}
+
+class ErrorWithStackTrace {
+  final Object error;
+  final StackTrace stackTrace;
+
+  const ErrorWithStackTrace(this.error, this.stackTrace);
+
+  @override
+  String toString() {
+    return '$error $stackTrace';
+  }
+}
+
+/// A class that implements this can be serialized
+/// into Json with the [toJson] method
+// ignore: one_member_abstracts
+abstract class SerializableToJson {
+  /// Returns this represented as a Json map
+  Map<String, Object?> toJson();
 }
