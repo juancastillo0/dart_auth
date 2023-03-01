@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
@@ -20,6 +21,9 @@ void main() async {
 
   final config = Config(
     allProviders: allProviders,
+    allCredentialsProviders: {
+      ImplementedProviders.username: UsernamePasswordProvider(),
+    },
     persistence: persistence,
     host: host,
     port: port,
@@ -51,6 +55,7 @@ Future<HttpServer> startServer(Config config) async {
 
 class Config {
   final Map<String, OAuthProvider> allProviders;
+  final Map<String, CredentialsProvider> allCredentialsProviders;
   final Persistence persistence;
   final String baseRedirectUri;
   final JsonWebTokenMaker jwtMaker;
@@ -62,6 +67,7 @@ class Config {
 
   Config({
     required this.allProviders,
+    required this.allCredentialsProviders,
     required this.persistence,
     required this.baseRedirectUri,
     required this.jwtMaker,

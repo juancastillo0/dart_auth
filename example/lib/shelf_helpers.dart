@@ -51,8 +51,9 @@ Future<Object?> parseBodyOrUrlData(Request request) async {
       request.method == 'OPTIONS') {
     final params = request.url.queryParameters;
     try {
-      if (params.isEmpty && request.url.fragment.isNotEmpty)
+      if (params.isEmpty && request.url.fragment.isNotEmpty) {
         return Uri.splitQueryString(request.url.fragment);
+      }
     } catch (_) {}
     return params;
   } else {

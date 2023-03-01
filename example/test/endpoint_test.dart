@@ -69,6 +69,10 @@ void main() async {
     setUpAll(() async {
       config = Config(
         allProviders: allProviders,
+        allCredentialsProviders: {
+          // TODO: test isolates
+          ImplementedProviders.username: UsernamePasswordProvider(),
+        },
         host: 'localhost',
         port: 0,
         persistence: persistence,

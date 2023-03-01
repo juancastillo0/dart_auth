@@ -12,10 +12,13 @@ export './src/providers/spotify.dart';
 export './src/providers/steam.dart';
 export './src/providers/twitch.dart';
 export './src/providers/twitter.dart';
+export './src/username_password_provider.dart';
 
 class ImplementedProviders {
   const ImplementedProviders._();
 
+  /// Provider id for [UsernamePasswordProvider]
+  static const username = 'username';
   /// Provider id for [AppleProvider]
   static const apple = 'apple';
 
