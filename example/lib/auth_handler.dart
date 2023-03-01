@@ -55,6 +55,10 @@ Handler makeHandler(Config config) {
       return handler.revokeAuthToken(request);
     } else if (path == 'user/me') {
       return handler.getUserMeInfo(request);
+    } else if (RegExp('credentials/signin$pIdRegExp').hasMatch(path)) {
+      return handler.credentialsSignIn(request, signUp: false);
+    } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
+      return handler.credentialsSignIn(request, signUp: true);
     }
     return Response.ok('Request for "${request.url}"');
   }
@@ -87,6 +91,20 @@ class AuthHandler {
             ? request.url.pathSegments[2]
             : null);
     final providerInstance = config.allProviders[providerId];
+    if (providerInstance == null) {
+      return Err(wrongProviderResponse);
+    }
+    return Ok(providerInstance);
+  }
+
+  Result<CredentialsProvider, Response> getCredentialsProvider(
+    Request request,
+  ) {
+    final providerId = request.url.queryParameters['provider'] ??
+        (request.url.pathSegments.length > 2
+            ? request.url.pathSegments[2]
+            : null);
+    final providerInstance = config.allCredentialsProviders[providerId];
     if (providerInstance == null) {
       return Err(wrongProviderResponse);
     }
@@ -153,7 +171,7 @@ class AuthHandler {
         }
       },
       ok: (token) async {
-        final user = await onUserAuthenticated(
+        final user = await processOAuthToken(
           token,
           providerInstance,
           sessionId: token.stateModel!.sessionId!,
@@ -173,7 +191,7 @@ class AuthHandler {
     );
   }
 
-  Future<Result<UserSession, GetUserError>> onUserAuthenticated<U>(
+  Future<Result<UserSession, GetUserError>> processOAuthToken<U>(
     TokenResponse token,
     OAuthProvider<U> providerInstance, {
     required String sessionId,
@@ -202,46 +220,56 @@ class AuthHandler {
       token,
     );
 
-    return result.andThenAsync((user) async {
-      final List<AppUser?> users =
-          await config.persistence.getUsersById(user.userIds());
-      // TODO: casting error whereType<Map<String, Object?>>() does not throw
-      final found = users.whereType<AppUser>().toList();
-      final userIds = found.map((e) => e.userId).toSet();
-      final String userId;
-      if (userIds.isEmpty) {
-        // create a new user
-        userId = generateStateToken();
-        await config.persistence.saveUser(userId, user);
-      } else if (userIds.length == 1) {
-        // merge users
-        userId = userIds.first;
-        await config.persistence.saveUser(userId, user);
-      } else {
-        // error multiple users
-        return Err(
-          GetUserError(
-            token: token,
-            response: null,
-            message: 'Multiple users with same credentials',
-          ),
-        );
-      }
-
-      final userSession = UserSession(
-        refreshToken: makeRefreshToken(
-          userId: userId,
-          providerId: user.providerId,
-          sessionId: sessionId,
-        ),
+    return result.andThenAsync(
+      (user) => onUserAuthenticated(
+        user,
         sessionId: sessionId,
-        userId: userId,
-        createdAt: DateTime.now(),
-      );
-      await config.persistence.saveSession(userSession);
+      ).mapErr(
+        (message) => GetUserError(
+          token: token,
+          response: null,
+          message: message,
+        ),
+      ),
+    );
+  }
 
-      return Ok(userSession);
-    });
+  Future<Result<UserSession, String>> onUserAuthenticated(
+    AuthUser<Object?> user, {
+    required String sessionId,
+  }) async {
+    final List<AppUser?> users =
+        await config.persistence.getUsersById(user.userIds());
+    // TODO: casting error whereType<Map<String, Object?>>() does not throw
+    final found = users.whereType<AppUser>().toList();
+    final userIds = found.map((e) => e.userId).toSet();
+    final String userId;
+    if (userIds.isEmpty) {
+      // create a new user
+      userId = generateStateToken();
+      await config.persistence.saveUser(userId, user);
+    } else if (userIds.length == 1) {
+      // merge users
+      userId = userIds.first;
+      await config.persistence.saveUser(userId, user);
+    } else {
+      // error multiple users
+      return const Err('Multiple users with same credentials');
+    }
+
+    final userSession = UserSession(
+      refreshToken: makeRefreshToken(
+        userId: userId,
+        providerId: user.providerId,
+        sessionId: sessionId,
+      ),
+      sessionId: sessionId,
+      userId: userId,
+      createdAt: DateTime.now(),
+    );
+    await config.persistence.saveSession(userSession);
+
+    return Ok(userSession);
   }
 
   Future<Response> getOAuthUrl(Request request) async {
@@ -355,13 +383,14 @@ class AuthHandler {
           );
         }
         final token = result.unwrap();
-        final user = await onUserAuthenticated(
+        final user = await processOAuthToken(
           token,
           providerInstance,
           sessionId: claims.sessionId,
         );
         if (user.isErr()) {
           return Response.internalServerError(
+            // TODO: standardize 'error' vs 'message'
             body: jsonEncode({'message': user.unwrapErr().message}),
             headers: jsonHeader,
           );
@@ -472,7 +501,7 @@ class AuthHandler {
                   // should we send the polling result? channel.sink.add(jsonEncode({'error': err.toString()}));
                 },
                 ok: (token) async {
-                  final sessionResult = await onUserAuthenticated(
+                  final sessionResult = await processOAuthToken(
                     token,
                     provider,
                     sessionId: claims.sessionId,
@@ -573,6 +602,133 @@ class AuthHandler {
     }
 
     return Response.ok(jsonEncode(payload), headers: jsonHeader);
+  }
+
+  Future<Response> credentialsSignIn(
+    Request request, {
+    required bool signUp,
+  }) async {
+    if (request.method != 'POST') return Response.notFound(null);
+    final providerInstance = getCredentialsProvider(request).throwErr();
+    return _credentialsSignIn(request, providerInstance, signUp: signUp);
+  }
+
+  Future<Response> _credentialsSignIn<C extends CredentialsData, U>(
+    Request request,
+    CredentialsProvider<C, U> providerInstance, {
+    required bool signUp,
+  }) async {
+    final data = await parseBodyOrUrlData(request);
+    if (data is! Map<String, Object?>) {
+      return Response.badRequest();
+    }
+    final credentialsResult = providerInstance.parseCredentials(data);
+    if (credentialsResult.isErr()) {
+      return Response.badRequest(
+        body: jsonEncode(
+          credentialsResult
+              .unwrapErr()
+              .map((key, value) => MapEntry(key, value.message)),
+        ),
+        headers: jsonHeader,
+      );
+    }
+    final credentials = credentialsResult.unwrap();
+    // TODO: multiple credentials email and phone
+    final userId = UserId(
+      '${providerInstance.providerId}:${credentials.providerUserId}',
+      UserIdKind.providerId,
+    );
+    final foundUser = await config.persistence.getUserById(userId);
+    if (foundUser != null) {
+      final user =
+          foundUser.authUsers.firstWhere((u) => u.userIds().contains(userId));
+      final validation = await providerInstance.verifyCredentials(
+        user.providerUser as U,
+        credentials,
+      );
+
+      if (validation.isErr()) {
+        return Response.unauthorized(
+          jsonEncode(validation.unwrapErr().toJson()),
+          headers: jsonHeader,
+        );
+      }
+      final response = validation.unwrap();
+      if (response.isSome()) {
+        final otherUser = response.unwrap().user;
+        if (otherUser == null) {
+          return Response.ok(
+            jsonEncode(response.unwrap().toJson()),
+            headers: jsonHeader,
+          );
+        }
+        if (otherUser.key != user.key) {
+          return Response.internalServerError(
+            body: jsonEncode({'error': 'Error merging users.'}),
+            headers: jsonHeader,
+          );
+        }
+      }
+      // TODO: maybe merge with the current session?
+      final sessionResponse = await onUserAuthenticatedResponse(
+        user,
+        sessionId: generateStateToken(),
+      );
+      return sessionResponse;
+    } else if (!signUp) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Credentials not found.'}),
+        headers: jsonHeader,
+      );
+    }
+
+    final userResult = await providerInstance.getUser(credentials);
+    if (userResult.isErr()) {
+      return Response.internalServerError(
+        // TODO: standardize 'error' vs 'message'
+        body: jsonEncode(userResult.unwrapErr().toJson()),
+        headers: jsonHeader,
+      );
+    }
+
+    final userOrMessage = userResult.unwrap();
+    if (userOrMessage.user == null) {
+      // The flow keeps going
+      return Response.ok(
+        jsonEncode(userOrMessage.toJson()),
+        headers: jsonHeader,
+      );
+    } else {
+      // TODO: maybe merge with the current session?
+      final sessionResponse = await onUserAuthenticatedResponse(
+        userOrMessage.user!,
+        sessionId: generateStateToken(),
+      );
+      return sessionResponse;
+    }
+  }
+
+  Future<Response> onUserAuthenticatedResponse(
+    AuthUser<Object?> user, {
+    required String sessionId,
+  }) async {
+    final sessionResult = await onUserAuthenticated(
+      user,
+      sessionId: sessionId,
+    );
+
+    if (sessionResult.isErr()) {
+      return Response.internalServerError(
+        // TODO: standardize 'error' vs 'message'
+        body: jsonEncode({'error': sessionResult.unwrapErr()}),
+        headers: jsonHeader,
+      );
+    }
+    return Response.ok(
+      jsonEncode({'refreshToken': sessionResult.unwrap().refreshToken}),
+      headers: jsonHeader,
+    );
   }
 }
 
