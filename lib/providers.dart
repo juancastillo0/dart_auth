@@ -1,5 +1,6 @@
 import 'package:oauth/providers.dart';
 
+export './src/email_phone_identifier_provider.dart';
 export './src/providers/apple.dart';
 export './src/providers/discord.dart';
 export './src/providers/facebook.dart';
@@ -19,6 +20,13 @@ class ImplementedProviders {
 
   /// Provider id for [UsernamePasswordProvider]
   static const username = 'username';
+
+  /// Provider id for [IdentifierPasswordProvider.email]
+  static const email = 'email';
+
+  /// Provider id for [IdentifierPasswordProvider.phone]
+  static const phone = 'phone';
+
   /// Provider id for [AppleProvider]
   static const apple = 'apple';
 
@@ -69,5 +77,8 @@ class ImplementedProviders {
     steam,
     twitch,
     twitter,
+    username,
+    email,
+    phone,
   ];
 }

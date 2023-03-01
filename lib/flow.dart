@@ -77,10 +77,11 @@ class OAuthFlow<U> {
     final stateModel = await persistence.getState(state);
     if (stateModel == null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.notFoundState));
-    } else if (stateModel.providerId != provider.providerId) {
+    } else if (stateModel.providerId != provider.providerId ||
+        stateModel.responseType == null) {
       return Err(AuthResponseError(data, AuthResponseErrorKind.invalidState));
     }
-    final grantType = stateModel.responseType.grantType;
+    final grantType = stateModel.responseType!.grantType;
 
     final TokenResponse token;
     HttpResponse? responseToken;
@@ -186,21 +187,25 @@ enum AuthResponseErrorKind {
   invalidState,
 }
 
+/// The data saved for authentication flows
 class AuthStateModel {
+  final String providerId;
+  final DateTime createdAt;
+  final OAuthResponseType? responseType;
+  final String? sessionId;
   final String? codeVerifier;
   final String? nonce;
-  final OAuthResponseType responseType;
-  final DateTime createdAt;
-  final String? sessionId;
-  final String providerId;
+  final Map<String, Object?>? meta;
 
+  /// The data saved for authentication flows
   AuthStateModel({
-    required this.responseType,
-    required this.createdAt,
     required this.providerId,
+    required this.createdAt,
+    required this.responseType,
     this.codeVerifier,
     this.nonce,
     this.sessionId,
+    this.meta,
   });
 
   Map<String, dynamic> toJson() {
@@ -209,19 +214,23 @@ class AuthStateModel {
       'codeVerifier': codeVerifier,
       'providerId': providerId,
       'nonce': nonce,
-      'responseType': responseType.toJson(),
+      'responseType': responseType?.toJson(),
       'sessionId': sessionId,
-    };
+      'meta': meta,
+    }..removeWhere((key, value) => value == null);
   }
 
   factory AuthStateModel.fromJson(Map<String, dynamic> map) {
     return AuthStateModel(
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      responseType: OAuthResponseType.fromJson(map['responseType'] as String),
       providerId: map['providerId'] as String,
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      responseType: map['responseType'] == null
+          ? null
+          : OAuthResponseType.fromJson(map['responseType'] as String),
       codeVerifier: map['codeVerifier'] as String?,
       nonce: map['nonce'] as String?,
       sessionId: map['sessionId'] as String?,
+      meta: map['meta'] as Map<String, Object?>?,
     );
   }
 }
