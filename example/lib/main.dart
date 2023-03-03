@@ -23,6 +23,27 @@ void main() async {
     allProviders: allProviders,
     allCredentialsProviders: {
       ImplementedProviders.username: UsernamePasswordProvider(),
+      'phone_no_password': IdentifierPasswordProvider.phone(
+        providerId: 'phone_no_password',
+        magicCodeConfig: MagicCodeConfig(
+          onlyMagicCodeNoPassword: true,
+          sendMagicCode: ({required identifier, required magicCode}) async {
+            print('MAGIC_CODE phone_no_password: $identifier $magicCode');
+            return const Ok(unit);
+          },
+          persistence: persistence,
+        ),
+      ),
+      ImplementedProviders.email: IdentifierPasswordProvider.email(
+        magicCodeConfig: MagicCodeConfig(
+          onlyMagicCodeNoPassword: false,
+          sendMagicCode: ({required identifier, required magicCode}) async {
+            print('MAGIC_CODE email: $identifier $magicCode');
+            return const Ok(unit);
+          },
+          persistence: persistence,
+        ),
+      ),
     },
     persistence: persistence,
     host: host,
@@ -53,6 +74,7 @@ Future<HttpServer> startServer(Config config) async {
   return server;
 }
 
+/// The main configuration por the server
 class Config {
   final Map<String, OAuthProvider> allProviders;
   final Map<String, CredentialsProvider> allCredentialsProviders;
@@ -65,6 +87,7 @@ class Config {
 
   final HttpClient client;
 
+  /// The main configuration por the server
   Config({
     required this.allProviders,
     required this.allCredentialsProviders,
@@ -84,5 +107,12 @@ Map<String, Object?> providerToJson(OAuthProvider e) {
     'openIdConnectSupported': e.defaultScopes.contains('openid'),
     'deviceCodeFlowSupported': e.supportedFlows.contains(GrantType.deviceCode),
     'implicitFlowSupported': e.supportedFlows.contains(GrantType.tokenImplicit)
+  };
+}
+
+Map<String, Object?> credentialsProviderToJson(CredentialsProvider e) {
+  return {
+    'providerId': e.providerId,
+    'paramDescriptions': e.paramDescriptions,
   };
 }
