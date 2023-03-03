@@ -404,7 +404,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     required String? jwksUri,
     required String issuer,
   }) async {
-    final jwt = JsonWebToken.unverified(token.id_token!);
+    final jwt = JsonWebToken.unverified(token.idToken!);
     final claims = OpenIdClaims.fromJson(jwt.claims.toJson());
 
     final keyStore = JsonWebKeyStore();
@@ -708,16 +708,16 @@ DateTime parseExpiresAt(Map<dynamic, dynamic> json) =>
         : DateTime.now().add(Duration(seconds: json['expires_in'] as int));
 
 /// The parsed body of the token OAuth2 endpoint
-class TokenResponse {
+class TokenResponse implements RefreshTokenResponse, SerializableToJson {
   /// The parsed body of the token OAuth2 endpoint
   const TokenResponse({
-    required this.access_token,
-    required this.expires_in,
-    required this.id_token,
+    required this.accessToken,
+    required this.expiresIn,
+    required this.idToken,
     required this.scope,
-    required this.token_type,
-    required this.refresh_token,
-    required this.expires_at,
+    required this.tokenType,
+    required this.refreshToken,
+    required this.expiresAt,
     this.state,
     this.rawJson,
     this.stateModel,
@@ -729,45 +729,48 @@ class TokenResponse {
     AuthStateModel? stateModel,
   }) =>
       TokenResponse(
-        access_token: json['access_token'] as String,
-        expires_in: json['expires_in'] as int,
-        id_token: json['id_token'] as String?,
+        accessToken: json['access_token'] as String,
+        expiresIn: json['expires_in'] as int,
+        idToken: json['id_token'] as String?,
         scope: json['scope'] as String,
-        token_type: json['token_type'] as String,
-        refresh_token: json['refresh_token'] as String?,
+        tokenType: json['token_type'] as String,
+        refreshToken: json['refresh_token'] as String?,
         state: json['state'] as String?,
-        expires_at: parseExpiresAt(json),
+        expiresAt: parseExpiresAt(json),
         rawJson: json.cast(),
         stateModel: stateModel,
       );
 
+  @override
   Map<String, Object?> toJson() {
     return {
       ...?rawJson,
-      'access_token': access_token,
-      'expires_in': expires_in,
-      'id_token': id_token,
+      'access_token': accessToken,
+      'expires_in': expiresIn,
+      'id_token': idToken,
       'scope': scope,
-      'token_type': token_type,
-      'refresh_token': refresh_token,
+      'token_type': tokenType,
+      'refresh_token': refreshToken,
       'state': state,
-      'expires_at': expires_at.toIso8601String(),
+      'expires_at': expiresAt.toIso8601String(),
       // TODO: stateModel
     }..removeWhere((key, value) => value == null);
   }
 
   /// A token that can be sent to a Google API.
-  final String access_token;
+  @override
+  final String accessToken;
 
   /// Identifies the type of token returned.
   /// At this time, this field always has the value "Bearer".
-  final String token_type;
+  final String tokenType;
 
   /// The remaining lifetime of the access token in seconds.
-  final int expires_in;
+  final int expiresIn;
 
-  /// The date where the [access_token] expires. Computed from [expires_in]
-  final DateTime expires_at;
+  /// The date where the [accessToken] expires. Computed from [expiresIn]
+  @override
+  final DateTime expiresAt;
 
   /// The scopes of access granted by the access_token expressed as a
   /// list of space-delimited, case-sensitive strings.
@@ -775,11 +778,12 @@ class TokenResponse {
 
   /// A JWT that contains identity information about the user
   /// that is digitally signed by Google.
-  final String? id_token;
+  final String? idToken;
 
   /// This field is only present if the access_type parameter was set to
   /// offline in the authentication request. For details, see Refresh tokens.
-  final String? refresh_token;
+  @override
+  final String? refreshToken;
 
   /// TODO: for implicint flow
   final String? state;
@@ -788,7 +792,7 @@ class TokenResponse {
   final Map<String, Object?>? rawJson;
 
   // TODO: should be save it here?
-  /// The nonce sent to the provider to verify the [id_token]
+  /// The nonce sent to the provider to verify the [idToken]
   // final String? nonce;
   final AuthStateModel? stateModel;
 }

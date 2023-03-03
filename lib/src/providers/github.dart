@@ -67,7 +67,7 @@ class GithubProvider extends OAuthProvider<GithubToken> {
         'X-GitHub-Api-Version': '2022-11-28'
       },
       // TODO: test and maybe use Headers.appFormUrlEncoded
-      body: jsonEncode({'access_token': token.access_token}),
+      body: jsonEncode({'access_token': token.accessToken}),
     );
     if (response.statusCode != 200) {
       return Err(GetUserError(response: response, token: token));

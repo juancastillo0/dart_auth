@@ -39,10 +39,7 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
     final response = await client.get(
       // Should we use https://discord.com/developers/docs/resources/user#get-current-user?
       Uri.parse('https://discord.com/api/oauth2/@me'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${token.access_token}',
-      },
+      headers: {Headers.accept: Headers.appJson},
     );
     if (response.statusCode != 200) {
       return Err(GetUserError(response: response, token: token));

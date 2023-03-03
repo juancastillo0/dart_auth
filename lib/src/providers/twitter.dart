@@ -67,17 +67,11 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
               ),
             ),
       ),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${token.access_token}',
-      },
+      headers: {Headers.accept: Headers.appJson},
     );
     final response = await client.get(
       Uri.parse('https://api.twitter.com/2/users/me?user.fields=$userFields'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${token.access_token}',
-      },
+      headers: {Headers.accept: Headers.appJson},
     );
 
     final responseEmail = await responseEmailFuture;
