@@ -238,10 +238,10 @@ class AuthHandler {
     AuthUser<Object?> user, {
     required String sessionId,
   }) async {
-    final List<AppUser?> users =
+    final List<AppUserComplete?> users =
         await config.persistence.getUsersById(user.userIds());
     // TODO: casting error whereType<Map<String, Object?>>() does not throw
-    final found = users.whereType<AppUser>().toList();
+    final found = users.whereType<AppUserComplete>().toList();
     final userIds = found.map((e) => e.userId).toSet();
     final String userId;
     if (userIds.isEmpty) {
@@ -593,15 +593,22 @@ class AuthHandler {
         .getUserById(UserId(claims.userId, UserIdKind.innerId));
     if (user == null) return Response.notFound(null);
 
-    final payload = user.toJson();
+    List<UserSession>? sessions;
     if (fields.contains('sessions')) {
-      final sessions = await config.persistence
+      sessions = await config.persistence
           .getUserSessions(user.userId, onlyValid: false);
-      // TODO: map sessions and remove refreshToken
-      payload['sessions'] = sessions;
     }
 
-    return Response.ok(jsonEncode(payload), headers: jsonHeader);
+    return Response.ok(
+      jsonEncode(
+        UserInfoMe(
+          user: user.user,
+          authUsers: user.authUsers,
+          sessions: sessions?.map(UserSessionBase.fromSession).toList(),
+        ),
+      ),
+      headers: jsonHeader,
+    );
   }
 
   Future<Response> credentialsSignIn(

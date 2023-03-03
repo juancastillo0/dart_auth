@@ -36,10 +36,10 @@ abstract class Persistence {
   /// Retrieves users by [ids]. A user is null if it was not found
   /// for the id in the given index.
   /// The returned array should have the same length as [ids].
-  Future<List<AppUser?>> getUsersById(List<UserId> ids);
+  Future<List<AppUserComplete?>> getUsersById(List<UserId> ids);
 
   /// Retrieves a user by [id].
-  Future<AppUser?> getUserById(UserId id) =>
+  Future<AppUserComplete?> getUserById(UserId id) =>
       getUsersById([id]).then((value) => value.first);
 }
 
@@ -66,11 +66,59 @@ enum UserIdKind {
   /// User id for the given provider
   providerId,
 
-  /// Verifier email address
+  /// Verified email address
   verifiedEmail,
 
-  /// Verifier phone number
+  /// Verified phone number
   verifiedPhone,
+}
+
+class UserSessionBase implements SerializableToJson {
+  final String sessionId;
+  final String userId;
+  final DateTime createdAt;
+  final DateTime? endedAt;
+
+  /// A user session, persisted when the user is signed in.
+  const UserSessionBase({
+    required this.sessionId,
+    required this.userId,
+    required this.createdAt,
+    this.endedAt,
+  });
+
+  /// Whether the session is valid
+  bool get isValid => endedAt == null;
+
+  factory UserSessionBase.fromJson(Map json) {
+    return UserSessionBase(
+      sessionId: json['sessionId'] as String,
+      userId: json['userId'] as String,
+      endedAt: json['endedAt'] == null
+          ? null
+          : DateTime.parse(json['endedAt'] as String),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  factory UserSessionBase.fromSession(UserSession session) {
+    return UserSessionBase(
+      sessionId: session.sessionId,
+      userId: session.userId,
+      endedAt: session.endedAt,
+      createdAt: session.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'sessionId': sessionId,
+      'userId': userId,
+      'endedAt': endedAt?.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
 }
 
 /// A user session, persisted when the user is signed in.
@@ -217,7 +265,8 @@ class AppUser implements SerializableToJson {
   final bool emailIsVerified;
   final String? phone;
   final bool phoneIsVerified;
-  final List<AuthUser<dynamic>> authUsers;
+  // TODO: rename to emailIsVerified->emailVerified and profilePicture -> picture
+  // TODO: add createdAt
 
   ///
   const AppUser({
@@ -228,10 +277,50 @@ class AppUser implements SerializableToJson {
     required this.emailIsVerified,
     this.phone,
     required this.phoneIsVerified,
+  });
+
+  factory AppUser.fromJson(Map<String, Object?> json) {
+    return AppUser(
+      userId: json['userId']! as String,
+      emailIsVerified: json['emailIsVerified']! as bool,
+      phoneIsVerified: json['phoneIsVerified']! as bool,
+      name: json['name'] as String?,
+      profilePicture: json['profilePicture'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'userId': userId,
+      'name': name,
+      'profilePicture': profilePicture,
+      'email': email,
+      'emailIsVerified': emailIsVerified,
+      'phone': phone,
+      'phoneIsVerified': phoneIsVerified,
+    };
+  }
+}
+
+class AppUserComplete implements SerializableToJson {
+  final AppUser user;
+  final List<AuthUser<Object?>> authUsers;
+
+  String get userId => user.userId;
+
+  Iterable<UserId> userIds() => [UserId(user.userId, UserIdKind.innerId)]
+      .followedBy(authUsers.expand((auth) => auth.userIds()));
+
+  ///
+  AppUserComplete({
+    required this.user,
     required this.authUsers,
   });
 
-  factory AppUser.merge(
+  factory AppUserComplete.merge(
     String userId,
     List<AuthUser<dynamic>> authUsers, {
     AppUser? base,
@@ -253,30 +342,30 @@ class AppUser implements SerializableToJson {
       (auth) => auth!.profilePicture != null,
       orElse: () => null,
     );
-    return AppUser(
-      userId: userId,
-      emailIsVerified: base != null && base.emailIsVerified || email != null,
-      phoneIsVerified: base != null && base.phoneIsVerified || phone != null,
-      email: base == null
-          ? email?.email
-          : (base.emailIsVerified ? base.email : email?.email ?? base.email),
-      phone: base == null
-          ? phone?.phone
-          : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
-      name: base?.name ?? name?.name,
-      profilePicture: base?.profilePicture ?? profilePicture?.profilePicture,
+    return AppUserComplete(
+      user: AppUser(
+        userId: userId,
+        emailIsVerified: base != null && base.emailIsVerified || email != null,
+        phoneIsVerified: base != null && base.phoneIsVerified || phone != null,
+        email: base == null
+            ? email?.email
+            : (base.emailIsVerified ? base.email : email?.email ?? base.email),
+        phone: base == null
+            ? phone?.phone
+            : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
+        name: base?.name ?? name?.name,
+        profilePicture: base?.profilePicture ?? profilePicture?.profilePicture,
+      ),
       authUsers: authUsers,
     );
   }
 
-  factory AppUser.fromJson(
+  factory AppUserComplete.fromJson(
     Map<String, Object?> json,
     Map<String, OAuthProvider<dynamic>> providers,
   ) {
-    return AppUser(
-      userId: json['userId']! as String,
-      emailIsVerified: json['emailIsVerified']! as bool,
-      phoneIsVerified: json['phoneIsVerified']! as bool,
+    return AppUserComplete(
+      user: AppUser.fromJson((json['user']! as Map).cast()),
       authUsers: (json['authUsers']! as Iterable)
           .cast<Map<String, Object?>>()
           .map((e) {
@@ -290,28 +379,50 @@ class AppUser implements SerializableToJson {
         }
         return provider.parseUser(e);
       }).toList(),
-      name: json['name'] as String?,
-      profilePicture: json['profilePicture'] as String?,
-      email: json['email'] as String?,
-      phone: json['phone'] as String?,
     );
   }
 
-  Iterable<UserId> userIds() => [UserId(userId, UserIdKind.innerId)]
-      .followedBy(authUsers.expand((auth) => auth.userIds()));
+  @override
+  Map<String, Object?> toJson() {
+    return {'user': user, 'authUsers': authUsers};
+  }
+}
+
+class UserInfoMe implements SerializableToJson {
+  final AppUser user;
+  final List<AuthUser<void>> authUsers;
+  final List<UserSessionBase>? sessions;
+
+  ///
+  UserInfoMe({
+    required this.user,
+    required this.authUsers,
+    required this.sessions,
+  });
+
+  factory UserInfoMe.fromJson(Map<String, Object?> json) {
+    return UserInfoMe(
+      user: AppUser.fromJson((json['user']! as Map).cast()),
+      authUsers: (json['authUsers']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(AuthUser.fromJsonRaw)
+          .toList(),
+      sessions: json['sessions'] == null
+          ? null
+          : (json['sessions']! as Iterable)
+              .cast<Map<String, Object?>>()
+              .map(UserSessionBase.fromJson)
+              .toList(),
+    );
+  }
 
   @override
   Map<String, Object?> toJson() {
     return {
-      'userId': userId,
-      'name': name,
-      'profilePicture': profilePicture,
-      'email': email,
-      'emailIsVerified': emailIsVerified,
-      'phone': phone,
-      'phoneIsVerified': phoneIsVerified,
+      'user': user,
       'authUsers': authUsers,
-    };
+      'sessions': sessions,
+    }..removeWhere((key, value) => value == null);
   }
 }
 
@@ -373,6 +484,22 @@ class AuthUser<T> implements SerializableToJson {
         phone: claims.phoneNumber,
         profilePicture: claims.picture?.toString(),
       );
+
+  static AuthUser<void> fromJsonRaw(Map<String, Object?> json) {
+    return AuthUser(
+      providerId: json['providerId']! as String,
+      providerUserId: json['providerUserId']! as String,
+      name: json['name'] as String?,
+      profilePicture: json['profilePicture'] as String?,
+      email: json['email'] as String?,
+      emailIsVerified: json['emailIsVerified']! as bool,
+      phone: json['phone'] as String?,
+      phoneIsVerified: json['phoneIsVerified']! as bool,
+      rawUserData: json,
+      openIdClaims: null,
+      providerUser: null,
+    );
+  }
 
   static AuthUser<U> fromJson<U>(
     Map<String, Object?> json,

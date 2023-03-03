@@ -7,7 +7,7 @@ import 'package:oauth/oauth.dart';
 class InMemoryPersistance extends Persistence {
   final Map<String, AuthStateModel> mapState = {};
   final Map<String, AuthUser> mapAuthUser = {};
-  final Map<String, AppUser> mapAppUser = {};
+  final Map<String, AppUserComplete> mapAppUser = {};
   final Map<String, UserSession> mapSession = {};
 
   @override
@@ -21,7 +21,7 @@ class InMemoryPersistance extends Persistence {
   }
 
   @override
-  Future<List<AppUser?>> getUsersById(List<UserId> ids) async {
+  Future<List<AppUserComplete?>> getUsersById(List<UserId> ids) async {
     return ids.map((id) {
       if (id.kind == UserIdKind.innerId) {
         return mapAppUser[id.id];
@@ -30,7 +30,7 @@ class InMemoryPersistance extends Persistence {
       //       (user) => user!.userIds().contains(id),
       //       orElse: () => null,
       //     );
-      return mapAppUser.values.cast<AppUser?>().firstWhere(
+      return mapAppUser.values.cast<AppUserComplete?>().firstWhere(
             (user) => user!.userIds().contains(id),
             orElse: () => null,
           );
@@ -53,7 +53,7 @@ class InMemoryPersistance extends Persistence {
     final prevUser = mapAppUser[userId];
     if (prevUser == null) {
       // create new user
-      mapAppUser[userId] = AppUser.merge(userId, [user]);
+      mapAppUser[userId] = AppUserComplete.merge(userId, [user]);
     } else {
       // update authUsers
       final index = prevUser.authUsers.indexWhere((u) => u.key == user.key);
@@ -63,10 +63,10 @@ class InMemoryPersistance extends Persistence {
         prevUser.authUsers[index] = user;
       }
       // add info from new provider
-      mapAppUser[userId] = AppUser.merge(
+      mapAppUser[userId] = AppUserComplete.merge(
         userId,
         prevUser.authUsers,
-        base: prevUser,
+        base: prevUser.user,
       );
     }
   }
