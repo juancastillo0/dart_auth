@@ -5,7 +5,7 @@ import 'package:oauth/src/password.dart';
 import 'package:oxidized/oxidized.dart';
 
 String? _getAuthToken(RequestCtx ctx) {
-  return ctx.requestHeaders['authorization'];
+  return ctx.requestHeaders['authorization']?.split(' ').last;
 }
 
 abstract class RequestCtx {

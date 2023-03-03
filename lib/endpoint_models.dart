@@ -79,3 +79,107 @@ class AuthResponse implements SerializableToJson {
     return 'AuthResponse${toJson()}';
   }
 }
+
+class AuthProvidersData {
+  final List<OAuthProviderData> providers;
+  final List<CredentialsProviderData> credentialsProviders;
+
+  ///
+  AuthProvidersData(this.providers, this.credentialsProviders);
+
+  factory AuthProvidersData.fromJson(Map<String, Object?> json) {
+    return AuthProvidersData(
+      (json['providers']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(OAuthProviderData.fromJson)
+          .toList(),
+      (json['credentialsProviders']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(CredentialsProviderData.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class CredentialsProviderData {
+  final String providerId;
+  final Map<String, ParamDescription> paramDescriptions;
+
+  ///
+  CredentialsProviderData({
+    required this.providerId,
+    required this.paramDescriptions,
+  });
+
+  factory CredentialsProviderData.fromJson(Map<String, Object?> json) {
+    return CredentialsProviderData(
+      providerId: json['providerId']! as String,
+      paramDescriptions: (json['paramDescriptions']! as Map).map(
+        (k, v) => MapEntry(
+          k! as String,
+          ParamDescription.fromJson((v as Map).cast()),
+        ),
+      ),
+    );
+  }
+}
+
+class OAuthProviderData {
+  final String providerId;
+  final List<String> defaultScopes;
+  final bool openIdConnectSupported;
+  final bool deviceCodeFlowSupported;
+  final bool implicitFlowSupported;
+
+  ///
+  OAuthProviderData({
+    required this.providerId,
+    required this.defaultScopes,
+    required this.openIdConnectSupported,
+    required this.deviceCodeFlowSupported,
+    required this.implicitFlowSupported,
+  });
+
+  factory OAuthProviderData.fromJson(Map<String, Object?> json) {
+    return OAuthProviderData(
+      providerId: json['providerId']! as String,
+      defaultScopes: (json['defaultScopes']! as List).cast(),
+      openIdConnectSupported: json['openIdConnectSupported']! as bool,
+      deviceCodeFlowSupported: json['deviceCodeFlowSupported']! as bool,
+      implicitFlowSupported: json['implicitFlowSupported']! as bool,
+    );
+  }
+}
+
+/// Either [OAuthProviderUrl] or [OAuthProviderDevice]
+abstract class OAuthProviderFlowData {
+  String get accessToken;
+}
+
+class OAuthProviderUrl implements OAuthProviderFlowData {
+  final String url;
+  final String accessToken;
+
+  ///
+  OAuthProviderUrl(this.url, this.accessToken);
+
+  factory OAuthProviderUrl.fromJson(Map<String, Object?> json) =>
+      OAuthProviderUrl(
+        json['url']! as String,
+        json['accessToken']! as String,
+      );
+}
+
+class OAuthProviderDevice implements OAuthProviderFlowData {
+  final DeviceCodeResponse device;
+  final String accessToken;
+
+  ///
+  OAuthProviderDevice(this.device, this.accessToken);
+
+  factory OAuthProviderDevice.fromJson(Map<String, Object?> json) =>
+      OAuthProviderDevice(
+        DeviceCodeResponse.fromJson(json['device']! as Map),
+        json['accessToken']! as String,
+      );
+}
