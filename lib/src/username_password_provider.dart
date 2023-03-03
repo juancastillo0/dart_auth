@@ -28,6 +28,7 @@ class UsernamePasswordProvider
 
   @override
   final String providerId;
+  // TODO: add name description
   final ParamDescription usernameDescription;
   final ParamDescription passwordDescription;
   final String? redirectUrl;
@@ -55,7 +56,7 @@ class UsernamePasswordProvider
         ? const Ok(None())
         : Err(
             AuthError(
-              code: 'invalid_password',
+              error: 'invalid_password',
               message: 'Invalid password.',
             ),
           );
@@ -126,14 +127,14 @@ class UsernamePasswordProvider
 }
 
 class AuthError {
-  final String code;
+  final String error;
   final String? message;
 
-  AuthError({required this.code, required this.message});
+  AuthError({required this.error, required this.message});
 
   Map<String, Object?> toJson() {
     return {
-      'code': code,
+      'error': error,
       'message': message,
     };
   }
@@ -172,16 +173,28 @@ class UsernamePassword extends CredentialsData {
 }
 
 abstract class CredentialsProvider<C extends CredentialsData, U> {
+  /// The unique global provider identifier
   String get providerId;
+
+  /// The description of the params required for authentication
   Map<String, ParamDescription>? get paramDescriptions;
+
+  /// Parses a [json] Map into the credentials [C] or returns a Map of
+  /// [FormatException]s for the fields that contain an error.
   Result<C, Map<String, FormatException>> parseCredentials(
     Map<String, Object?> json,
   );
 
+  /// Verifies that the [credentials] are associated with the [user].
+  /// May return a [CredentialsResponse] without an user if the flow
+  /// requires additional verification.
   Future<Result<Option<CredentialsResponse<U>>, AuthError>> verifyCredentials(
     U user,
     C credentials,
   );
+
+  /// May return a [CredentialsResponse] without an user if the flow
+  /// requires additional verification.
   Future<Result<CredentialsResponse<U>, AuthError>> getUser(C credentials);
 }
 
@@ -195,18 +208,39 @@ class CredentialsResponse<U> implements SerializableToJson {
   final String? redirectUrl;
   final String? userMessage;
   final String? state;
+  final Map<String, ParamDescription>? paramDescriptions;
 
   CredentialsResponse.continueFlow({
+    required String this.userMessage,
+    required String this.state,
     this.redirectUrl,
-    this.userMessage,
-    this.state,
+    this.paramDescriptions,
   }) : user = null;
 
   CredentialsResponse.authenticated(
     AuthUser<U> this.user, {
     this.redirectUrl,
     this.userMessage,
-  }) : state = null;
+  })  : state = null,
+        paramDescriptions = null;
+
+  factory CredentialsResponse.fromJson(Map<String, Object?> json) {
+    return CredentialsResponse.continueFlow(
+      state: json['state']! as String,
+      userMessage: json['userMessage']! as String,
+      redirectUrl: json['redirectUrl'] as String?,
+      paramDescriptions: json['paramDescriptions'] == null
+          ? null
+          : (json['paramDescriptions']! as Map).map(
+              (key, value) => MapEntry(
+                key as String,
+                ParamDescription.fromJson(
+                  (value as Map).cast(),
+                ),
+              ),
+            ),
+    );
+  }
 
   @override
   Map<String, Object?> toJson() => {
@@ -214,21 +248,39 @@ class CredentialsResponse<U> implements SerializableToJson {
         'redirectUrl': redirectUrl,
         'userMessage': userMessage,
         'state': state,
+        'paramDescriptions': paramDescriptions,
       }..removeWhere((key, value) => value == null);
 }
 
-class ParamDescription {
+class ParamDescription implements SerializableToJson {
   final String name;
   final String? description;
   final RegExp? regExp;
-  final Map<String, ParamDescription>? paramsDescription;
+  final Map<String, ParamDescription>? paramsDescriptions;
 
+  ///
   ParamDescription({
     required this.name,
     required this.description,
     required this.regExp,
-    this.paramsDescription,
+    this.paramsDescriptions,
   });
+
+  factory ParamDescription.fromJson(Map<String, Object?> json) {
+    return ParamDescription(
+      name: json['name']! as String,
+      description: json['description'] as String?,
+      regExp: json['regExp'] == null ? null : RegExp(json['regExp']! as String),
+      paramsDescriptions: json['paramsDescriptions'] == null
+          ? null
+          : (json['paramsDescriptions']! as Map).map(
+              (key, value) => MapEntry(
+                key! as String,
+                ParamDescription.fromJson((value as Map).cast()),
+              ),
+            ),
+    );
+  }
 
   FormatException? validate(String value) {
     if (regExp != null && !regExp!.hasMatch(value)) {
@@ -238,5 +290,15 @@ class ParamDescription {
       );
     }
     return null;
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'name': name,
+      'description': description,
+      'regExp': regExp?.pattern,
+      'paramsDescriptions': paramsDescriptions,
+    }..removeWhere((key, value) => value == null);
   }
 }

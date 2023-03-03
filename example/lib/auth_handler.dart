@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
 
+import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
@@ -34,7 +35,10 @@ Handler makeHandler(Config config) {
       if (request.method != 'GET') return Response.notFound(null);
       return Response.ok(
         jsonEncode({
-          'providers': config.allProviders.values.map(providerToJson).toList()
+          'providers': config.allProviders.values.map(providerToJson).toList(),
+          'credentialsProviders': config.allCredentialsProviders.values
+              .map(credentialsProviderToJson)
+              .toList(),
         }),
         headers: jsonHeader,
       );
@@ -60,7 +64,7 @@ Handler makeHandler(Config config) {
     } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
       return handler.credentialsSignIn(request, signUp: true);
     }
-    return Response.ok('Request for "${request.url}"');
+    return Response.notFound('${request.method} Request for "${request.url}"');
   }
 
   return handleRequest;
@@ -69,6 +73,7 @@ Handler makeHandler(Config config) {
 class AuthHandler {
   final Config config;
 
+  /// Handler for multiple authentication endpoints
   AuthHandler(
     this.config, {
     this.authSessionDuration = const Duration(minutes: 10),
@@ -142,7 +147,7 @@ class AuthHandler {
     }
     final providerInstance = getProvider(request).throwErr();
 
-    final body = await parseBodyOrUrlData(request) as Map<String, Object?>;
+    final body = (await parseBodyOrUrlData(request))! as Map<String, Object?>;
     final flow =
         OAuthFlow(providerInstance, config.persistence, client: config.client);
     final authenticated = await flow.handleRedirectUri(
@@ -212,7 +217,7 @@ class AuthHandler {
     }
     final result = await providerInstance.getUser(
       // TODO: improve this
-      OAuthClient.fromTokenResponse(
+      OAuthClient.fromProvider(
         providerInstance,
         token,
         innerClient: config.client,
@@ -362,8 +367,9 @@ class AuthHandler {
       return Response.badRequest();
     }
 
-    final session = await config.persistence.getValidSession(claims.sessionId);
-    String? refreshToken = session?.refreshToken;
+    UserSession? session =
+        await config.persistence.getValidSession(claims.sessionId);
+    final refreshToken = session?.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) {
       // has not been logged in
       if (!meta.isDeviceCodeFlow) {
@@ -383,30 +389,47 @@ class AuthHandler {
           );
         }
         final token = result.unwrap();
-        final user = await processOAuthToken(
+        final sessionResult = await processOAuthToken(
           token,
           providerInstance,
           sessionId: claims.sessionId,
         );
-        if (user.isErr()) {
+        if (sessionResult.isErr()) {
           return Response.internalServerError(
             // TODO: standardize 'error' vs 'message'
-            body: jsonEncode({'message': user.unwrapErr().message}),
+            body: jsonEncode({'message': sessionResult.unwrapErr().message}),
             headers: jsonHeader,
           );
         }
-        refreshToken = user.unwrap().refreshToken;
+        session = sessionResult.unwrap();
       }
     }
 
-    // final jwt = makeRefreshToken(
-    //   userId: userId,
-    //   sessionId: claims.sessionId,
-    //   providerId: providerInstance.providerId,
-    // );
     return Response.ok(
-      jsonEncode({'refreshToken': refreshToken}),
+      jsonEncode(successResponse(session!, providerInstance.providerId)),
       headers: jsonHeader,
+    );
+  }
+
+  AuthResponse successResponse(UserSession session, String providerId) {
+    final accessToken = config.jwtMaker.createJwt(
+      userId: session.userId,
+      sessionId: session.sessionId,
+      duration: authSessionDuration,
+      isRefreshToken: false,
+      meta: UserMetaClaims.loggedUser(
+        providerId: providerId,
+        userId: session.userId,
+      ).toJson(),
+    );
+
+    return AuthResponse(
+      refreshToken: session.refreshToken,
+      accessToken: accessToken,
+      expiresAt: DateTime.now().add(authSessionDuration),
+      error: null,
+      message: null,
+      code: null,
     );
   }
 
@@ -436,7 +459,7 @@ class AuthHandler {
       bool didInitConnection = false;
 
       Future<void> _closeUnauthorized() {
-        channel.sink.add(jsonEncode({'error': 'Unauthorized'}));
+        channel.sink.add(jsonEncode(AuthResponse.error('Unauthorized')));
         return channel.sink.close();
       }
 
@@ -475,9 +498,9 @@ class AuthHandler {
           // TODO: maybe other error
           return _closeUnauthorized();
         }
-        Future<void> sendAndClose(Map<String, Object?> json) async {
+        Future<void> sendAndClose(AuthResponse json) async {
           if (isClosed) return;
-          channel.sink.add(jsonEncode(json));
+          channel.sink.add(jsonEncode(json.toJson()));
           return channel.sink.close();
         }
 
@@ -495,7 +518,7 @@ class AuthHandler {
                 err: (err) {
                   if (err.error == null ||
                       DeviceFlowError.isDeviceFlowFinished(err.error!)) {
-                    return sendAndClose({'error': err.toString()});
+                    return sendAndClose(AuthResponse.error(err.toString()));
                   }
                   // not yet authenticated
                   // should we send the polling result? channel.sink.add(jsonEncode({'error': err.toString()}));
@@ -509,15 +532,11 @@ class AuthHandler {
 
                   return sessionResult.when(
                     // TODO: make a better error
-                    err: (err) => sendAndClose({'error': err.toString()}),
+                    err: (err) =>
+                        sendAndClose(AuthResponse.error(err.toString())),
                     ok: (session) {
-                      // final jwt = makeRefreshToken(
-                      //   userId: user.key,
-                      //   sessionId: claims.sessionId,
-                      //   providerId: provider.providerId,
-                      // );
                       return sendAndClose(
-                        {'refreshToken': session.refreshToken},
+                        successResponse(session, provider.providerId),
                       );
                     },
                   );
@@ -541,15 +560,12 @@ class AuthHandler {
               return;
             }
             if (session != null && session.userId.isNotEmpty) {
-              // final jwt = makeRefreshToken(
-              //   userId: session.userId,
-              //   sessionId: claims.sessionId,
-              //   providerId: provider.providerId,
-              // );
-              return sendAndClose({'refreshToken': session.refreshToken});
+              return sendAndClose(
+                successResponse(session, provider.providerId),
+              );
             } else if (DateTime.now().difference(startTime) >
                 authSessionDuration) {
-              return sendAndClose({'error': 'timeout'});
+              return sendAndClose(AuthResponse.error('timeout'));
             } else {
               Timer(duration, timerCallback);
             }
@@ -632,11 +648,11 @@ class AuthHandler {
     final credentialsResult = providerInstance.parseCredentials(data);
     if (credentialsResult.isErr()) {
       return Response.badRequest(
-        body: jsonEncode(
-          credentialsResult
+        body: jsonEncode({
+          'fieldErrors': credentialsResult
               .unwrapErr()
               .map((key, value) => MapEntry(key, value.message)),
-        ),
+        }),
         headers: jsonHeader,
       );
     }
@@ -692,7 +708,7 @@ class AuthHandler {
 
     final userResult = await providerInstance.getUser(credentials);
     if (userResult.isErr()) {
-      return Response.internalServerError(
+      return Response.badRequest(
         // TODO: standardize 'error' vs 'message'
         body: jsonEncode(userResult.unwrapErr().toJson()),
         headers: jsonHeader,
@@ -728,12 +744,12 @@ class AuthHandler {
     if (sessionResult.isErr()) {
       return Response.internalServerError(
         // TODO: standardize 'error' vs 'message'
-        body: jsonEncode({'error': sessionResult.unwrapErr()}),
+        body: jsonEncode(AuthResponse.error(sessionResult.unwrapErr())),
         headers: jsonHeader,
       );
     }
     return Response.ok(
-      jsonEncode({'refreshToken': sessionResult.unwrap().refreshToken}),
+      jsonEncode(successResponse(sessionResult.unwrap(), user.providerId)),
       headers: jsonHeader,
     );
   }

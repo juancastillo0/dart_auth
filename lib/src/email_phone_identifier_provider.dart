@@ -20,6 +20,7 @@ class MagicCodeConfig<U> {
     Random? random,
   }) {
     final r = random ?? Random.secure();
+    // TODO: return Param description, use RegExp.escape
     return String.fromCharCodes(
       Iterable.generate(
         count,
@@ -31,7 +32,7 @@ class MagicCodeConfig<U> {
   }
 
   final bool onlyMagicCodeNoPassword;
-  final Future<Result<CredentialsResponse<U>, AuthError>> Function({
+  final Future<Result<Unit, AuthError>> Function({
     required String identifier,
     required String magicCode,
   }) sendMagicCode;
@@ -160,7 +161,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         ? Ok(None())
         : Err(
             AuthError(
-              code: 'invalid_password',
+              error: 'invalid_password',
               message: 'Invalid password.',
             ),
           );
@@ -171,7 +172,9 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     IdentifierPassword credentials,
   ) async {
     String? passwordHash;
-    if (!onlyMagicCodeNoPassword && credentials.password != null) {
+    if (!onlyMagicCodeNoPassword &&
+        credentials.password != null &&
+        credentials.magicCode == null) {
       if (useIsolateForHashing) {
         passwordHash = await hashPasswordFromIsolate(credentials.password!);
       } else {
@@ -190,7 +193,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         // TODO: should we ask for password after verification? make it configurable?
         if (passwordHash == null && !onlyMagicCodeNoPassword) {
           return Err(
-            AuthError(code: 'no_password', message: 'Password is required'),
+            AuthError(error: 'no_password', message: 'Password is required'),
           );
         }
         state = generateStateToken();
@@ -211,38 +214,35 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
           ),
         );
         // TODO: should this have a result? what happens if there is an error?
-        await ml.sendMagicCode(
+        final result = await ml.sendMagicCode(
           identifier: credentials.identifier,
           magicCode: magicCode,
         );
+        if (result.isErr()) return Err(result.unwrapErr());
       } else {
         // A magic code sent by the user, verify the flow
-        state = credentials.state;
-        if (state == null) {
-          return Err(AuthError(code: 'no_state', message: 'Bad request'));
+        final s = credentials.state;
+        if (s == null) {
+          return Err(AuthError(error: 'no_state', message: 'Bad request'));
         }
+        state = s;
         final stateModel = await ml.persistence.getState(state);
         if (stateModel == null) {
-          return Err(AuthError(code: 'invalid_state', message: 'Bad request'));
+          return Err(AuthError(error: 'invalid_state', message: 'Bad request'));
         }
         final CredentialsAuthState model;
         try {
           model = CredentialsAuthState.fromJson(stateModel.meta!);
         } catch (_) {
-          return Err(AuthError(code: 'invalid_state', message: 'Bad request'));
+          return Err(AuthError(error: 'invalid_state', message: 'Bad request'));
         }
 
         if (model.magicCode != credentials.magicCode) {
-          return Err(AuthError(code: 'invalid_code', message: 'Unauthorized'));
-        }
-        if (passwordHash != null && model.passwordHash != passwordHash) {
-          return Err(
-            AuthError(code: 'invalid_password', message: 'Unauthorized'),
-          );
+          return Err(AuthError(error: 'invalid_code', message: 'Unauthorized'));
         }
         if (model.identifier != credentials.identifier) {
           return Err(
-            AuthError(code: 'invalid_identifier', message: 'Unauthorized'),
+            AuthError(error: 'invalid_identifier', message: 'Unauthorized'),
           );
         }
         authenticated = true;
@@ -252,7 +252,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     }
     if (authenticated && passwordHash == null && !onlyMagicCodeNoPassword) {
       return Err(
-        AuthError(code: 'no_password', message: 'Password is required'),
+        AuthError(error: 'no_password', message: 'Password is required'),
       );
     }
     if (!authenticated) {
@@ -261,7 +261,15 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
           // TODO configurable
           userMessage: 'A code has been sent',
           redirectUrl: redirectUrl,
-          state: state,
+          state: state!,
+          paramDescriptions: {
+            // TODO: use it to validate
+            'magicCode': ParamDescription(
+              name: 'Magic Code',
+              description: 'The code sent to your device',
+              regExp: RegExp(r'^[a-z0-9]{6}$'),
+            ),
+          },
         ),
       );
     }
@@ -328,8 +336,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     // onlyMagicCodeNoPassword -> identifier -> magicCode
     // magicCode & password -> identifier & password -> magicCode
     // password -> identifier & password
-    if ((magicCodeConfig == null && password is! String ||
-            magicCodeConfig != null) ||
+    if ((magicCodeConfig == null && password == null) ||
         identifier is! String) {
       return Err({
         if (identifier is! String)
@@ -354,6 +361,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
 
     return Ok(
       IdentifierPassword(
+        // TODO: normalize identifier
         identifier: identifier,
         password: password,
         magicCode: magicCode,
@@ -508,8 +516,8 @@ class CredentialsAuthState extends SerializableToJson {
     return CredentialsAuthState(
       identifier: json['identifier']! as String,
       magicCode: json['magicCode']! as String,
-      passwordHash: json['passwordHash']! as String?,
-      name: json['name']! as String?,
+      passwordHash: json['passwordHash'] as String?,
+      name: json['name'] as String?,
     );
   }
 }
