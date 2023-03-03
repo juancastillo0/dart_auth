@@ -330,9 +330,9 @@ MockClient createMockClient({
         }
 
         final tokenResponse = TokenResponse(
-          access_token: generateStateToken(),
-          expires_in: 900,
-          id_token: scope.split(RegExp('[ ,]+')).contains('openid')
+          accessToken: generateStateToken(),
+          expiresIn: 900,
+          idToken: scope.split(RegExp('[ ,]+')).contains('openid')
               ? createIdToken({
                   // TODO: additional data specific for providers
                   // TODO: nonce and wrong nonce
@@ -360,15 +360,15 @@ MockClient createMockClient({
                 })
               : null,
           scope: scope,
-          token_type: 'bearer',
-          refresh_token: sendRefreshToken ? generateStateToken() : null,
-          expires_at: DateTime.now(),
+          tokenType: 'bearer',
+          refreshToken: sendRefreshToken ? generateStateToken() : null,
+          expiresAt: DateTime.now(),
         );
 
-        providerMock.tokens[tokenResponse.access_token] =
+        providerMock.tokens[tokenResponse.accessToken] =
             TokenResponseTest('access_token', grantType, tokenResponse);
         if (sendRefreshToken) {
-          providerMock.tokens[tokenResponse.refresh_token!] =
+          providerMock.tokens[tokenResponse.refreshToken!] =
               TokenResponseTest('refresh_token', grantType, tokenResponse);
         }
         return Response(
