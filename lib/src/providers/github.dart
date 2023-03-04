@@ -89,10 +89,12 @@ class GithubProvider extends OAuthProvider<GithubToken> {
       if (emailResponse.statusCode != 200) {
         return Err(GetUserError(response: emailResponse, token: token));
       }
-      final emails = jsonDecode(emailResponse.body) as List;
-      if (emails.isNotEmpty) {
-        userData['email'] =
-            GithubEmail.fromJson((emails.first as Map).cast()).email;
+      final emails = (jsonDecode(emailResponse.body) as List)
+          .cast<Map<Object?, Object?>>()
+          .map(GithubEmail.fromJson)
+          .toList();
+      if (emails.any((e) => e.verified)) {
+        userData['email'] = emails.firstWhere((e) => e.verified).email;
       }
     }
     return Ok(parseUser(tokenData));
@@ -109,7 +111,7 @@ class GithubProvider extends OAuthProvider<GithubToken> {
       emailIsVerified: user.email != null,
       email: user.email,
       name: user.name,
-      profilePicture: user.avatar_url,
+      picture: user.avatar_url,
       phoneIsVerified: false,
       rawUserData: userData,
       providerUser: token,

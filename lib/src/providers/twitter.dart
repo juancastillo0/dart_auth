@@ -106,7 +106,7 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
       providerUserId: user.id,
       email: verifyCredentials.email,
       name: user.name,
-      profilePicture: user.profile_image_url ??
+      picture: user.profile_image_url ??
           verifyCredentials.profile_image_url_https ??
           verifyCredentials.profile_image_url,
       rawUserData: json,

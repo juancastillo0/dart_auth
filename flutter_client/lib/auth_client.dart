@@ -81,7 +81,10 @@ class AuthState {
   void _initFlow(OAuthProviderFlowData data) {
     currentFlow.value = data;
     final ws = WebSocketChannel.connect(
-      Uri.parse(client.baseUrl).replace(path: 'oauth/subscribe', scheme: 'ws'),
+      Uri.parse(client.baseUrl).replace(
+        path: 'oauth/subscribe',
+        scheme: client.baseUrl.startsWith('https') ? 'wss' : 'ws',
+      ),
     );
     ws.sink.add(jsonEncode({'accessToken': data.accessToken}));
     _oauthSubscription = ws.stream

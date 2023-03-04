@@ -426,7 +426,7 @@ class TestState {
           : noName.contains(provider.providerId)
               ? 'username'
               : 'name',
-      'profilePicture': noPicture.contains(provider.providerId)
+      'picture': noPicture.contains(provider.providerId)
           ? null
           : 'https://i.scdn.co/image/ab67616d00001e02ff9ca10b55ce82ae553c8228',
       'email': provider.providerId == ImplementedProviders.reddit

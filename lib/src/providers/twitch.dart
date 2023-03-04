@@ -57,7 +57,7 @@ class TwitchProvider extends OpenIdConnectProvider<TwitchUser> {
       email: claims.email,
       name: claims.preferredUsername,
       openIdClaims: claims,
-      profilePicture: claims.picture?.toString(),
+      picture: claims.picture?.toString(),
     );
   }
 

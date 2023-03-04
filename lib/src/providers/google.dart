@@ -93,7 +93,7 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
       email: googleClaims.email,
       name: googleClaims.name,
       openIdClaims: OpenIdClaims.fromJson(userData),
-      profilePicture: googleClaims.picture,
+      picture: googleClaims.picture,
     );
   }
 }

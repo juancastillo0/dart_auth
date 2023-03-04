@@ -57,7 +57,7 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
       email: user.email,
       name: user.display_name,
       providerUser: user,
-      profilePicture: user.images.isNotEmpty ? user.images[0].url : null,
+      picture: user.images.isNotEmpty ? user.images[0].url : null,
     );
   }
 }

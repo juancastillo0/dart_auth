@@ -150,7 +150,7 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
       providerUserId: user.id,
       email: user.email,
       name: user.name,
-      profilePicture: user.profile_pic ?? user.picture.data.url,
+      picture: user.profile_pic ?? user.picture.data.url,
     );
   }
 }

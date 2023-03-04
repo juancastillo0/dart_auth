@@ -260,23 +260,24 @@ T matchProvider<T>(
 class AppUser implements SerializableToJson {
   final String userId;
   final String? name;
-  final String? profilePicture;
+  final String? picture;
   final String? email;
   final bool emailIsVerified;
   final String? phone;
   final bool phoneIsVerified;
-  // TODO: rename to emailIsVerified->emailVerified and profilePicture -> picture
-  // TODO: add createdAt
+  final DateTime createdAt;
+  // TODO: rename to emailIsVerified->emailVerified
 
   ///
   const AppUser({
     required this.userId,
     this.name,
-    this.profilePicture,
+    this.picture,
     this.email,
     required this.emailIsVerified,
     this.phone,
     required this.phoneIsVerified,
+    required this.createdAt,
   });
 
   factory AppUser.fromJson(Map<String, Object?> json) {
@@ -285,9 +286,10 @@ class AppUser implements SerializableToJson {
       emailIsVerified: json['emailIsVerified']! as bool,
       phoneIsVerified: json['phoneIsVerified']! as bool,
       name: json['name'] as String?,
-      profilePicture: json['profilePicture'] as String?,
+      picture: json['picture'] as String?,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
+      createdAt: DateTime.parse(json['createdAt']! as String),
     );
   }
 
@@ -296,11 +298,12 @@ class AppUser implements SerializableToJson {
     return {
       'userId': userId,
       'name': name,
-      'profilePicture': profilePicture,
+      'picture': picture,
       'email': email,
       'emailIsVerified': emailIsVerified,
       'phone': phone,
       'phoneIsVerified': phoneIsVerified,
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 }
@@ -338,13 +341,14 @@ class AppUserComplete implements SerializableToJson {
       (auth) => auth!.name != null,
       orElse: () => null,
     );
-    final profilePicture = list.firstWhere(
-      (auth) => auth!.profilePicture != null,
+    final picture = list.firstWhere(
+      (auth) => auth!.picture != null,
       orElse: () => null,
     );
     return AppUserComplete(
       user: AppUser(
         userId: userId,
+        createdAt: base?.createdAt ?? DateTime.now(),
         emailIsVerified: base != null && base.emailIsVerified || email != null,
         phoneIsVerified: base != null && base.phoneIsVerified || phone != null,
         email: base == null
@@ -354,7 +358,7 @@ class AppUserComplete implements SerializableToJson {
             ? phone?.phone
             : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
         name: base?.name ?? name?.name,
-        profilePicture: base?.profilePicture ?? profilePicture?.profilePicture,
+        picture: base?.picture ?? picture?.picture,
       ),
       authUsers: authUsers,
     );
@@ -432,7 +436,7 @@ class AuthUser<T> implements SerializableToJson {
     required this.providerId,
     required this.providerUserId,
     this.name,
-    this.profilePicture,
+    this.picture,
     this.email,
     required this.emailIsVerified,
     this.phone,
@@ -445,7 +449,7 @@ class AuthUser<T> implements SerializableToJson {
   final String providerId;
   final String providerUserId;
   final String? name;
-  final String? profilePicture;
+  final String? picture;
   final String? email;
   final bool emailIsVerified;
   final String? phone;
@@ -482,7 +486,7 @@ class AuthUser<T> implements SerializableToJson {
         name: claims.name,
         openIdClaims: claims,
         phone: claims.phoneNumber,
-        profilePicture: claims.picture?.toString(),
+        picture: claims.picture?.toString(),
       );
 
   static AuthUser<void> fromJsonRaw(Map<String, Object?> json) {
@@ -490,7 +494,7 @@ class AuthUser<T> implements SerializableToJson {
       providerId: json['providerId']! as String,
       providerUserId: json['providerUserId']! as String,
       name: json['name'] as String?,
-      profilePicture: json['profilePicture'] as String?,
+      picture: json['picture'] as String?,
       email: json['email'] as String?,
       emailIsVerified: json['emailIsVerified']! as bool,
       phone: json['phone'] as String?,
@@ -512,7 +516,7 @@ class AuthUser<T> implements SerializableToJson {
         'providerId': providerId,
         'providerUserId': providerUserId,
         'name': name,
-        'profilePicture': profilePicture,
+        'picture': picture,
         'email': email,
         'emailIsVerified': emailIsVerified,
         'phone': phone,

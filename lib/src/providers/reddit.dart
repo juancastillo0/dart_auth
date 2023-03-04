@@ -66,7 +66,7 @@ class RedditProvider extends OAuthProvider<RedditUser> {
       rawUserData: userData,
       providerUserId: user.id,
       name: user.name,
-      profilePicture: user.iconImg,
+      picture: user.iconImg,
     );
   }
 
