@@ -11,17 +11,17 @@ class MagicCodeConfig<U> {
     required this.onlyMagicCodeNoPassword,
     required this.sendMagicCode,
     required this.persistence,
+    this.userMessage = 'A code has been sent',
     this.generateMagicCode = defaultGenerateMagicCode,
   });
 
-  static String defaultGenerateMagicCode({
+  static GeneratedMagicCode defaultGenerateMagicCode({
     int count = 6,
     String alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789',
     Random? random,
   }) {
     final r = random ?? Random.secure();
-    // TODO: return Param description, use RegExp.escape
-    return String.fromCharCodes(
+    final code = String.fromCharCodes(
       Iterable.generate(
         count,
         (_) => alphabet.codeUnitAt(
@@ -29,15 +29,37 @@ class MagicCodeConfig<U> {
         ),
       ),
     );
+
+    return GeneratedMagicCode(
+      code,
+      ParamDescription(
+        name: 'Code',
+        description: 'The code sent to your device',
+        regExp: RegExp('^[${RegExp.escape(alphabet)}]{${count}}\$'),
+      ),
+    );
   }
 
+  final String userMessage;
   final bool onlyMagicCodeNoPassword;
   final Future<Result<Unit, AuthError>> Function({
     required String identifier,
     required String magicCode,
   }) sendMagicCode;
   final Persistence persistence;
-  final String Function() generateMagicCode;
+  final GeneratedMagicCode Function() generateMagicCode;
+}
+
+class GeneratedMagicCode {
+  /// The magic code used to authenticate the user
+  final String code;
+
+  /// The description for the input field for this code.
+  /// Presented in the user interface.
+  final ParamDescription paramDescription;
+
+  ///
+  GeneratedMagicCode(this.code, this.paramDescription);
 }
 
 class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
@@ -52,6 +74,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     ParamDescription? passwordDescription,
     this.redirectUrl,
     this.useIsolateForHashing = true,
+    this.normalizeIdentifier,
   }) : passwordDescription = passwordDescription ??
             UsernamePasswordProvider.defaultPasswordDescription;
 
@@ -64,6 +87,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     ParamDescription? passwordDescription,
     String? redirectUrl,
     bool useIsolateForHashing = true,
+    String Function(String)? normalizeEmail,
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -74,14 +98,25 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       passwordDescription: passwordDescription,
       redirectUrl: redirectUrl,
       useIsolateForHashing: useIsolateForHashing,
+      normalizeIdentifier: normalizeEmail ?? defaultNormalizeEmail,
     );
   }
 
+  /// The default identifier parameter description
+  /// used in [IdentifierPasswordProvider.email]
   static final defaultEmailDescription = ParamDescription(
     name: 'Email',
     description: 'The email address. This will be your identifier to sign in.',
     regExp: RegExp('@'),
   );
+
+  /// Normalizes an [email] address.
+  /// Default used in [IdentifierPasswordProvider.email]
+  static String defaultNormalizeEmail(String email) {
+    final split = email.toLowerCase().replaceAll(RegExp(r'\s'), '').split('@');
+    final domain = split.last.split(',').first;
+    return '${split.first}@${domain}';
+  }
 
   static IdentifierPasswordProvider<PhonePasswordUser> phone({
     required MagicCodeConfig<PhonePasswordUser> magicCodeConfig,
@@ -92,6 +127,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     ParamDescription? passwordDescription,
     String? redirectUrl,
     bool useIsolateForHashing = true,
+    String Function(String)? normalizePhone,
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -102,9 +138,12 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       passwordDescription: passwordDescription,
       redirectUrl: redirectUrl,
       useIsolateForHashing: useIsolateForHashing,
+      normalizeIdentifier: normalizePhone,
     );
   }
 
+  /// The default identifier parameter description
+  /// used in [IdentifierPasswordProvider.phone]
   static final defaultPhoneDescription = ParamDescription(
     name: 'Phone',
     description: 'The phone number. This will be your identifier to sign in.',
@@ -120,6 +159,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
   final bool useIsolateForHashing;
   final MakeUserFromIdentifier<U> makeUser;
   final MagicCodeConfig<U>? magicCodeConfig;
+  final String Function(String)? normalizeIdentifier;
 
   bool get onlyMagicCodeNoPassword =>
       magicCodeConfig?.onlyMagicCodeNoPassword ?? false;
@@ -156,15 +196,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         user.passwordHash!,
       );
     }
-    return isValid
-        // ignore: prefer_const_constructors
-        ? Ok(None())
-        : Err(
-            AuthError(
-              error: 'invalid_password',
-              message: 'Invalid password.',
-            ),
-          );
+    return isValid ? const Ok(None()) : const Err(AuthError.invalidPassword);
   }
 
   @override
@@ -186,15 +218,13 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     String? state;
     final ml = magicCodeConfig;
     bool authenticated = ml == null;
-    String? magicCode;
+    GeneratedMagicCode? magicCode;
     if (ml != null) {
       if (credentials.magicCode == null) {
         // No magic code sent by the user, start the flow
         // TODO: should we ask for password after verification? make it configurable?
         if (passwordHash == null && !onlyMagicCodeNoPassword) {
-          return Err(
-            AuthError(error: 'no_password', message: 'Password is required'),
-          );
+          return const Err(AuthError.noPassword);
         }
         state = generateStateToken();
         magicCode = ml.generateMagicCode();
@@ -208,42 +238,39 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
             meta: CredentialsAuthState(
               identifier: credentials.identifier,
               passwordHash: passwordHash,
-              magicCode: magicCode,
+              magicCode: magicCode.code,
               name: name,
             ).toJson(),
           ),
         );
-        // TODO: should this have a result? what happens if there is an error?
         final result = await ml.sendMagicCode(
           identifier: credentials.identifier,
-          magicCode: magicCode,
+          magicCode: magicCode.code,
         );
         if (result.isErr()) return Err(result.unwrapErr());
       } else {
         // A magic code sent by the user, verify the flow
         final s = credentials.state;
         if (s == null) {
-          return Err(AuthError(error: 'no_state', message: 'Bad request'));
+          return const Err(AuthError.noState);
         }
         state = s;
         final stateModel = await ml.persistence.getState(state);
         if (stateModel == null) {
-          return Err(AuthError(error: 'invalid_state', message: 'Bad request'));
+          return const Err(AuthError.invalidState);
         }
         final CredentialsAuthState model;
         try {
           model = CredentialsAuthState.fromJson(stateModel.meta!);
         } catch (_) {
-          return Err(AuthError(error: 'invalid_state', message: 'Bad request'));
+          return const Err(AuthError.invalidState);
         }
 
         if (model.magicCode != credentials.magicCode) {
-          return Err(AuthError(error: 'invalid_code', message: 'Unauthorized'));
+          return const Err(AuthError.invalidCode);
         }
         if (model.identifier != credentials.identifier) {
-          return Err(
-            AuthError(error: 'invalid_identifier', message: 'Unauthorized'),
-          );
+          return const Err(AuthError.invalidIdentifier);
         }
         authenticated = true;
         passwordHash ??= model.passwordHash;
@@ -251,24 +278,16 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       }
     }
     if (authenticated && passwordHash == null && !onlyMagicCodeNoPassword) {
-      return Err(
-        AuthError(error: 'no_password', message: 'Password is required'),
-      );
+      return const Err(AuthError.noPassword);
     }
     if (!authenticated) {
       return Ok(
         CredentialsResponse.continueFlow(
-          // TODO configurable
-          userMessage: 'A code has been sent',
+          userMessage: ml!.userMessage,
           redirectUrl: redirectUrl,
           state: state!,
           paramDescriptions: {
-            // TODO: use it to validate
-            'magicCode': ParamDescription(
-              name: 'Magic Code',
-              description: 'The code sent to your device',
-              regExp: RegExp(r'^[a-z0-9]{6}$'),
-            ),
+            'magicCode': magicCode!.paramDescription,
           },
         ),
       );
@@ -278,10 +297,12 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     //   passwordHash: passwordHash,
     // );
     final authUser = makeUser(
-      identifier: credentials.identifier,
-      passwordHash: passwordHash,
-      providerId: providerId,
-      name: name,
+      UserIdentifierData(
+        identifier: credentials.identifier,
+        passwordHash: passwordHash,
+        providerId: providerId,
+        name: name,
+      ),
     );
     // final emailVerified = ids.any((id) => id.kind ==
     //     UserIdKind.verifiedEmail);
@@ -358,11 +379,11 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         if (passwordError != null) 'password': passwordError,
       });
     }
-
+    final normalizedIdentifier =
+        normalizeIdentifier?.call(identifier) ?? identifier;
     return Ok(
       IdentifierPassword(
-        // TODO: normalize identifier
-        identifier: identifier,
+        identifier: normalizedIdentifier,
         password: password,
         magicCode: magicCode,
         state: state,
@@ -373,14 +394,38 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
 }
 
 ///
-typedef MakeUserFromIdentifier<U> = AuthUser<U> Function({
-  required String providerId,
-  required String identifier,
-  required String? passwordHash,
-  String? name,
-});
+typedef MakeUserFromIdentifier<U> = AuthUser<U> Function(
+  UserIdentifierData data,
+);
 
-class EmailPasswordUser implements IdentifierPasswordUser {
+/// Parameters for [MakeUserFromIdentifier]
+class UserIdentifierData {
+  /// The provider id
+  final String providerId;
+
+  /// The identifier.
+  /// For example, the email if using [IdentifierPasswordProvider.email] or
+  /// phone if using [IdentifierPasswordProvider.phone].
+  final String identifier;
+
+  /// The password hash to be saved so we can validate the password
+  /// on future sign in attempts.
+  /// May be null if the provider does not use passwords.
+  final String? passwordHash;
+
+  /// The user's name
+  final String? name;
+
+  /// Parameters for [MakeUserFromIdentifier]
+  UserIdentifierData({
+    required this.providerId,
+    required this.identifier,
+    required this.passwordHash,
+    required this.name,
+  });
+}
+
+class EmailPasswordUser implements IdentifierPasswordUser, SerializableToJson {
   final String email;
   @override
   final String? passwordHash;
@@ -391,32 +436,28 @@ class EmailPasswordUser implements IdentifierPasswordUser {
     required this.passwordHash,
   });
 
+  @override
   Map<String, Object?> toJson() {
     return {
       'email': email,
       'passwordHash': passwordHash,
-    };
+    }..removeWhere((key, value) => value == null);
   }
 
-  static AuthUser<EmailPasswordUser> makeUser({
-    required String providerId,
-    required String identifier,
-    required String? passwordHash,
-    String? name,
-  }) {
+  static AuthUser<EmailPasswordUser> makeUser(UserIdentifierData data) {
     final providerUser = EmailPasswordUser(
-      email: identifier,
-      passwordHash: passwordHash,
+      email: data.identifier,
+      passwordHash: data.passwordHash,
     );
     return AuthUser(
-      providerId: providerId,
-      providerUserId: identifier,
+      providerId: data.providerId,
+      providerUserId: data.identifier,
       emailIsVerified: true,
       phoneIsVerified: false,
       rawUserData: providerUser.toJson(),
       providerUser: providerUser,
-      email: identifier,
-      name: name,
+      email: data.identifier,
+      name: data.name,
     );
   }
 }
@@ -440,30 +481,28 @@ class PhonePasswordUser implements IdentifierPasswordUser {
     };
   }
 
-  static AuthUser<PhonePasswordUser> makeUser({
-    required String providerId,
-    required String identifier,
-    required String? passwordHash,
-    String? name,
-  }) {
+  static AuthUser<PhonePasswordUser> makeUser(UserIdentifierData data) {
     final providerUser = PhonePasswordUser(
-      phone: identifier,
-      passwordHash: passwordHash,
+      phone: data.identifier,
+      passwordHash: data.passwordHash,
     );
     return AuthUser(
-      providerId: providerId,
-      providerUserId: identifier,
+      providerId: data.providerId,
+      providerUserId: data.identifier,
       emailIsVerified: false,
       phoneIsVerified: true,
       rawUserData: providerUser.toJson(),
       providerUser: providerUser,
-      phone: identifier,
-      name: name,
+      phone: data.identifier,
+      name: data.name,
     );
   }
 }
 
 abstract class IdentifierPasswordUser implements SerializableToJson {
+  /// The password hash to be saved so we can validate the password
+  /// on future sign in attempts.
+  /// May be null if the provider does not use passwords.
   String? get passwordHash;
 }
 

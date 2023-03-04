@@ -52,14 +52,7 @@ class UsernamePasswordProvider
         user.passwordHash,
       );
     }
-    return isValid
-        ? const Ok(None())
-        : Err(
-            AuthError(
-              error: 'invalid_password',
-              message: 'Invalid password.',
-            ),
-          );
+    return isValid ? const Ok(None()) : const Err(AuthError.invalidPassword);
   }
 
   @override
@@ -130,7 +123,10 @@ class AuthError {
   final String error;
   final String? message;
 
-  AuthError({required this.error, required this.message});
+  const AuthError({
+    required this.error,
+    required this.message,
+  });
 
   Map<String, Object?> toJson() {
     return {
@@ -138,6 +134,31 @@ class AuthError {
       'message': message,
     };
   }
+
+  static const noState = AuthError(
+    error: 'no_state',
+    message: 'Bad request',
+  );
+  static const noPassword = AuthError(
+    error: 'no_password',
+    message: 'Password is required',
+  );
+  static const invalidState = AuthError(
+    error: 'invalid_state',
+    message: 'Bad request',
+  );
+  static const invalidPassword = AuthError(
+    error: 'invalid_password',
+    message: 'Invalid credentials',
+  );
+  static const invalidCode = AuthError(
+    error: 'invalid_code',
+    message: 'Unauthorized, wrong code',
+  );
+  static const invalidIdentifier = AuthError(
+    error: 'invalid_identifier',
+    message: 'Unauthorized, wrong identifier',
+  );
 }
 
 class UsernamePasswordUser {

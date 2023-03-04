@@ -403,6 +403,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     required String clientId,
     required String? jwksUri,
     required String issuer,
+    Duration expiryTolerance = Duration.zero,
   }) async {
     final jwt = JsonWebToken.unverified(token.idToken!);
     final claims = OpenIdClaims.fromJson(jwt.claims.toJson());
@@ -423,11 +424,10 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     }
     final errors = claims
         .validate(
-          // TODO: tolerance
-          expiryTolerance: const Duration(seconds: 30),
+          expiryTolerance: expiryTolerance,
           clientId: clientId,
           issuer: Uri.parse(issuer),
-          // TODO: should be use it from token?
+          // TODO: should we use it from the token?
           nonce: token.stateModel?.nonce,
         )
         .toList();
