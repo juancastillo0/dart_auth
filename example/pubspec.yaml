@@ -13,6 +13,7 @@ dependencies:
   pointycastle: ^3.6.2
   shelf_web_socket: ^1.0.0
   web_socket_channel: ^2.3.0
+  shelf_hotreload: ^1.4.0
   oauth:
     path: ..
 

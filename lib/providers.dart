@@ -13,6 +13,7 @@ export './src/providers/spotify.dart';
 export './src/providers/steam.dart';
 export './src/providers/twitch.dart';
 export './src/providers/twitter.dart';
+export './src/time_otp_provider.dart';
 export './src/username_password_provider.dart';
 
 class ImplementedProviders {
@@ -26,6 +27,9 @@ class ImplementedProviders {
 
   /// Provider id for [IdentifierPasswordProvider.phone]
   static const phone = 'phone';
+
+  /// Provider id for [TimeOneTimePasswordProvider]
+  static const totp = 'totp';
 
   /// Provider id for [AppleProvider]
   static const apple = 'apple';
@@ -80,5 +84,6 @@ class ImplementedProviders {
     username,
     email,
     phone,
+    totp,
   ];
 }

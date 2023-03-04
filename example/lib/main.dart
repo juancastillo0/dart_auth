@@ -5,13 +5,18 @@ import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_hotreload/shelf_hotreload.dart';
 
 import 'auth_handler.dart';
-import 'credentials.dart';
 import 'persistence.dart';
 import 'shelf_helpers.dart';
 
 void main() async {
+  // ignore: unnecessary_lambdas
+  withHotreload(() => init());
+}
+
+Future<HttpServer> init() async {
   final persistence = InMemoryPersistance();
   final credentials = AppCredentialsConfig.fromEnvironment();
   final allProviders = await credentials.providersMap();
@@ -44,6 +49,10 @@ void main() async {
           persistence: persistence,
         ),
       ),
+      ImplementedProviders.totp: TimeOneTimePasswordProvider(
+        issuer: 'oauth_example',
+        persistence: persistence,
+      )
     },
     persistence: persistence,
     host: host,
@@ -57,7 +66,7 @@ void main() async {
     ),
   );
 
-  await startServer(config);
+  return startServer(config);
 }
 
 Future<HttpServer> startServer(Config config) async {
@@ -98,21 +107,4 @@ class Config {
     required this.host,
     HttpClient? client,
   }) : client = client ?? HttpClient();
-}
-
-Map<String, Object?> providerToJson(OAuthProvider e) {
-  return {
-    'providerId': e.providerId,
-    'defaultScopes': e.defaultScopes,
-    'openIdConnectSupported': e.defaultScopes.contains('openid'),
-    'deviceCodeFlowSupported': e.supportedFlows.contains(GrantType.deviceCode),
-    'implicitFlowSupported': e.supportedFlows.contains(GrantType.tokenImplicit)
-  };
-}
-
-Map<String, Object?> credentialsProviderToJson(CredentialsProvider e) {
-  return {
-    'providerId': e.providerId,
-    'paramDescriptions': e.paramDescriptions,
-  };
 }

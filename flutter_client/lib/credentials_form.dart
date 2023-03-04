@@ -1,3 +1,4 @@
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:oauth/endpoint_models.dart';
@@ -53,6 +54,15 @@ class CredentialsProviderForm extends HookWidget {
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(cred.userMessage!),
+                ),
+              if (cred.qrUrl != null)
+                BarcodeWidget(
+                  barcode: Barcode.qrCode(
+                    errorCorrectLevel: BarcodeQRCorrectionLevel.high,
+                  ),
+                  data: cred.qrUrl!,
+                  width: 200,
+                  height: 200,
                 ),
               TextButton(
                 onPressed: () {

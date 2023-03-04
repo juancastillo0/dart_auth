@@ -227,14 +227,16 @@ abstract class CredentialsData {
 class CredentialsResponse<U> implements SerializableToJson {
   final AuthUser<U>? user;
   final String? redirectUrl;
+  final String? qrUrl;
   final String? userMessage;
   final String? state;
   final Map<String, ParamDescription>? paramDescriptions;
 
   CredentialsResponse.continueFlow({
-    required String this.userMessage,
     required String this.state,
+    required String this.userMessage,
     this.redirectUrl,
+    this.qrUrl,
     this.paramDescriptions,
   }) : user = null;
 
@@ -243,13 +245,15 @@ class CredentialsResponse<U> implements SerializableToJson {
     this.redirectUrl,
     this.userMessage,
   })  : state = null,
-        paramDescriptions = null;
+        paramDescriptions = null,
+        qrUrl = null;
 
   factory CredentialsResponse.fromJson(Map<String, Object?> json) {
     return CredentialsResponse.continueFlow(
       state: json['state']! as String,
       userMessage: json['userMessage']! as String,
       redirectUrl: json['redirectUrl'] as String?,
+      qrUrl: json['qrUrl'] as String?,
       paramDescriptions: json['paramDescriptions'] == null
           ? null
           : (json['paramDescriptions']! as Map).map(
@@ -266,9 +270,10 @@ class CredentialsResponse<U> implements SerializableToJson {
   @override
   Map<String, Object?> toJson() => {
         'user': user,
-        'redirectUrl': redirectUrl,
-        'userMessage': userMessage,
         'state': state,
+        'userMessage': userMessage,
+        'redirectUrl': redirectUrl,
+        'qrUrl': qrUrl,
         'paramDescriptions': paramDescriptions,
       }..removeWhere((key, value) => value == null);
 }
