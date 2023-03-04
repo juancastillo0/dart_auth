@@ -588,8 +588,11 @@ class ErrorWithStackTrace {
 
 /// A class that implements this can be serialized
 /// into Json with the [toJson] method
-// ignore: one_member_abstracts
 abstract class SerializableToJson {
   /// Returns this represented as a Json map
   Map<String, Object?> toJson();
+
+  /// Executes [toJson] from [instance]
+  static Map<String, Object?> staticToJson(SerializableToJson instance) =>
+      instance.toJson();
 }

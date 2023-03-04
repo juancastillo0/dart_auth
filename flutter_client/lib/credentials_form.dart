@@ -26,7 +26,7 @@ class CredentialsProviderForm extends HookWidget {
         Form(
           child: Column(
             children: [
-              ...paramDescriptions.entries.map((e) {
+              ...?paramDescriptions?.entries.map((e) {
                 final value = e.value;
                 final regExp = value.regExp;
 
@@ -56,7 +56,10 @@ class CredentialsProviderForm extends HookWidget {
                 ),
               TextButton(
                 onPressed: () {
+                  params.value = {};
                   credentials.value = null;
+                  errorMessage.value = null;
+                  fieldErrorMessage.value = null;
                 },
                 child: const Text('Cancel Flow'),
               )

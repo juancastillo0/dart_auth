@@ -2,6 +2,7 @@ import 'dart:convert' show base64UrlEncode, jsonDecode, jsonEncode, utf8;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
@@ -97,7 +98,12 @@ void main() async {
         expect(response.statusCode, 200);
         expect(
           jsonDecode(response.body),
-          {'providers': allProviders.values.map(providerToJson).toList()},
+          {
+            'providers': allProviders.values
+                .map(OAuthProviderData.fromProvider)
+                .map(SerializableToJson.staticToJson)
+                .toList()
+          },
         );
       });
 

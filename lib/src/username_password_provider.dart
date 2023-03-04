@@ -221,7 +221,7 @@ abstract class CredentialsProvider<C extends CredentialsData, U> {
 
 abstract class CredentialsData {
   // TODO: allow for email/phone ids
-  String get providerUserId;
+  String? get providerUserId;
 }
 
 class CredentialsResponse<U> implements SerializableToJson {

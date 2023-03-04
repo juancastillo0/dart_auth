@@ -34,12 +34,16 @@ Handler makeHandler(Config config) {
     } else if (path == 'oauth/providers') {
       if (request.method != 'GET') return Response.notFound(null);
       return Response.ok(
-        jsonEncode({
-          'providers': config.allProviders.values.map(providerToJson).toList(),
-          'credentialsProviders': config.allCredentialsProviders.values
-              .map(credentialsProviderToJson)
-              .toList(),
-        }),
+        jsonEncode(
+          AuthProvidersData(
+            config.allProviders.values
+                .map(OAuthProviderData.fromProvider)
+                .toList(),
+            config.allCredentialsProviders.values
+                .map(CredentialsProviderData.fromProvider)
+                .toList(),
+          ),
+        ),
         headers: jsonHeader,
       );
     } else if (RegExp('oauth/url$pIdRegExp').hasMatch(path)) {
@@ -662,7 +666,9 @@ class AuthHandler {
       '${providerInstance.providerId}:${credentials.providerUserId}',
       UserIdKind.providerId,
     );
-    final foundUser = await config.persistence.getUserById(userId);
+    final foundUser = credentials.providerUserId == null
+        ? null
+        : await config.persistence.getUserById(userId);
     if (foundUser != null) {
       final user =
           foundUser.authUsers.firstWhere((u) => u.userIds().contains(userId));

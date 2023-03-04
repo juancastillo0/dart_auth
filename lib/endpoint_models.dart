@@ -80,7 +80,7 @@ class AuthResponse implements SerializableToJson {
   }
 }
 
-class AuthProvidersData {
+class AuthProvidersData implements SerializableToJson {
   final List<OAuthProviderData> providers;
   final List<CredentialsProviderData> credentialsProviders;
 
@@ -99,11 +99,19 @@ class AuthProvidersData {
           .toList(),
     );
   }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'providers': providers,
+      'credentialsProviders': credentialsProviders,
+    };
+  }
 }
 
-class CredentialsProviderData {
+class CredentialsProviderData implements SerializableToJson {
   final String providerId;
-  final Map<String, ParamDescription> paramDescriptions;
+  final Map<String, ParamDescription>? paramDescriptions;
 
   ///
   CredentialsProviderData({
@@ -114,17 +122,36 @@ class CredentialsProviderData {
   factory CredentialsProviderData.fromJson(Map<String, Object?> json) {
     return CredentialsProviderData(
       providerId: json['providerId']! as String,
-      paramDescriptions: (json['paramDescriptions']! as Map).map(
-        (k, v) => MapEntry(
-          k! as String,
-          ParamDescription.fromJson((v as Map).cast()),
-        ),
-      ),
+      paramDescriptions: json['paramDescriptions'] == null
+          ? null
+          : (json['paramDescriptions']! as Map).map(
+              (k, v) => MapEntry(
+                k! as String,
+                ParamDescription.fromJson((v as Map).cast()),
+              ),
+            ),
     );
+  }
+
+  factory CredentialsProviderData.fromProvider(
+    CredentialsProvider<CredentialsData, Object?> e,
+  ) {
+    return CredentialsProviderData(
+      providerId: e.providerId,
+      paramDescriptions: e.paramDescriptions,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'providerId': providerId,
+      'paramDescriptions': paramDescriptions,
+    };
   }
 }
 
-class OAuthProviderData {
+class OAuthProviderData implements SerializableToJson {
   final String providerId;
   final List<String> defaultScopes;
   final bool openIdConnectSupported;
@@ -148,6 +175,27 @@ class OAuthProviderData {
       deviceCodeFlowSupported: json['deviceCodeFlowSupported']! as bool,
       implicitFlowSupported: json['implicitFlowSupported']! as bool,
     );
+  }
+
+  factory OAuthProviderData.fromProvider(OAuthProvider<Object?> e) {
+    return OAuthProviderData(
+      providerId: e.providerId,
+      defaultScopes: e.defaultScopes,
+      openIdConnectSupported: e.defaultScopes.contains('openid'),
+      deviceCodeFlowSupported: e.supportedFlows.contains(GrantType.deviceCode),
+      implicitFlowSupported: e.supportedFlows.contains(GrantType.tokenImplicit),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'providerId': providerId,
+      'defaultScopes': defaultScopes,
+      'openIdConnectSupported': openIdConnectSupported,
+      'deviceCodeFlowSupported': deviceCodeFlowSupported,
+      'implicitFlowSupported': implicitFlowSupported,
+    };
   }
 }
 
