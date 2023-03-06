@@ -117,6 +117,18 @@ class UsernamePasswordProvider
 
     return Ok(UsernamePassword(username: username, password: password));
   }
+
+  @override
+  Future<CredentialsResponse<UsernamePasswordUser>?> mfaCredentialsFlow(
+    MFAItem mfaItem,
+  ) async {
+    return CredentialsResponse.continueFlow(
+      state: null,
+      userMessage: 'Input the username and password.',
+      // TODO: should we ask for the username? if we should then do not sent it to the client
+      paramDescriptions: paramDescriptions,
+    );
+  }
 }
 
 class AuthError {
@@ -217,6 +229,10 @@ abstract class CredentialsProvider<C extends CredentialsData, U> {
   /// May return a [CredentialsResponse] without an user if the flow
   /// requires additional verification.
   Future<Result<CredentialsResponse<U>, AuthError>> getUser(C credentials);
+
+  /// Returns the information required to continue a mfa credentials flow.
+  /// null if not supported
+  Future<CredentialsResponse<U>?> mfaCredentialsFlow(MFAItem mfaItem);
 }
 
 abstract class CredentialsData {
@@ -233,7 +249,7 @@ class CredentialsResponse<U> implements SerializableToJson {
   final Map<String, ParamDescription>? paramDescriptions;
 
   CredentialsResponse.continueFlow({
-    required String this.state,
+    required this.state,
     required String this.userMessage,
     this.redirectUrl,
     this.qrUrl,
@@ -250,7 +266,7 @@ class CredentialsResponse<U> implements SerializableToJson {
 
   factory CredentialsResponse.fromJson(Map<String, Object?> json) {
     return CredentialsResponse.continueFlow(
-      state: json['state']! as String,
+      state: json['state'] as String?,
       userMessage: json['userMessage']! as String,
       redirectUrl: json['redirectUrl'] as String?,
       qrUrl: json['qrUrl'] as String?,

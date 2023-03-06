@@ -1,6 +1,3 @@
-import 'dart:convert' show base64UrlEncode, utf8;
-
-import 'package:crypto/crypto.dart' show sha1;
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
@@ -14,13 +11,27 @@ class TimeOneTimePasswordProvider
     required this.persistence,
     this.providerId = ImplementedProviders.totp,
     this.config = const TOTPConfig(),
-  });
+    ParamDescription? totpDescription,
+  }) : totpDescription = totpDescription ??
+            ParamDescription(
+              name: 'One Time Password Code',
+              description: 'The code presented in your authenticator app.',
+              regExp: RegExp('^[0-9]{${config.digits}}\$'),
+            );
 
   @override
   final String providerId;
   final String issuer;
   final Persistence persistence;
   final TOTPConfig config;
+  // TODO: allow sign in with providerUserId
+
+  final ParamDescription totpDescription;
+  Map<String, ParamDescription> get initiatedFlowParamDescriptions =>
+      {'totp': totpDescription};
+
+  @override
+  Map<String, ParamDescription>? get paramDescriptions => null;
 
   @override
   Future<Result<CredentialsResponse<TOTPUser>, AuthError>> getUser(
@@ -58,21 +69,13 @@ class TimeOneTimePasswordProvider
         ),
       );
     } else {
-      final state = generateStateToken();
       final base32Secret = OTP.randomSecret();
-      final providerUserId = generateStateToken();
-      await persistence.setState(
-        state,
-        AuthStateModel(
-          createdAt: DateTime.now(),
-          providerId: providerId,
-          responseType: null,
-          meta: {
-            'base32Secret': base32Secret,
-            'providerUserId': providerUserId,
-          },
-        ),
+      final providerUserId = generateStateToken(size: 30);
+      final saved = await _saveState(
+        base32Secret: base32Secret,
+        providerUserId: providerUserId,
       );
+      final state = saved.state;
 
       final query = Uri(
         queryParameters: {
@@ -82,8 +85,9 @@ class TimeOneTimePasswordProvider
         },
       ).query;
 
-      final userId =
-          base64UrlEncode(sha1.convert(utf8.encode(providerUserId)).bytes);
+      // final userId =
+      //     base64UrlEncode(sha1.convert(utf8.encode(providerUserId)).bytes);
+      final userId = providerUserId;
       final qrUrl =
           'otpauth://totp/${Uri.encodeComponent(issuer)}:${userId}?${query}';
 
@@ -91,24 +95,16 @@ class TimeOneTimePasswordProvider
         CredentialsResponse.continueFlow(
           state: state,
           qrUrl: qrUrl,
+          // TODO: make it configurable/localized
           userMessage: 'Use the an authenticator application that supports'
               ' Time-Base One-Time Passwords (TOTP) such as'
               ' Google Authenticator, Twilio Authy or Microsoft Authenticator.'
               ' Setup key: "$base32Secret".',
-          paramDescriptions: {
-            'totp': ParamDescription(
-              name: 'One Time Password Code',
-              description: 'The code presented in your authenticator app.',
-              regExp: RegExp('^[0-9]{${config.digits}}\$'),
-            ),
-          },
+          paramDescriptions: initiatedFlowParamDescriptions,
         ),
       );
     }
   }
-
-  @override
-  Map<String, ParamDescription>? get paramDescriptions => null;
 
   @override
   Result<TOTPCredentials, Map<String, FormatException>> parseCredentials(
@@ -161,6 +157,41 @@ class TimeOneTimePasswordProvider
     } else {
       return const Err(AuthError.invalidCode);
     }
+  }
+
+  Future<AuthStateModel> _saveState({
+    required String base32Secret,
+    required String providerUserId,
+  }) async {
+    final state = generateStateToken();
+    final model = AuthStateModel(
+      state: state,
+      createdAt: DateTime.now(),
+      providerId: providerId,
+      responseType: null,
+      meta: {
+        'base32Secret': base32Secret,
+        'providerUserId': providerUserId,
+      },
+    );
+    await persistence.setState(state, model);
+
+    return model;
+  }
+
+  // TODO: improve CredentialsResponse type
+  @override
+  Future<CredentialsResponse<TOTPUser>?> mfaCredentialsFlow(
+    MFAItem mfaItem,
+  ) async {
+    // final state = await saveState(user);
+    return CredentialsResponse.continueFlow(
+      state: null,
+      // TODO: make text configurable. Should we send providerUserId to the client?
+      userMessage: 'Input the TOTP code shown in your authenticator app'
+          ' for the account "${mfaItem.providerUserId}".',
+      paramDescriptions: initiatedFlowParamDescriptions,
+    );
   }
 }
 

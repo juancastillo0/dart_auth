@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:jose/jose.dart';
+import 'package:oauth/oauth.dart';
 import 'package:oauth/src/password.dart';
-import 'package:oxidized/oxidized.dart';
 
 String? _getAuthToken(RequestCtx ctx) {
   return ctx.requestHeaders['authorization']?.split(' ').last;
@@ -36,17 +36,35 @@ class _CtxValue implements RequestCtx {
       _appendResponseHeader(name, value);
 }
 
-class UserClaims {
+class UserClaims implements SerializableToJson {
   final String userId;
   final String sessionId;
   // TODO: should we add providerId? what happends for 2fa
   final Map<String, Object?>? meta;
 
+  ///
   UserClaims({
     required this.userId,
     required this.sessionId,
     required this.meta,
   });
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'userId': userId,
+      'sessionId': sessionId,
+      'meta': meta,
+    };
+  }
+
+  factory UserClaims.fromJson(Map<String, Object?> json) {
+    return UserClaims(
+      userId: json['userId']! as String,
+      sessionId: json['sessionId']! as String,
+      meta: json['meta'] == null ? null : (json['meta']! as Map).cast(),
+    );
+  }
 }
 
 class JsonWebTokenMaker<U> {
@@ -199,6 +217,7 @@ class JsonWebTokenMaker<U> {
     });
   }
 
+  // TODO: return a Result
   // @visibleForTesting
   Future<UserClaims?> getUserClaimsFromToken(
     String authToken, {

@@ -232,6 +232,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         await ml.persistence.setState(
           state,
           AuthStateModel(
+            state: state,
             responseType: null,
             createdAt: DateTime.now(),
             providerId: providerId,
@@ -389,6 +390,21 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
         state: state,
         name: name?.trim().replaceAll(RegExp(r'\s+'), ' '),
       ),
+    );
+  }
+
+
+  @override
+  Future<CredentialsResponse<U>?> mfaCredentialsFlow(MFAItem mfaItem) async {
+    return CredentialsResponse.continueFlow(
+      state: null,
+      userMessage: magicCodeConfig != null
+          ? 'A magic code will be sent to the device'
+          : 'Input the credentials',
+      paramDescriptions: {
+        identifierName: identifierDescription,
+        if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
+      },
     );
   }
 }

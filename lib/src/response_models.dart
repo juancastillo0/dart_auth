@@ -1,6 +1,6 @@
 import 'package:oauth/oauth.dart';
 
-class OAuthErrorResponse implements Exception {
+class OAuthErrorResponse implements Exception, SerializableToJson {
   ///
   OAuthErrorResponse({
     required this.response,
@@ -100,6 +100,18 @@ class OAuthErrorResponse implements Exception {
   /// The requested scope is invalid, unknown, malformed, or
   /// exceeds the scope granted by the resource owner.
   static const errorInvalidScope = 'invalid_scope';
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      ...?jsonData,
+      'error': error,
+      'error_description': errorDescription,
+      'error_uri': errorUri,
+      'status_code': response?.statusCode,
+      'status_code_description': response?.reasonPhrase,
+    }..removeWhere((key, value) => value == null);
+  }
 }
 
 class AuthRedirectResponse implements OAuthErrorResponse {

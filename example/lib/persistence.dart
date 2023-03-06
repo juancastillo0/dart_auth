@@ -6,7 +6,7 @@ import 'package:oauth/oauth.dart';
 // https://pub.dev/packages/stormberry
 class InMemoryPersistance extends Persistence {
   final Map<String, AuthStateModel> mapState = {};
-  final Map<String, AuthUser> mapAuthUser = {};
+  final Map<String, AuthUser<Object?>> mapAuthUser = {};
   final Map<String, AppUserComplete> mapAppUser = {};
   final Map<String, UserSession> mapSession = {};
 
@@ -48,12 +48,16 @@ class InMemoryPersistance extends Persistence {
   }
 
   @override
-  Future<void> saveUser(String userId, AuthUser user) async {
+  Future<AppUserComplete> saveUser(
+    String userId,
+    AuthUser<Object?> user,
+  ) async {
     mapAuthUser[user.key] = user;
     final prevUser = mapAppUser[userId];
+    final AppUserComplete newUser;
     if (prevUser == null) {
       // create new user
-      mapAppUser[userId] = AppUserComplete.merge(userId, [user]);
+      newUser = AppUserComplete.merge(userId, [user]);
     } else {
       // update authUsers
       final index = prevUser.authUsers.indexWhere((u) => u.key == user.key);
@@ -63,12 +67,14 @@ class InMemoryPersistance extends Persistence {
         prevUser.authUsers[index] = user;
       }
       // add info from new provider
-      mapAppUser[userId] = AppUserComplete.merge(
+      newUser = AppUserComplete.merge(
         userId,
         prevUser.authUsers,
         base: prevUser.user,
       );
     }
+    mapAppUser[userId] = newUser;
+    return newUser;
   }
 
   @override
@@ -79,5 +85,14 @@ class InMemoryPersistance extends Persistence {
     return mapSession.values
         .where((s) => s.userId == userId && (!onlyValid || s.isValid))
         .toList();
+  }
+
+  @override
+  Future<void> updateUser(AppUser user) async {
+    final prevUser = mapAppUser[user.userId]!;
+    mapAppUser[user.userId] = AppUserComplete(
+      user: user,
+      authUsers: prevUser.authUsers,
+    );
   }
 }

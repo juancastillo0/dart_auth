@@ -217,6 +217,7 @@ Future<UserClaims> validateDeviceCodeSession(
       providerId: provider.providerId,
       deviceCode: deviceCode.deviceCode,
       interval: deviceCode.interval,
+      mfaItems: null,
     ).toJson(),
   );
   final session = await config.persistence.getAnySession(claims.sessionId);
@@ -247,6 +248,7 @@ Future<UserClaims> validateUrlResponse(
     UserMetaClaims.authorizationCode(
       providerId: provider.providerId,
       state: state,
+      mfaItems: null,
     ).toJson(),
   );
   final session = await config.persistence.getAnySession(claims.sessionId);

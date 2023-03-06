@@ -19,6 +19,7 @@ class OAuthFlow<U> {
     String? state,
     OAuthResponseType responseType = OAuthResponseType.code,
     String? sessionId,
+    Map<String, Object?>? meta,
   }) async {
     scope ??= provider.config.scope;
     state ??= generateStateToken();
@@ -46,12 +47,14 @@ class OAuthFlow<U> {
     final uri = Uri.parse(provider.authorizationEndpoint)
         .replace(queryParameters: params);
     final stateMode = AuthStateModel(
+      state: state,
       createdAt: DateTime.now(),
       codeVerifier: challenge?.codeVerifier,
       nonce: nonce,
       responseType: responseType,
       sessionId: sessionId,
       providerId: provider.providerId,
+      meta: meta,
     );
     // TODO: should we use jwt?
     // TODO: maybe allow more meta data?
@@ -66,20 +69,38 @@ class OAuthFlow<U> {
     Map<String, String?>? otherParams,
   }) async {
     final data = AuthRedirectResponse.fromJson(queryParams);
-    if (data.error != null) {
-      return Err(AuthResponseError(data, AuthResponseErrorKind.endpointError));
-    }
     final code = data.code;
     final state = data.state;
     if (state == null) {
-      return Err(AuthResponseError(data, AuthResponseErrorKind.noState));
+      return Err(
+        AuthResponseError(
+          data,
+          AuthResponseErrorKind.noState,
+          stateModel: null,
+        ),
+      );
     }
+
     final stateModel = await persistence.getState(state);
+    Result<TokenResponse, AuthResponseError> retErr(
+      AuthResponseErrorKind kind,
+    ) {
+      return Err(
+        AuthResponseError(
+          data,
+          kind,
+          stateModel: stateModel,
+        ),
+      );
+    }
+
     if (stateModel == null) {
-      return Err(AuthResponseError(data, AuthResponseErrorKind.notFoundState));
+      return retErr(AuthResponseErrorKind.notFoundState);
     } else if (stateModel.providerId != provider.providerId ||
         stateModel.responseType == null) {
-      return Err(AuthResponseError(data, AuthResponseErrorKind.invalidState));
+      return retErr(AuthResponseErrorKind.invalidState);
+    } else if (data.error != null) {
+      return retErr(AuthResponseErrorKind.endpointError);
     }
     final grantType = stateModel.responseType!.grantType;
 
@@ -92,9 +113,7 @@ class OAuthFlow<U> {
       );
     } else {
       if (code == null) {
-        return Err(
-          AuthResponseError(data, AuthResponseErrorKind.noCode),
-        );
+        return retErr(AuthResponseErrorKind.noCode);
       }
       final params = provider.mapTokenParamsToQueryParams(
         TokenParams(
@@ -121,6 +140,7 @@ class OAuthFlow<U> {
             AuthResponseErrorKind.tokenResponseError,
             response: responseToken,
             error: error,
+            stateModel: stateModel,
           ),
         );
       }
@@ -164,18 +184,45 @@ enum OAuthResponseType {
   }
 }
 
-class AuthResponseError {
+class AuthResponseError implements SerializableToJson {
   final AuthRedirectResponse data;
   final AuthResponseErrorKind kind;
   final HttpResponse? response;
   final OAuthErrorResponse? error;
+  final AuthStateModel? stateModel;
 
+  ///
   AuthResponseError(
     this.data,
     this.kind, {
     this.response,
     this.error,
+    required this.stateModel,
   });
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'data': data,
+      'kind': kind.name,
+      'error': error,
+      'stateModel': stateModel,
+    };
+  }
+
+  factory AuthResponseError.fromJson(Map<String, Object?> json) {
+    return AuthResponseError(
+      AuthRedirectResponse.fromJson(json['data']! as Map),
+      AuthResponseErrorKind.values.byName(json['kind']! as String),
+      error: json['error'] == null
+          ? null
+          : OAuthErrorResponse.fromJson(json['error']! as Map, null),
+      stateModel: json['stateModel'] == null
+          ? null
+          : AuthStateModel.fromJson((json['stateModel']! as Map).cast()),
+      response: null,
+    );
+  }
 }
 
 enum AuthResponseErrorKind {
@@ -189,6 +236,7 @@ enum AuthResponseErrorKind {
 
 /// The data saved for authentication flows
 class AuthStateModel {
+  final String state;
   final String providerId;
   final DateTime createdAt;
   final OAuthResponseType? responseType;
@@ -199,6 +247,7 @@ class AuthStateModel {
 
   /// The data saved for authentication flows
   AuthStateModel({
+    required this.state,
     required this.providerId,
     required this.createdAt,
     required this.responseType,
@@ -210,6 +259,7 @@ class AuthStateModel {
 
   Map<String, dynamic> toJson() {
     return {
+      'state': state,
       'createdAt': createdAt.toIso8601String(),
       'codeVerifier': codeVerifier,
       'providerId': providerId,
@@ -222,6 +272,7 @@ class AuthStateModel {
 
   factory AuthStateModel.fromJson(Map<String, dynamic> map) {
     return AuthStateModel(
+      state: map['state'] as String,
       providerId: map['providerId'] as String,
       createdAt: DateTime.parse(map['createdAt'] as String),
       responseType: map['responseType'] == null
@@ -231,6 +282,46 @@ class AuthStateModel {
       nonce: map['nonce'] as String?,
       sessionId: map['sessionId'] as String?,
       meta: map['meta'] as Map<String, Object?>?,
+    );
+  }
+}
+
+class OAuthCodeStateMeta implements SerializableToJson {
+  final UserClaims? claims;
+  final TokenResponse? token;
+  final AuthResponseError? error;
+  final String? getUserError;
+
+  ///
+  OAuthCodeStateMeta({
+    this.claims,
+    this.token,
+    this.error,
+    this.getUserError,
+  });
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'claims': claims,
+      'token': token,
+      'error': error,
+      'getUserError': getUserError,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  factory OAuthCodeStateMeta.fromJson(Map<String, Object?> json) {
+    return OAuthCodeStateMeta(
+      claims: json['claims'] == null
+          ? null
+          : UserClaims.fromJson((json['claims']! as Map).cast()),
+      token: json['token'] == null
+          ? null
+          : TokenResponse.fromJson((json['token']! as Map).cast()),
+      error: json['error'] == null
+          ? null
+          : AuthResponseError.fromJson((json['error']! as Map).cast()),
+      getUserError: json['getUserError'] as String?,
     );
   }
 }

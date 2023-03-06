@@ -13,6 +13,7 @@ class AuthResponse implements SerializableToJson {
   /// TODO: make it not generic. Maybe create a CredentialsResponseContinueFlow
   final CredentialsResponse<Object?>? credentials;
   // TODO: 2FA Second factor
+  final List<MFAItemWithFlow>? leftMfaItems;
 
   ///
   AuthResponse({
@@ -24,6 +25,7 @@ class AuthResponse implements SerializableToJson {
     required this.code,
     this.credentials,
     this.fieldErrors,
+    this.leftMfaItems,
   });
 
   factory AuthResponse.fromJson(Map<String, Object?> json) {
@@ -42,6 +44,12 @@ class AuthResponse implements SerializableToJson {
       code: json['code'] as String?,
       credentials: credentials,
       fieldErrors: (json['fieldErrors'] as Map?)?.cast(),
+      leftMfaItems: json['leftMfaItems'] == null
+          ? null
+          : (json['leftMfaItems']! as Iterable)
+              .cast<Map<String, Object?>>()
+              .map(MFAItemWithFlow.fromJson)
+              .toList(),
     );
   }
 
@@ -71,6 +79,7 @@ class AuthResponse implements SerializableToJson {
       'message': message,
       'code': code,
       'fieldErrors': fieldErrors,
+      'leftMfaItems': leftMfaItems,
     }..removeWhere((key, value) => value == null);
   }
 
@@ -78,6 +87,38 @@ class AuthResponse implements SerializableToJson {
   String toString() {
     return 'AuthResponse${toJson()}';
   }
+}
+
+class MFAItemWithFlow implements SerializableToJson {
+  final MFAItem mfa;
+  final CredentialsResponse<Object?>? credentialsInfo;
+
+  MFAItemWithFlow(this.mfa, this.credentialsInfo);
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'mfa': mfa,
+      'credentialsInfo': credentialsInfo,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  factory MFAItemWithFlow.fromJson(Map<String, Object?> json) {
+    return MFAItemWithFlow(
+      MFAItem.fromJson((json['mfa']! as Map).cast()),
+      json['credentialsInfo'] == null
+          ? null
+          : CredentialsResponse.fromJson(
+              (json['credentialsInfo']! as Map).cast(),
+            ),
+    );
+  }
+}
+
+/// Either [OAuthProviderData] or [CredentialsProviderData]
+abstract class AuthProviderData {
+  /// The identifier of this provider
+  String get providerId;
 }
 
 class AuthProvidersData implements SerializableToJson {
@@ -109,7 +150,8 @@ class AuthProvidersData implements SerializableToJson {
   }
 }
 
-class CredentialsProviderData implements SerializableToJson {
+class CredentialsProviderData implements SerializableToJson, AuthProviderData {
+  @override
   final String providerId;
   final Map<String, ParamDescription>? paramDescriptions;
 
@@ -151,7 +193,8 @@ class CredentialsProviderData implements SerializableToJson {
   }
 }
 
-class OAuthProviderData implements SerializableToJson {
+class OAuthProviderData implements SerializableToJson, AuthProviderData {
+  @override
   final String providerId;
   final List<String> defaultScopes;
   final bool openIdConnectSupported;

@@ -31,7 +31,10 @@ abstract class Persistence {
   });
 
   /// Saves a [user] and associates it with a [userId]
-  Future<void> saveUser(String userId, AuthUser<Object?> user);
+  Future<AppUserComplete> saveUser(String userId, AuthUser<Object?> user);
+
+  /// Updates the [user] information
+  Future<void> updateUser(AppUser user);
 
   /// Retrieves users by [ids]. A user is null if it was not found
   /// for the id in the given index.
@@ -121,15 +124,24 @@ class UserSessionBase implements SerializableToJson {
   }
 }
 
+class UserSessionOrPartial {
+  final UserSession session;
+  final List<MFAItem>? leftMfa;
+
+  ///
+  UserSessionOrPartial(this.session, {required this.leftMfa});
+}
+
 /// A user session, persisted when the user is signed in.
 class UserSession implements SerializableToJson {
   final String sessionId;
-  final String refreshToken;
+  final String? refreshToken;
   final String userId;
   final DateTime createdAt;
   final String? deviceId;
   final Map<String, Object?>? meta;
   final DateTime? endedAt;
+  final List<MFAItem>? mfa;
 
   /// A user session, persisted when the user is signed in.
   const UserSession({
@@ -140,30 +152,39 @@ class UserSession implements SerializableToJson {
     this.deviceId,
     this.meta,
     this.endedAt,
+    this.mfa,
   });
 
   /// Whether the session is valid
   bool get isValid => endedAt == null;
 
+  /// Whether the session is in multi-factor authentication
+  bool get isInMFA => isValid && refreshToken == null && mfa != null;
+
 // generated-dart-fixer-start{"md5Hash":"UR44W1AtB7vHXyyYToVCGQ=="}
 
   UserSession copyWith({
     String? refreshToken,
+    bool refreshTokenToNull = false,
     String? deviceId,
     bool deviceIdToNull = false,
     Map<String, Object?>? meta,
     bool metaToNull = false,
     DateTime? endedAt,
     bool endedAtToNull = false,
+    List<MFAItem>? mfa,
+    bool mfaToNull = false,
   }) {
     return UserSession(
-      refreshToken: refreshToken ?? this.refreshToken,
+      refreshToken:
+          refreshToken ?? (refreshTokenToNull ? null : this.refreshToken),
       sessionId: sessionId,
       userId: userId,
       createdAt: createdAt,
       deviceId: deviceId ?? (deviceIdToNull ? null : this.deviceId),
       endedAt: endedAt ?? (endedAtToNull ? null : this.endedAt),
       meta: meta ?? (metaToNull ? null : this.meta),
+      mfa: mfa ?? (mfaToNull ? null : this.mfa),
     );
   }
 
@@ -171,7 +192,7 @@ class UserSession implements SerializableToJson {
     return UserSession(
       deviceId: json['deviceId'] as String?,
       sessionId: json['sessionId'] as String,
-      refreshToken: json['refreshToken'] as String,
+      refreshToken: json['refreshToken'] as String?,
       userId: json['userId'] as String,
       meta: json['meta'] == null
           ? null
@@ -179,6 +200,12 @@ class UserSession implements SerializableToJson {
       endedAt: json['endedAt'] == null
           ? null
           : DateTime.parse(json['endedAt'] as String),
+      mfa: json['mfa'] == null
+          ? null
+          : (json['mfa'] as Iterable)
+              .cast<Map<String, Object?>>()
+              .map(MFAItem.fromJson)
+              .toList(),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -191,9 +218,10 @@ class UserSession implements SerializableToJson {
       'refreshToken': refreshToken,
       'userId': userId,
       'meta': meta,
+      'mfa': mfa,
       'endedAt': endedAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
-    };
+    }..removeWhere((key, value) => value == null);
   }
 
   @override
@@ -204,6 +232,7 @@ class UserSession implements SerializableToJson {
       "refreshToken": refreshToken,
       "userId": userId,
       "meta": meta,
+      "mfa": mfa,
       "endedAt": endedAt,
       "createdAt": createdAt,
     }}";
@@ -265,6 +294,7 @@ class AppUser implements SerializableToJson {
   final bool emailIsVerified;
   final String? phone;
   final bool phoneIsVerified;
+  final List<MFAItem> multiFactorAuth;
   final DateTime createdAt;
   // TODO: rename to emailIsVerified->emailVerified
 
@@ -277,6 +307,7 @@ class AppUser implements SerializableToJson {
     required this.emailIsVerified,
     this.phone,
     required this.phoneIsVerified,
+    required this.multiFactorAuth,
     required this.createdAt,
   });
 
@@ -289,7 +320,39 @@ class AppUser implements SerializableToJson {
       picture: json['picture'] as String?,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
+      multiFactorAuth: (json['multiFactorAuth']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(MFAItem.fromJson)
+          .toList(),
       createdAt: DateTime.parse(json['createdAt']! as String),
+    );
+  }
+
+  AppUser copyWith({
+    String? userId,
+    String? name,
+    bool nameToNull = false,
+    String? picture,
+    bool pictureToNull = false,
+    String? email,
+    bool emailToNull = false,
+    bool? emailIsVerified,
+    String? phone,
+    bool phoneToNull = false,
+    bool? phoneIsVerified,
+    List<MFAItem>? multiFactorAuth,
+    DateTime? createdAt,
+  }) {
+    return AppUser(
+      userId: userId ?? this.userId,
+      emailIsVerified: emailIsVerified ?? this.emailIsVerified,
+      phoneIsVerified: phoneIsVerified ?? this.phoneIsVerified,
+      createdAt: createdAt ?? this.createdAt,
+      email: email ?? (emailToNull ? null : this.email),
+      multiFactorAuth: multiFactorAuth ?? this.multiFactorAuth,
+      name: name ?? (nameToNull ? null : this.name),
+      phone: phone ?? (phoneToNull ? null : this.phone),
+      picture: picture ?? (pictureToNull ? null : this.picture),
     );
   }
 
@@ -303,7 +366,47 @@ class AppUser implements SerializableToJson {
       'emailIsVerified': emailIsVerified,
       'phone': phone,
       'phoneIsVerified': phoneIsVerified,
+      'multiFactorAuth': multiFactorAuth,
       'createdAt': createdAt.toIso8601String(),
+    }..removeWhere((key, value) => value == null);
+  }
+}
+
+@immutable
+class MFAItem implements SerializableToJson {
+  final String providerId;
+  final String providerUserId;
+
+  ///
+  MFAItem({
+    required this.providerId,
+    required this.providerUserId,
+  });
+
+  factory MFAItem.fromJson(Map<String, Object?> json) {
+    return MFAItem(
+      providerId: json['providerId']! as String,
+      providerUserId: json['providerUserId']! as String,
+    );
+  }
+
+  UserId get userId =>
+      UserId('$providerId:$providerUserId', UserIdKind.providerId);
+
+  @override
+  bool operator ==(Object other) =>
+      other is MFAItem &&
+      providerId == other.providerId &&
+      providerUserId == other.providerUserId;
+
+  @override
+  int get hashCode => Object.hash(providerId, providerUserId);
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'providerId': providerId,
+      'providerUserId': providerUserId,
     };
   }
 }
@@ -359,6 +462,7 @@ class AppUserComplete implements SerializableToJson {
             : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
         name: base?.name ?? name?.name,
         picture: base?.picture ?? picture?.picture,
+        multiFactorAuth: base?.multiFactorAuth ?? [],
       ),
       authUsers: authUsers,
     );
@@ -432,7 +536,7 @@ class UserInfoMe implements SerializableToJson {
 
 class AuthUser<T> implements SerializableToJson {
   ///
-  const AuthUser({
+  AuthUser({
     required this.providerId,
     required this.providerUserId,
     this.name,
@@ -457,6 +561,7 @@ class AuthUser<T> implements SerializableToJson {
   final Map<String, Object?> rawUserData;
   final OpenIdClaims? openIdClaims;
   final T providerUser;
+  // TODO: created at
 
   /// A global unique key for the user
   String get key => '$providerId:$providerUserId';
@@ -522,7 +627,7 @@ class AuthUser<T> implements SerializableToJson {
         'phone': phone,
         'phoneIsVerified': phoneIsVerified,
         ...rawUserData,
-      };
+      }..removeWhere((key, value) => value == null);
 }
 
 /// An error found when getting the user's data
