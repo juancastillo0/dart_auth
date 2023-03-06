@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
 import 'auth_client.dart';
 import 'auth_widgets.dart';
+import 'user_info_widget.dart';
 
 void main() {
   final state = GlobalState();
@@ -69,6 +68,7 @@ class MainHomePage extends HookWidget {
     );
     final currentFlow = useValueListenable(state.currentFlow);
     final userInfo = useValueListenable(state.userInfo);
+    final isAddingMFAProvider = useValueListenable(state.isAddingMFAProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -78,20 +78,8 @@ class MainHomePage extends HookWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (userInfo != null)
-              Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(38),
-                    child: Text(jsonEncode(userInfo)),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: state.signOut,
-                    icon: const Icon(Icons.close),
-                    label: const Text('Sign Out'),
-                  ),
-                ],
-              )
+            if (userInfo != null && !isAddingMFAProvider)
+              Expanded(child: UserInfoWidget(userInfo: userInfo))
             else
               OAuthFlowWidget(currentFlow: currentFlow),
             const Text(

@@ -10,7 +10,26 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'endpoint.dart';
 
 class AuthState {
-  final client = ClientWithConfig(baseUrl: 'http://localhost:3000');
+  ///
+  AuthState({this.baseUrl = 'http://localhost:3000'}) {
+    _setUpClient();
+    authenticatedClient.addListener(_setUpClient);
+  }
+
+  late ClientWithConfig client;
+  final String baseUrl;
+
+  void _setUpClient() {
+    if (authenticatedClient.value == null) {
+      client = ClientWithConfig(baseUrl: baseUrl);
+    } else {
+      // TODO: revert authenticated client on change of access token
+      client = ClientWithConfig(
+        baseUrl: baseUrl,
+        client: authenticatedClient.value,
+      );
+    }
+  }
 
   final _errorController =
       StreamController<ResponseData<Object?, Object?>>.broadcast();
@@ -27,6 +46,8 @@ class AuthState {
   final providersList = ValueNotifier<AuthProvidersData?>(null);
   final authenticatedClient = ValueNotifier<OAuthClient?>(null);
   final userInfo = ValueNotifier<UserInfoMe?>(null);
+  final leftMfaItems = ValueNotifier<List<MFAItemWithFlow>?>(null);
+  final isAddingMFAProvider = ValueNotifier<bool>(false);
 
   bool get isInFlow => isLoadingFlow.value || currentFlow.value != null;
 
@@ -70,10 +91,7 @@ class AuthState {
 
   Future<UserInfoMe?> getUserInfoMe() async {
     if (authenticatedClient.value == null) return null;
-    final response = await getUserMeEndpoint.request(
-      client.copyWith(client: authenticatedClient.value),
-      null,
-    );
+    final response = await getUserMeEndpoint.request(client, null);
     if (_isError(response)) return null;
     return response.data;
   }
@@ -98,10 +116,18 @@ class AuthState {
   void cancelCurrentFlow() {
     _oauthSubscription?.cancel();
     currentFlow.value = null;
+    leftMfaItems.value = null;
+    isAddingMFAProvider.value = false;
+  }
+
+  void addMFAProvider() {
+    assert(userInfo.value != null, 'Should only add MFA when logged in.');
+    isAddingMFAProvider.value = true;
   }
 
   Future<void> _processAuthResponse(AuthResponse response) async {
     final refreshToken = response.refreshToken;
+    // TODO: AuthResponse response.when/switch case/match
     if (refreshToken != null) {
       final authClient = OAuthClient(
         refreshAccessToken: (client, refreshToken) async {
@@ -133,9 +159,24 @@ class AuthState {
         userInfo.value = userInfoResponse;
       }
       cancelCurrentFlow();
+    } else if (response.leftMfaItems != null) {
+      leftMfaItems.value = response.leftMfaItems;
+      // TODO: revert authenticated client on change of access token
+      final authClient = OAuthClient(
+        accessToken: response.accessToken!,
+        accessTokenExpiration: response.expiresAt,
+        refreshAccessToken: null,
+        refreshToken: null,
+        innerClient: client.client,
+      );
+      authenticatedClient.value = authClient;
     } else if (response.error != null) {
       _authErrorController.add(response);
-      cancelCurrentFlow();
+      if (leftMfaItems.value == null && !isAddingMFAProvider.value) {
+        // Only cancel if its a single error in flow.
+        // The user can go back for MFA flows
+        cancelCurrentFlow();
+      }
     }
   }
 
@@ -148,17 +189,31 @@ class AuthState {
     return response.data;
   }
 
+  Future<AuthResponse?> signInWithCredentials(
+    CredentialsParams params,
+  ) async {
+    final response = await credentialsProviderSignIn.request(client, params);
+    if (_isError(response)) return null;
+    await _processAuthResponse(response.data!);
+    return response.data;
+  }
+
   Future<void> signOut() async {
     if (authenticatedClient.value == null) return;
-    final response = await revokeTokenEndpoint.request(
-      client.copyWith(client: authenticatedClient.value),
-      null,
-    );
+    final response = await revokeTokenEndpoint.request(client, null);
     if (_isError(response)) return;
     if (response.response!.statusCode == 200) {
       authenticatedClient.value = null;
       userInfo.value = null;
     }
+  }
+
+  Future<UserInfoMe?> setUserMFA(MFAPostData data) async {
+    if (authenticatedClient.value == null) return null;
+    final response = await postUserMFAEndpoint.request(client, data);
+    if (_isError(response)) return null;
+    userInfo.value = response.data;
+    return response.data;
   }
 
   static final providers = Endpoint<void, AuthProvidersData>(
@@ -219,6 +274,24 @@ class AuthState {
     deserialize: UserInfoMe.fromJson,
     serialize: (_) => ReqParams.empty,
   );
+
+  static final postUserMFAEndpoint = Endpoint<MFAPostData, UserInfoMe>(
+    path: 'user/mfa',
+    method: 'POST',
+    deserialize: UserInfoMe.fromJson,
+    serialize: (p) => ReqParams([], p.toJson()),
+  );
+}
+
+class MFAPostData implements SerializableToJson {
+  final List<MFAItem> mfa;
+
+  MFAPostData(this.mfa);
+
+  @override
+  Map<String, Object?> toJson() {
+    return {'mfa': mfa};
+  }
 }
 
 class CredentialsParams {

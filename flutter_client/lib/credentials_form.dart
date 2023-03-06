@@ -14,11 +14,36 @@ class CredentialsProviderForm extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = GlobalState.of(context).authState;
+    final leftMfaItems = useValueListenable(state.leftMfaItems);
+    final providerUserIdState = useState<String?>(null);
+    final mfa = useMemoized(
+      () =>
+          leftMfaItems
+              ?.where((e) => e.mfa.providerId == data.providerId)
+              .toList() ??
+          const [],
+      [leftMfaItems, data.providerId],
+    );
+    final mfaItem = useMemoized(
+      () => mfa.isEmpty
+          ? null
+          : mfa.length == 1
+              ? mfa.first
+              : mfa.firstWhere(
+                  (e) => e.mfa.providerUserId == providerUserIdState.value,
+                  orElse: () => mfa.first,
+                ),
+      [mfa, providerUserIdState.value],
+    );
     final params = useState(<String, String>{});
     final errorMessage = useState<String?>(null);
     final fieldErrorMessage = useState<Map<String, String>?>(null);
     final credentials = useState<CredentialsResponse<Object?>?>(null);
-    final cred = credentials.value;
+    final cred = useMemoized(
+      () => credentials.value ?? mfaItem?.credentialsInfo,
+      [credentials.value, mfaItem?.credentialsInfo],
+    );
     final paramDescriptions = cred?.paramDescriptions ?? data.paramDescriptions;
 
     return Column(
@@ -27,6 +52,24 @@ class CredentialsProviderForm extends HookWidget {
         Form(
           child: Column(
             children: [
+              if (mfa.length == 1)
+                // TODO: maybe use an opaque id?
+                Text(mfaItem!.mfa.providerUserId)
+              else if (mfa.length > 1)
+                DropdownButton<String>(
+                  items: mfa.map(
+                    (e) {
+                      final providerUserId = e.mfa.providerUserId;
+                      return DropdownMenuItem(
+                        key: Key(providerUserId),
+                        value: providerUserId,
+                        child: Text(providerUserId),
+                      );
+                    },
+                  ).toList(),
+                  value: mfaItem!.mfa.providerUserId,
+                  onChanged: (v) => providerUserIdState.value = v,
+                ),
               ...?paramDescriptions?.entries.map((e) {
                 final value = e.value;
                 final regExp = value.regExp;
@@ -37,11 +80,16 @@ class CredentialsProviderForm extends HookWidget {
                     label: Text(value.name),
                     helperText: value.description,
                     errorText: fieldErrorMessage.value?[e.key],
+                    errorMaxLines: 100,
+                    helperMaxLines: 100,
                   ),
                   validator: regExp == null
                       ? null
                       : (value) => regExp.hasMatch(value ?? '') ? null : '',
-                  onChanged: (value) => params.value[e.key] = value,
+                  onChanged: (value) {
+                    params.value[e.key] = value;
+                    fieldErrorMessage.value = null;
+                  },
                 );
               }),
             ],
@@ -93,12 +141,18 @@ class CredentialsProviderForm extends HookWidget {
             errorMessage.value = null;
             fieldErrorMessage.value = null;
             final authState = GlobalState.of(context).authState;
-            final response = await authState.signUpWithCredentials(
-              CredentialsParams(data.providerId, {
-                if (cred != null) 'state': cred.state,
-                ...params.value,
-              }),
-            );
+            final AuthResponse? response;
+            final reqParams = CredentialsParams(data.providerId, {
+              if (cred != null) 'state': cred.state,
+              // TODO: maybe use an opaque id?
+              if (mfa.isNotEmpty) 'providerUserId': mfaItem!.mfa.providerUserId,
+              ...params.value,
+            });
+            if (mfa.isNotEmpty) {
+              response = await authState.signInWithCredentials(reqParams);
+            } else {
+              response = await authState.signUpWithCredentials(reqParams);
+            }
             if (response == null) return;
             if (response.error != null) {
               final message =

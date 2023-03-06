@@ -14,7 +14,7 @@ class OAuthClient extends http.BaseClient {
   final Future<RefreshTokenResponse> Function(
     HttpClient client,
     String refreshToken,
-  ) refreshAccessToken;
+  )? refreshAccessToken;
 
   ///
   OAuthClient({
@@ -69,12 +69,12 @@ class OAuthClient extends http.BaseClient {
     }
 
     // The access token has expired or is not set.
-    if (_refreshToken == null) {
+    if (_refreshToken == null || refreshAccessToken == null) {
       throw Exception('No refresh token available');
     }
     // Exchange the refresh token for a new access token.
     final tokenResponse =
-        await refreshAccessToken(_innerClient, _refreshToken!);
+        await refreshAccessToken!(_innerClient, _refreshToken!);
     _accessToken = tokenResponse.accessToken;
     _accessTokenExpiration = tokenResponse.expiresAt;
     _refreshToken = tokenResponse.refreshToken ?? _refreshToken;

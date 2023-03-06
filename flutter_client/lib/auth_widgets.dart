@@ -142,42 +142,83 @@ class AuthProvidersList extends HookWidget {
   Widget build(BuildContext context) {
     final state = GlobalState.of(context).authState;
     final data = useValueListenable(state.providersList);
+    final leftMfaItems = useValueListenable(state.leftMfaItems);
+    final isAddingMFAProvider = useValueListenable(state.isAddingMFAProvider);
 
     if (data == null) return const CircularProgressIndicator();
 
+    bool inMFA(AuthProviderData s) {
+      return leftMfaItems == null ||
+          leftMfaItems.any((e) => e.mfa.providerId == s.providerId);
+    }
+
+    Widget list = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...data.credentialsProviders
+              .where(inMFA)
+              .map(CredentialsProviderForm.new)
+              .map(
+                (w) => Card(
+                  key: Key(w.data.providerId),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 22,
+                    ),
+                    child: w,
+                  ),
+                ),
+              ),
+          ...data.providers.where(inMFA).map(OAuthProviderSignInButton.new).map(
+                (w) => Card(
+                  key: Key(w.data.providerId),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 22,
+                    ),
+                    child: w,
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+    if (leftMfaItems != null || isAddingMFAProvider) {
+      list = Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                // TODO: Leave it for both flows?
+                if (isAddingMFAProvider)
+                  BackButton(
+                    onPressed: state.cancelCurrentFlow,
+                  ),
+                Expanded(
+                  child: Text(
+                    '${isAddingMFAProvider ? 'Add ' : ''}'
+                    'Multi-Factor Authentication (MFA)',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: list,
+          ),
+        ],
+      );
+    }
+
     return Expanded(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              ...data.credentialsProviders.map(CredentialsProviderForm.new).map(
-                    (w) => Card(
-                      key: Key(w.data.providerId),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 22,
-                        ),
-                        child: w,
-                      ),
-                    ),
-                  ),
-              ...data.providers.map(OAuthProviderSignInButton.new).map(
-                    (w) => Card(
-                      key: Key(w.data.providerId),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 22,
-                        ),
-                        child: w,
-                      ),
-                    ),
-                  ),
-            ],
-          ),
-        ),
+        constraints: const BoxConstraints(maxWidth: 450),
+        child: list,
       ),
     );
   }
