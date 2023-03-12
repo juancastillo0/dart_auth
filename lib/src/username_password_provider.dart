@@ -24,6 +24,7 @@ class UsernamePasswordProvider
     name: 'Password',
     description: 'Should be at least 8 characters.',
     regExp: RegExp(r'[\s\S]{8,}'),
+    obscureText: true,
   );
 
   @override
@@ -245,6 +246,7 @@ class CredentialsResponse<U> implements SerializableToJson {
   final String? redirectUrl;
   final String? qrUrl;
   final String? userMessage;
+  final String? buttonText;
   final String? state;
   final Map<String, ParamDescription>? paramDescriptions;
 
@@ -254,6 +256,7 @@ class CredentialsResponse<U> implements SerializableToJson {
     this.redirectUrl,
     this.qrUrl,
     this.paramDescriptions,
+    this.buttonText,
   }) : user = null;
 
   CredentialsResponse.authenticated(
@@ -262,7 +265,8 @@ class CredentialsResponse<U> implements SerializableToJson {
     this.userMessage,
   })  : state = null,
         paramDescriptions = null,
-        qrUrl = null;
+        qrUrl = null,
+        buttonText = null;
 
   factory CredentialsResponse.fromJson(Map<String, Object?> json) {
     return CredentialsResponse.continueFlow(
@@ -270,6 +274,7 @@ class CredentialsResponse<U> implements SerializableToJson {
       userMessage: json['userMessage']! as String,
       redirectUrl: json['redirectUrl'] as String?,
       qrUrl: json['qrUrl'] as String?,
+      buttonText: json['buttonText'] as String?,
       paramDescriptions: json['paramDescriptions'] == null
           ? null
           : (json['paramDescriptions']! as Map).map(
@@ -290,21 +295,107 @@ class CredentialsResponse<U> implements SerializableToJson {
         'userMessage': userMessage,
         'redirectUrl': redirectUrl,
         'qrUrl': qrUrl,
+        'buttonText': buttonText,
         'paramDescriptions': paramDescriptions,
       }..removeWhere((key, value) => value == null);
+}
+
+enum ParamKeyboardType {
+  text,
+  multiline,
+  number,
+  phone,
+  datetime,
+  emailAddress,
+  url,
+  visiblePassword,
+  name,
+  streetAddress,
+  none,
+}
+
+/// Configures how the platform keyboard will select an uppercase or
+/// lowercase keyboard.
+///
+/// Only supports text keyboards, other keyboard types will ignore this
+/// configuration. Capitalization is locale-aware.
+enum ParamTextCapitalization {
+  /// Defaults to an uppercase keyboard for the first letter of each word.
+  ///
+  /// Corresponds to `InputType.TYPE_TEXT_FLAG_CAP_WORDS` on Android, and
+  /// `UITextAutocapitalizationTypeWords` on iOS.
+  words,
+
+  /// Defaults to an uppercase keyboard for the first letter of each sentence.
+  ///
+  /// Corresponds to `InputType.TYPE_TEXT_FLAG_CAP_SENTENCES` on Android, and
+  /// `UITextAutocapitalizationTypeSentences` on iOS.
+  sentences,
+
+  /// Defaults to an uppercase keyboard for each character.
+  ///
+  /// Corresponds to `InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS` on Android, and
+  /// `UITextAutocapitalizationTypeAllCharacters` on iOS.
+  characters,
+
+  /// Defaults to a lowercase keyboard.
+  none,
+}
+
+class NumberParamKeyboardType implements SerializableToJson {
+  final bool? signed;
+  final bool? decimal;
+
+  ///
+  const NumberParamKeyboardType({
+    this.signed = false,
+    this.decimal = false,
+  });
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'signed': signed,
+      'decimal': decimal,
+    };
+  }
+
+  factory NumberParamKeyboardType.fromJson(Map<String, Object?> json) {
+    return NumberParamKeyboardType(
+      signed: json['signed'] as bool?,
+      decimal: json['decimal'] as bool?,
+    );
+  }
 }
 
 class ParamDescription implements SerializableToJson {
   final String name;
   final String? description;
   final RegExp? regExp;
+  final bool required;
+  final String? initialValue;
+  final bool readOnly;
   final Map<String, ParamDescription>? paramsDescriptions;
+  final bool obscureText;
+  final String? hint;
+  final ParamKeyboardType keyboardType;
+  final NumberParamKeyboardType? numberKeyboardType;
+  final ParamTextCapitalization textCapitalization;
+  // TODO: maxLines? maxLenght required/optional
 
   ///
   ParamDescription({
     required this.name,
     required this.description,
     required this.regExp,
+    this.required = false,
+    this.initialValue,
+    this.readOnly = false,
+    this.obscureText = false,
+    this.hint,
+    this.keyboardType = ParamKeyboardType.text,
+    this.numberKeyboardType,
+    this.textCapitalization = ParamTextCapitalization.none,
     this.paramsDescriptions,
   });
 
@@ -321,6 +412,23 @@ class ParamDescription implements SerializableToJson {
                 ParamDescription.fromJson((value as Map).cast()),
               ),
             ),
+      required: json['required'] as bool? ?? false,
+      initialValue: json['initialValue'] as String?,
+      readOnly: json['readOnly'] as bool? ?? false,
+      obscureText: json['obscureText'] as bool? ?? false,
+      hint: json['hint'] as String?,
+      keyboardType: json['keyboardType'] == null
+          ? ParamKeyboardType.text
+          : ParamKeyboardType.values.byName(json['keyboardType']! as String),
+      numberKeyboardType: json['numberKeyboardType'] == null
+          ? null
+          : NumberParamKeyboardType.fromJson(
+              json['numberKeyboardType']! as Map<String, Object?>,
+            ),
+      textCapitalization: json['textCapitalization'] == null
+          ? ParamTextCapitalization.none
+          : ParamTextCapitalization.values
+              .byName(json['textCapitalization']! as String),
     );
   }
 
@@ -341,6 +449,14 @@ class ParamDescription implements SerializableToJson {
       'description': description,
       'regExp': regExp?.pattern,
       'paramsDescriptions': paramsDescriptions,
+      'required': required,
+      'initialValue': initialValue,
+      'readOnly': readOnly,
+      'obscureText': obscureText,
+      'hint': hint,
+      'keyboardType': keyboardType.name,
+      'numberKeyboardType': numberKeyboardType,
+      'textCapitalization': textCapitalization.name,
     }..removeWhere((key, value) => value == null);
   }
 }

@@ -15,6 +15,7 @@ class CredentialsProviderForm extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final state = GlobalState.of(context).authState;
+    // TODO: extract state into a separate class
     final leftMfaItems = useValueListenable(state.leftMfaItems);
     final providerUserIdState = useState<String?>(null);
     final mfa = useMemoized(
@@ -45,11 +46,13 @@ class CredentialsProviderForm extends HookWidget {
       [credentials.value, mfaItem?.credentialsInfo],
     );
     final paramDescriptions = cred?.paramDescriptions ?? data.paramDescriptions;
+    final formKey = useMemoized(GlobalKey<FormState>.new);
 
     return Column(
       children: [
         Text(data.providerId),
         Form(
+          key: formKey,
           child: Column(
             children: [
               if (mfa.length == 1)
@@ -77,15 +80,25 @@ class CredentialsProviderForm extends HookWidget {
                 return TextFormField(
                   key: Key(e.key),
                   decoration: InputDecoration(
-                    label: Text(value.name),
+                    labelText: value.name,
                     helperText: value.description,
+                    hintText: value.hint,
                     errorText: fieldErrorMessage.value?[e.key],
                     errorMaxLines: 100,
                     helperMaxLines: 100,
                   ),
+                  keyboardType: getKeyboardType(value),
+                  readOnly: value.readOnly,
+                  initialValue: value.initialValue,
+                  textCapitalization: TextCapitalization.values
+                      .byName(value.textCapitalization.name),
+                  obscureText: value.obscureText,
+                  // TODO: validate on
                   validator: regExp == null
                       ? null
-                      : (value) => regExp.hasMatch(value ?? '') ? null : '',
+                      : (str) => regExp.hasMatch(str ?? '')
+                          ? null
+                          : (value.description ?? ''),
                   onChanged: (value) {
                     params.value[e.key] = value;
                     fieldErrorMessage.value = null;
@@ -138,6 +151,9 @@ class CredentialsProviderForm extends HookWidget {
         const SizedBox(height: 12),
         ElevatedButton(
           onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+
+            // TODO: handle required
             errorMessage.value = null;
             fieldErrorMessage.value = null;
             final authState = GlobalState.of(context).authState;
@@ -168,9 +184,32 @@ class CredentialsProviderForm extends HookWidget {
               credentials.value = response.credentials;
             }
           },
-          child: const Text('Submit'),
+          child: credentials.value?.buttonText != null
+              ? Text(credentials.value!.buttonText!)
+              : const Text('Submit'),
         ),
       ],
     );
   }
+}
+
+TextInputType? getKeyboardType(ParamDescription value) {
+  return value.keyboardType == ParamKeyboardType.number
+      ? TextInputType.numberWithOptions(
+          decimal: value.numberKeyboardType?.decimal,
+          signed: value.numberKeyboardType?.signed,
+        )
+      : const {
+          ParamKeyboardType.text: TextInputType.text,
+          ParamKeyboardType.multiline: TextInputType.multiline,
+          ParamKeyboardType.number: TextInputType.number,
+          ParamKeyboardType.phone: TextInputType.phone,
+          ParamKeyboardType.datetime: TextInputType.datetime,
+          ParamKeyboardType.emailAddress: TextInputType.emailAddress,
+          ParamKeyboardType.url: TextInputType.url,
+          ParamKeyboardType.visiblePassword: TextInputType.visiblePassword,
+          ParamKeyboardType.name: TextInputType.name,
+          ParamKeyboardType.streetAddress: TextInputType.streetAddress,
+          ParamKeyboardType.none: TextInputType.none,
+        }[value.keyboardType];
 }

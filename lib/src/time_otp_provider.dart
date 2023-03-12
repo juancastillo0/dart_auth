@@ -17,6 +17,7 @@ class TimeOneTimePasswordProvider
               name: 'One Time Password Code',
               description: 'The code presented in your authenticator app.',
               regExp: RegExp('^[0-9]{${config.digits}}\$'),
+              keyboardType: ParamKeyboardType.number,
             );
 
   @override

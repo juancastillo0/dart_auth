@@ -36,6 +36,9 @@ class MagicCodeConfig<U> {
         name: 'Code',
         description: 'The code sent to your device',
         regExp: RegExp('^[${RegExp.escape(alphabet)}]{${count}}\$'),
+        keyboardType: RegExp(r'^[0-9]+$').hasMatch(alphabet)
+            ? ParamKeyboardType.number
+            : ParamKeyboardType.text,
       ),
     );
   }
@@ -108,6 +111,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     name: 'Email',
     description: 'The email address. This will be your identifier to sign in.',
     regExp: RegExp('@'),
+    keyboardType: ParamKeyboardType.emailAddress,
   );
 
   /// Normalizes an [email] address.
@@ -148,6 +152,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     name: 'Phone',
     description: 'The phone number. This will be your identifier to sign in.',
     regExp: RegExp(r'^[0-9]{7,}$'),
+    keyboardType: ParamKeyboardType.phone,
   );
 
   @override
@@ -170,7 +175,13 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       identifierName: identifierDescription,
       if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
       // TODO: make it required? configurable? localization/internationalization
-      'name': ParamDescription(name: 'Name', description: null, regExp: null),
+      'name': ParamDescription(
+        name: 'Name',
+        description: null,
+        regExp: null,
+        keyboardType: ParamKeyboardType.name,
+        textCapitalization: ParamTextCapitalization.words,
+      ),
     };
   }
 
