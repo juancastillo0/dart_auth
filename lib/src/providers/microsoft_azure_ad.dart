@@ -3,6 +3,8 @@
 // https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app
 // https://learn.microsoft.com/en-us/azure/active-directory-b2c/tutorial-create-tenant
 
+import 'dart:convert' show base64Encode;
+
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
@@ -14,12 +16,26 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   /// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
   /// TODO: https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-protocols-oidc#send-a-sign-out-request
   MicrosoftProvider({
-    super.providerId = ImplementedProviders.microsoft,
-    super.config = const MicrosoftAuthParams(),
     required super.openIdConfig,
     required super.clientId,
     required super.clientSecret,
-  });
+    super.providerId = ImplementedProviders.microsoft,
+    super.config = const MicrosoftAuthParams(),
+    OAuthButtonStyles? buttonStyles,
+    this.profilePictureSize = 96,
+  }) : super(
+          buttonStyles: buttonStyles ??
+              const OAuthButtonStyles(
+                logo: 'azure.svg',
+                logoDark: 'azure-dark.svg',
+                bg: 'FFFFFF',
+                text: '0072C6',
+                bgDark: '0072C6',
+                textDark: 'FFFFFF',
+              ),
+        );
+
+  final int? profilePictureSize;
 
   static String wellKnownOpenIdEndpoint({
     MicrosoftTenant tenant = MicrosoftTenant.common,
@@ -29,6 +45,8 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
   static Future<MicrosoftProvider> retrieve({
     required String clientId,
     required String clientSecret,
+    OAuthButtonStyles? buttonStyles,
+    int? profilePictureSize = 96,
     OAuthProviderConfig config = const MicrosoftAuthParams(),
 
     /// The {tenant} value in the path of the request can be used to
@@ -48,6 +66,8 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
         ),
         clientId: clientId,
         clientSecret: clientSecret,
+        buttonStyles: buttonStyles,
+        profilePictureSize: profilePictureSize,
       );
 
   @override
@@ -70,13 +90,37 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     HttpClient client,
     TokenResponse token,
   ) async {
+    // https://docs.microsoft.com/en-us/graph/api/profilephoto-get?view=graph-rest-1.0#examples
+    final sizePathParam = profilePictureSize == null
+        ? 'me/photo'
+        : 'me/photos/${profilePictureSize}x${profilePictureSize}';
+    final profilePicture = await client.get(
+      Uri.parse('https://graph.microsoft.com/v1.0/${sizePathParam}/\$value'),
+    );
+
+    String? picture;
+    if (profilePicture.statusCode == 200) {
+      final pictureBase64 = base64Encode(profilePicture.bodyBytes);
+      final contentType =
+          profilePicture.headers[Headers.contentType] ?? 'image/jpeg';
+      picture = 'data:$contentType;base64,$pictureBase64';
+    }
+
     final result = await OpenIdConnectProvider.getOpenIdConnectUser(
       token: token,
       clientId: clientId,
       jwksUri: openIdConfig.jwksUri,
       issuer: openIdConfig.issuer,
     );
-    return result.map((claims) => parseUser(claims.toJson()));
+    return result.map(
+      (claims) {
+        final json = claims.toJson();
+        if (picture != null) {
+          json['picture'] = json['picture'] ?? picture;
+        }
+        return parseUser(json);
+      },
+    );
   }
 
   // Supported claims:

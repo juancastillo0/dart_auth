@@ -26,7 +26,17 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
     required super.openIdConfig,
     required super.clientId,
     required super.clientSecret,
+    OAuthButtonStyles? buttonStyles,
   }) : super(
+          buttonStyles: buttonStyles ??
+              const OAuthButtonStyles(
+                logo: 'google.svg',
+                logoDark: 'google.svg',
+                bgDark: 'FFFFFF',
+                bg: 'FFFFFF',
+                text: '000000',
+                textDark: '000000',
+              ),
           config: config ??
               const GoogleAuthParams(
                 scope: 'openid email profile',
@@ -41,6 +51,7 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
     required String clientSecret,
     OAuthProviderConfig? config,
     HttpClient? client,
+    OAuthButtonStyles? buttonStyles,
   }) async =>
       GoogleProvider(
         openIdConfig: await OpenIdConnectProvider.retrieveConfiguration(
@@ -50,6 +61,7 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
         clientId: clientId,
         clientSecret: clientSecret,
         config: config,
+        buttonStyles: buttonStyles,
       );
 
   @override

@@ -20,6 +20,14 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
     super.config = const OAuthProviderConfig(
       scope: 'users.read tweet.read offline.access',
     ),
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'twitter.svg',
+      logoDark: 'twitter-dark.svg',
+      bg: 'FFFFFF',
+      text: '1DA1F2',
+      bgDark: '1DA1F2',
+      textDark: 'FFFFFF',
+    ),
   }) : super(
           // TODO: response_type=code&code_challenge=dwdwa&code_challenge_method=plain
           authorizationEndpoint: 'https://twitter.com/i/oauth2/authorize',

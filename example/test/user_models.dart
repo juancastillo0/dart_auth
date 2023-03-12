@@ -216,6 +216,7 @@ AuthUser<U> mockUser<U>(
         updatedAt: updatedAt,
         issuedAt: issuedAt,
         expiresAt: expires,
+        rawJson: {},
       ).toJson()
         ..['nonce'] = nonce
         ..['azp'] = provider.clientId

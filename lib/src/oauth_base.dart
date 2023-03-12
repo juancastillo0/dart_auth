@@ -72,6 +72,7 @@ abstract class OAuthProvider<U> {
     required this.clientId,
     required this.clientSecret,
     required this.config,
+    required this.buttonStyles,
     this.deviceAuthorizationEndpoint,
   });
 
@@ -108,6 +109,8 @@ abstract class OAuthProvider<U> {
   List<GrantType> get supportedFlows;
 
   final OAuthProviderConfig config;
+
+  final OAuthButtonStyles buttonStyles;
 
   List<String> get defaultScopes => config.scope.split(RegExp('[ ,]+'));
 
@@ -359,6 +362,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     required super.clientSecret,
     required super.config,
     required super.providerId,
+    required super.buttonStyles,
   }) : super(
           authorizationEndpoint: openIdConfig.authorizationEndpoint,
           revokeTokenEndpoint: openIdConfig.revocationEndpoint,
@@ -795,4 +799,62 @@ class TokenResponse implements RefreshTokenResponse, SerializableToJson {
   /// The nonce sent to the provider to verify the [idToken]
   // final String? nonce;
   final AuthStateModel? stateModel;
+}
+
+class OAuthButtonStyles implements SerializableToJson {
+  final String logo;
+  final String logoDark;
+  final String bg;
+  final String bgDark;
+  final String text;
+  final String textDark;
+
+  ///
+  const OAuthButtonStyles({
+    required this.logo,
+    required this.logoDark,
+    required this.bg,
+    required this.bgDark,
+    required this.text,
+    required this.textDark,
+  });
+
+  factory OAuthButtonStyles.fromJson(Map<String, Object?> json) {
+    return OAuthButtonStyles(
+      logo: json['logo']! as String,
+      logoDark: json['logoDark']! as String,
+      bg: json['bg']! as String,
+      bgDark: json['bgDark']! as String,
+      text: json['text']! as String,
+      textDark: json['textDark']! as String,
+    );
+  }
+
+  static int parseHexColor(String hexString) {
+    String str = hexString;
+    if (str.length == 3) {
+      // f0c -> ff00cc
+      str = '${str[0] * 2}${str[1] * 2}${str[2] * 2}';
+    }
+    if (str.length == 6) {
+      str = 'FF$str';
+    }
+    return int.parse(str, radix: 16);
+  }
+
+  @override
+  Map<String, Object?> toJson({String? basePath}) {
+    return {
+      'logo': basePath == null || Uri.parse(logo).scheme.isNotEmpty
+          ? logo
+          : Uri.parse('$basePath/$logo').toString(),
+      'logoDark': basePath == null || Uri.parse(logoDark).scheme.isNotEmpty
+          ? logoDark
+          : Uri.parse('$basePath/$logoDark').toString(),
+      'bg': bg,
+      'bgDark': bgDark,
+      'text': text,
+      'textDark': textDark,
+    };
+  }
 }

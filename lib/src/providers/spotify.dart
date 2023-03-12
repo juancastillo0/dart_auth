@@ -11,6 +11,14 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
     super.config = const SpotifyAuthParams(),
     required super.clientId,
     required super.clientSecret,
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'spotify.svg',
+      logoDark: 'spotify.svg',
+      bg: 'FFFFFF',
+      text: '2EBD59',
+      bgDark: 'FFFFFF',
+      textDark: '2EBD59',
+    ),
   }) : super(
           authorizationEndpoint: 'https://accounts.spotify.com/authorize',
           tokenEndpoint: 'https://accounts.spotify.com/api/token',

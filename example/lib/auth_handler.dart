@@ -42,7 +42,8 @@ Handler makeHandler(Config config) {
             config.allCredentialsProviders.values
                 .map(CredentialsProviderData.fromProvider)
                 .toList(),
-          ),
+            // TODO: maybe leave it to the front end?
+          ).toJson(basePath: config.baseRedirectUri),
         ),
         headers: jsonHeader,
       );

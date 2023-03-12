@@ -14,6 +14,14 @@ class RedditProvider extends OAuthProvider<RedditUser> {
         const RedditAuthParams(duration: RedditAuthDuration.permanent),
     required super.clientId,
     required super.clientSecret,
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'reddit.svg',
+      logoDark: 'reddit.svg',
+      bg: 'FF4500',
+      bgDark: 'FF4500',
+      text: 'FFFFFF',
+      textDark: 'FFFFFF',
+    ),
   }) : super(
           authorizationEndpoint:
               'https://www.reddit.com/api/v1/authorize', // or https://www.reddit.com/api/v1/authorize.compact for small screens

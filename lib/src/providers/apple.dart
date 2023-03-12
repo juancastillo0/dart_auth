@@ -15,6 +15,14 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
     super.config = const AppleAuthParams(scope: 'openid name email'),
     required super.clientId,
     required super.clientSecret,
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'apple.svg',
+      logoDark: 'apple-dark.svg',
+      bg: 'FFFFFF',
+      text: '000000',
+      bgDark: '000000',
+      textDark: 'FFFFFF',
+    ),
   }) : super(
           openIdConfig: const OpenIdConfiguration(
             // https://appleid.apple.com/.well-known/openid-configuration

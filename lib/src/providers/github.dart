@@ -11,16 +11,23 @@ export 'package:oauth/src/providers/github_token.dart';
 class GithubProvider extends OAuthProvider<GithubToken> {
   /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
   const GithubProvider({
-    super.providerId = ImplementedProviders.github,
-    super.config = const GithubProviderConfig(scope: 'read:user user:email'),
     required super.clientId,
     required super.clientSecret,
+    super.providerId = ImplementedProviders.github,
+    super.config = const GithubProviderConfig(scope: 'read:user user:email'),
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'github.svg',
+      logoDark: 'github-dark.svg',
+      bg: 'FFFFFF',
+      bgDark: '000000',
+      text: '000000',
+      textDark: 'FFFFFF',
+    ),
   }) : super(
           authorizationEndpoint: 'https://github.com/login/oauth/authorize',
           tokenEndpoint: 'https://github.com/login/oauth/access_token',
           // https://docs.github.com/en/rest/apps/oauth-applications?apiVersion=2022-11-28#about-oauth-apps
           // https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation
-          // TODO: access_token param instead of token
           revokeTokenEndpoint:
               'https://api.github.com/applications/$clientId/token',
           deviceAuthorizationEndpoint: 'https://github.com/login/device/code',

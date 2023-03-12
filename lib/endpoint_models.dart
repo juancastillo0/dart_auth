@@ -142,9 +142,9 @@ class AuthProvidersData implements SerializableToJson {
   }
 
   @override
-  Map<String, Object?> toJson() {
+  Map<String, Object?> toJson({String? basePath}) {
     return {
-      'providers': providers,
+      'providers': providers.map((e) => e.toJson(basePath: basePath)).toList(),
       'credentialsProviders': credentialsProviders,
     };
   }
@@ -197,6 +197,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   @override
   final String providerId;
   final List<String> defaultScopes;
+  final OAuthButtonStyles buttonStyles;
   final bool openIdConnectSupported;
   final bool deviceCodeFlowSupported;
   final bool implicitFlowSupported;
@@ -205,6 +206,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   OAuthProviderData({
     required this.providerId,
     required this.defaultScopes,
+    required this.buttonStyles,
     required this.openIdConnectSupported,
     required this.deviceCodeFlowSupported,
     required this.implicitFlowSupported,
@@ -214,6 +216,8 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
     return OAuthProviderData(
       providerId: json['providerId']! as String,
       defaultScopes: (json['defaultScopes']! as List).cast(),
+      buttonStyles:
+          OAuthButtonStyles.fromJson((json['buttonStyles']! as Map).cast()),
       openIdConnectSupported: json['openIdConnectSupported']! as bool,
       deviceCodeFlowSupported: json['deviceCodeFlowSupported']! as bool,
       implicitFlowSupported: json['implicitFlowSupported']! as bool,
@@ -224,6 +228,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
     return OAuthProviderData(
       providerId: e.providerId,
       defaultScopes: e.defaultScopes,
+      buttonStyles: e.buttonStyles,
       openIdConnectSupported: e.defaultScopes.contains('openid'),
       deviceCodeFlowSupported: e.supportedFlows.contains(GrantType.deviceCode),
       implicitFlowSupported: e.supportedFlows.contains(GrantType.tokenImplicit),
@@ -231,10 +236,11 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   }
 
   @override
-  Map<String, Object?> toJson() {
+  Map<String, Object?> toJson({String? basePath}) {
     return {
       'providerId': providerId,
       'defaultScopes': defaultScopes,
+      'buttonStyles': buttonStyles.toJson(basePath: basePath),
       'openIdConnectSupported': openIdConnectSupported,
       'deviceCodeFlowSupported': deviceCodeFlowSupported,
       'implicitFlowSupported': implicitFlowSupported,

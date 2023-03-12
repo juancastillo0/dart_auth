@@ -12,6 +12,14 @@ class TwitchProvider extends OpenIdConnectProvider<TwitchUser> {
     required super.clientSecret,
     super.config = const OAuthProviderConfig(scope: defaultScopesString),
     super.providerId = ImplementedProviders.twitch,
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'twitch.svg',
+      logoDark: 'twitch-dark.svg',
+      bg: 'FFFFFF',
+      text: '65459B',
+      bgDark: '65459B',
+      textDark: 'FFFFFF',
+    ),
   });
 
   static const wellKnownOpenIdEndpoint =
@@ -51,6 +59,7 @@ class TwitchProvider extends OpenIdConnectProvider<TwitchUser> {
         updatedAt: claims.updatedAt!,
         issuedAt: claims.issuedAt,
         expiresAt: claims.expiry,
+        rawJson: userData,
       ),
       providerUserId: claims.subject,
       rawUserData: userData,
@@ -72,6 +81,8 @@ class TwitchProvider extends OpenIdConnectProvider<TwitchUser> {
 
 /// A Twitch user from the open id token claims
 class TwitchUser {
+  // TODO: "azp", "aud", "iss",
+
   /// id An ID that identifies the user.
   final String sub;
   //  login	String	The user’s login name.
@@ -101,6 +112,9 @@ class TwitchUser {
   /// exp The date when the token will expire
   final DateTime expiresAt;
 
+  /// The raw Json values
+  final Map<String, Object?>? rawJson;
+
   /// A Twitch user from the open id token claims
   const TwitchUser({
     required this.sub,
@@ -111,6 +125,7 @@ class TwitchUser {
     required this.updatedAt,
     required this.issuedAt,
     required this.expiresAt,
+    required this.rawJson,
   });
 // generated-dart-fixer-start{"md5Hash":"BUhsGd5FysUYNlJ20+hYuA=="}
 
@@ -128,11 +143,13 @@ class TwitchUser {
           DateTime.fromMillisecondsSinceEpoch((json['iat'] as int) * 1000),
       expiresAt:
           DateTime.fromMillisecondsSinceEpoch((json['exp'] as int) * 1000),
+      rawJson: json.cast(),
     );
   }
 
   Map<String, Object?> toJson() {
     return {
+      ...?rawJson,
       'sub': sub,
       'preferred_username': preferredUsername,
       'picture': picture,
@@ -155,6 +172,7 @@ class TwitchUser {
       "updated_at": updatedAt,
       "issuedAt": issuedAt,
       "expiresAt": expiresAt,
+      "rawJson": rawJson,
     }}";
   }
 }

@@ -17,6 +17,14 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
     /// scopes -> webhook.incoming
     /// https://discord.com/developers/docs/topics/oauth2#shared-resources-oauth2-scopes
     super.config = const OAuthProviderConfig(scope: 'identify email'),
+    super.buttonStyles = const OAuthButtonStyles(
+      logo: 'discord.svg',
+      logoDark: 'discord-dark.svg',
+      bg: 'FFFFFF',
+      text: '7289DA',
+      bgDark: '7289DA',
+      textDark: 'FFFFFF',
+    ),
   }) : super(
           authorizationEndpoint: 'https://discord.com/oauth2/authorize',
           tokenEndpoint: 'https://discord.com/api/oauth2/token',
@@ -52,6 +60,12 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
   AuthUser<DiscordOAuth2Me> parseUser(Map<String, Object?> userData) {
     final discordData = DiscordOAuth2Me.fromJson(userData);
     final discordUser = discordData.user!;
+    String? picture;
+    if (discordUser.avatar != null) {
+      final format = discordUser.avatar!.startsWith('a_') ? 'gif' : 'png';
+      picture =
+          'https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.${format}';
+    }
     return AuthUser(
       emailIsVerified: discordUser.verified ?? false,
       phoneIsVerified: false,
@@ -61,6 +75,7 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
       email: discordUser.email,
       name: discordUser.username,
       providerUser: discordData,
+      picture: picture,
     );
   }
 }

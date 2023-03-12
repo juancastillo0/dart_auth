@@ -1,7 +1,9 @@
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:oauth/endpoint_models.dart';
+import 'package:oauth/oauth.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'credentials_form.dart';
@@ -14,6 +16,37 @@ class OAuthProviderSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode =
+        Theme.of(context).colorScheme.brightness == Brightness.dark;
+
+    final ButtonStyle buttonStyle;
+    final String logo;
+    final oauthStyles = data.buttonStyles;
+    if (isDarkMode) {
+      logo = oauthStyles.logoDark;
+      buttonStyle = ElevatedButton.styleFrom(
+        backgroundColor:
+            Color(OAuthButtonStyles.parseHexColor(oauthStyles.bgDark)),
+        foregroundColor:
+            Color(OAuthButtonStyles.parseHexColor(oauthStyles.textDark)),
+      );
+    } else {
+      logo = oauthStyles.logo;
+      buttonStyle = ElevatedButton.styleFrom(
+        backgroundColor: Color(OAuthButtonStyles.parseHexColor(oauthStyles.bg)),
+        foregroundColor:
+            Color(OAuthButtonStyles.parseHexColor(oauthStyles.text)),
+      );
+    }
+
+    final Widget image;
+    // TODO: extract logic and support 'data:' uris
+    if (logo.endsWith('.svg')) {
+      image = SvgPicture.network(logo, width: 20);
+    } else {
+      image = Image.network(logo, width: 20);
+    }
+
     return Column(
       children: [
         Row(
@@ -24,13 +57,20 @@ class OAuthProviderSignInButton extends StatelessWidget {
         ),
         if (data.deviceCodeFlowSupported)
           ElevatedButton(
+            style: buttonStyle,
             onPressed: () async {
               final authState = GlobalState.of(context).authState;
               await authState.getProviderDeviceCode(data.providerId);
             },
-            child: const Text('Sign Up with Device'),
+            child: Row(
+              children: [
+                image,
+                const Text('Sign Up with Device'),
+              ],
+            ),
           ),
         ElevatedButton(
+          style: buttonStyle,
           onPressed: () async {
             final authState = GlobalState.of(context).authState;
             final url = await authState.getProviderUrl(data.providerId);
@@ -39,7 +79,12 @@ class OAuthProviderSignInButton extends StatelessWidget {
               final success = await launchUrlString(url);
             }
           },
-          child: const Text('Sign Up'),
+          child: Row(
+            children: [
+              image,
+              const Text('Sign Up'),
+            ],
+          ),
         ),
       ],
     );

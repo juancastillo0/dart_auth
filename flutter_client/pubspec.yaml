@@ -39,6 +39,7 @@ dependencies:
   barcode_widget: ^2.0.3
   mobx: ^2.1.4
   flutter_mobx: ^2.0.6+5
+  flutter_svg: ^2.0.3
   oauth:
     path: ..
 
