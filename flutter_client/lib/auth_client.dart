@@ -9,13 +9,41 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'endpoint.dart';
 
+abstract class ClientPersistence {
+  FutureOr<String?> read(String key);
+  FutureOr<void> write(String key, String value);
+  FutureOr<void> delete(String key);
+}
+
 class AuthState {
   ///
-  AuthState({this.baseUrl = 'http://localhost:3000'}) {
+  AuthState._({
+    this.baseUrl = 'http://localhost:3000',
+    required this.persistence,
+  }) {
     _setUpClient();
     authenticatedClient.addListener(_setUpClient);
   }
 
+  static Future<AuthState> load({
+    required ClientPersistence persistence,
+    String baseUrl = 'http://localhost:3000',
+  }) async {
+    final token = await persistence.read(persistenceTokenKey);
+    final state = AuthState._(baseUrl: baseUrl, persistence: persistence);
+    if (token != null) {
+      await state._processAuthResponse(
+        AuthResponse.fromJson(
+          jsonDecode(token) as Map<String, Object?>,
+        ),
+      );
+    }
+    return state;
+  }
+
+  static const persistenceTokenKey = 'authStateTokenKey';
+
+  final ClientPersistence persistence;
   late ClientWithConfig client;
   final String baseUrl;
 
@@ -129,6 +157,9 @@ class AuthState {
     final refreshToken = response.refreshToken;
     // TODO: AuthResponse response.when/switch case/match
     if (refreshToken != null) {
+      // TODO: save on refresh
+      await persistence.write(persistenceTokenKey, jsonEncode(response));
+
       final authClient = OAuthClient(
         refreshAccessToken: (client, refreshToken) async {
           final response = await refreshTokenEndpoint.request(
@@ -155,6 +186,8 @@ class AuthState {
       if (userInfoResponse == null) {
         // TODO:
         authenticatedClient.value = null;
+
+        await persistence.delete(persistenceTokenKey);
       } else {
         userInfo.value = userInfoResponse;
       }
@@ -208,6 +241,8 @@ class AuthState {
     final response = await revokeTokenEndpoint.request(client, null);
     if (_isError(response)) return;
     if (response.response!.statusCode == 200) {
+      await persistence.delete(persistenceTokenKey);
+
       authenticatedClient.value = null;
       userInfo.value = null;
     }

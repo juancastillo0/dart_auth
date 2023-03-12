@@ -3,10 +3,13 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 
 import 'auth_client.dart';
 import 'auth_widgets.dart';
+import 'secure_storage.dart';
 import 'user_info_widget.dart';
 
-void main() {
-  final state = GlobalState();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final state = await GlobalState.load();
+
   runApp(
     InheritedGlobalState(
       state: state,
@@ -16,7 +19,16 @@ void main() {
 }
 
 class GlobalState {
-  final authState = AuthState();
+  final AuthState authState;
+
+  GlobalState(this.authState);
+
+  static Future<GlobalState> load() async {
+    final authState =
+        await AuthState.load(persistence: SecureStorageClientPersistence());
+
+    return GlobalState(authState);
+  }
 
   static GlobalState of(BuildContext context) {
     final widget = context
