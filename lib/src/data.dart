@@ -294,7 +294,7 @@ class AppUser implements SerializableToJson {
   final bool emailIsVerified;
   final String? phone;
   final bool phoneIsVerified;
-  final List<MFAItem> multiFactorAuth;
+  final MFAConfig multiFactorAuth;
   final DateTime createdAt;
   // TODO: rename to emailIsVerified->emailVerified
 
@@ -320,10 +320,8 @@ class AppUser implements SerializableToJson {
       picture: json['picture'] as String?,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
-      multiFactorAuth: (json['multiFactorAuth']! as Iterable)
-          .cast<Map<String, Object?>>()
-          .map(MFAItem.fromJson)
-          .toList(),
+      multiFactorAuth:
+          MFAConfig.fromJson(json['multiFactorAuth']! as Map<String, Object?>),
       createdAt: DateTime.parse(json['createdAt']! as String),
     );
   }
@@ -340,7 +338,7 @@ class AppUser implements SerializableToJson {
     String? phone,
     bool phoneToNull = false,
     bool? phoneIsVerified,
-    List<MFAItem>? multiFactorAuth,
+    MFAConfig? multiFactorAuth,
     DateTime? createdAt,
   }) {
     return AppUser(
@@ -411,6 +409,83 @@ class MFAItem implements SerializableToJson {
   }
 }
 
+enum MFAProviderKind {
+  required,
+  optional,
+  none,
+}
+
+class MFAConfig implements SerializableToJson {
+  final Set<MFAItem> requiredItems;
+  final int optionalCount;
+  final Set<MFAItem> optionalItems;
+
+  ///
+  const MFAConfig({
+    required this.requiredItems,
+    required this.optionalCount,
+    required this.optionalItems,
+  });
+
+  static const empty =
+      MFAConfig(optionalCount: 0, requiredItems: {}, optionalItems: {});
+
+  bool get isEmpty =>
+      requiredItems.isEmpty && optionalItems.isEmpty && optionalCount == 0;
+  bool get isValid =>
+      optionalCount >= 0 &&
+      optionalCount <= optionalItems.length &&
+      (requiredItems.length != 1 || optionalCount > 0) &&
+      optionalItems.union(requiredItems).length ==
+          requiredItems.length + optionalItems.length;
+
+  factory MFAConfig.fromJson(Map<String, Object?> json) {
+    return MFAConfig(
+      requiredItems: (json['requiredItems']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(MFAItem.fromJson)
+          .toSet(),
+      optionalCount: json['optionalCount']! as int,
+      optionalItems: (json['optionalItems']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(MFAItem.fromJson)
+          .toSet(),
+    );
+  }
+
+  List<MFAItem> itemsLeft(Iterable<MFAItem> doneItems) {
+    final reqLeft =
+        requiredItems.where((item) => !doneItems.contains(item)).toList();
+    final optLeft =
+        optionalItems.where((item) => !doneItems.contains(item)).toList();
+    if (optLeft.isEmpty ||
+        optionalItems.length - optLeft.length >= optionalCount) {
+      // done with optional
+      return reqLeft;
+    }
+    return reqLeft.followedBy(optLeft).toList();
+  }
+
+  MFAProviderKind kind(MFAItem item) {
+    if (requiredItems.contains(item)) {
+      return MFAProviderKind.required;
+    } else if (optionalItems.contains(item)) {
+      return MFAProviderKind.optional;
+    } else {
+      return MFAProviderKind.none;
+    }
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'requiredItems': requiredItems.toList(),
+      'optionalCount': optionalCount,
+      'optionalItems': optionalItems.toList(),
+    };
+  }
+}
+
 class AppUserComplete implements SerializableToJson {
   final AppUser user;
   final List<AuthUser<Object?>> authUsers;
@@ -462,7 +537,7 @@ class AppUserComplete implements SerializableToJson {
             : (base.phoneIsVerified ? base.phone : phone?.phone ?? base.phone),
         name: base?.name ?? name?.name,
         picture: base?.picture ?? picture?.picture,
-        multiFactorAuth: base?.multiFactorAuth ?? [],
+        multiFactorAuth: base?.multiFactorAuth ?? MFAConfig.empty,
       ),
       authUsers: authUsers,
     );

@@ -160,16 +160,21 @@ class AuthState {
       }
       cancelCurrentFlow();
     } else if (response.leftMfaItems != null) {
-      leftMfaItems.value = response.leftMfaItems;
-      // TODO: revert authenticated client on change of access token
-      final authClient = OAuthClient(
-        accessToken: response.accessToken!,
-        accessTokenExpiration: response.expiresAt,
-        refreshAccessToken: null,
-        refreshToken: null,
-        innerClient: client.client,
-      );
-      authenticatedClient.value = authClient;
+      if (isAddingMFAProvider.value) {
+        // Successfully added a MFA. Go back to user info
+        isAddingMFAProvider.value = false;
+      } else {
+        leftMfaItems.value = response.leftMfaItems;
+        // TODO: revert authenticated client on change of access token
+        final authClient = OAuthClient(
+          accessToken: response.accessToken!,
+          accessTokenExpiration: response.expiresAt,
+          refreshAccessToken: null,
+          refreshToken: null,
+          innerClient: client.client,
+        );
+        authenticatedClient.value = authClient;
+      }
     } else if (response.error != null) {
       _authErrorController.add(response);
       if (leftMfaItems.value == null && !isAddingMFAProvider.value) {
@@ -284,7 +289,7 @@ class AuthState {
 }
 
 class MFAPostData implements SerializableToJson {
-  final List<MFAItem> mfa;
+  final MFAConfig mfa;
 
   MFAPostData(this.mfa);
 

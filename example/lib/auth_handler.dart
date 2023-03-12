@@ -315,7 +315,7 @@ class AuthHandler {
       // verify multiFactorAuth
       // TODO: split between required and a optional amount of auth providers for MFA
       final mfa = found.first.user.multiFactorAuth;
-      leftMfa = [...mfa]..removeWhere(doneMfa.contains);
+      leftMfa = mfa.itemsLeft(doneMfa);
 
       // merge users
       userId = userIds.first;
@@ -331,15 +331,19 @@ class AuthHandler {
         // TODO: maybe only change multiFactorAuth in the separate endpoint
         await config.persistence.updateUser(
           newUser.user.copyWith(
-            multiFactorAuth: providerIds
-                .map(
-                  (e) => MFAItem(
-                    // TODO: imrove UserId typing. Maybe a separate ProviderUserId
-                    providerId: e.id.split(':').first,
-                    providerUserId: e.id.split(':').last,
-                  ),
-                )
-                .toList(),
+            multiFactorAuth: MFAConfig(
+              optionalCount: 0,
+              optionalItems: {},
+              requiredItems: providerIds
+                  .map(
+                    (e) => MFAItem(
+                      // TODO: imrove UserId typing. Maybe a separate ProviderUserId
+                      providerId: e.id.split(':').first,
+                      providerUserId: e.id.split(':').last,
+                    ),
+                  )
+                  .toSet(),
+            ),
           ),
         );
       }
@@ -864,13 +868,12 @@ class AuthHandler {
 
     final data = await parseBodyOrUrlData(request);
     if (data is! Map<String, Object?>) return Response.badRequest();
-    final mfa = (data['mfa']! as Iterable)
-        .cast<Map<String, Object?>>()
-        .map(MFAItem.fromJson)
-        .toSet();
+    final mfa = MFAConfig.fromJson(data['mfa']! as Map<String, Object?>);
 
-    final notFoundMethods =
-        mfa.where((e) => !user.userIds().contains(e.userId)).toList();
+    final notFoundMethods = mfa.requiredItems
+        .followedBy(mfa.optionalItems)
+        .where((e) => !user.userIds().contains(e.userId))
+        .toList();
 
     if (notFoundMethods.isNotEmpty) {
       return Response.badRequest(
@@ -878,14 +881,15 @@ class AuthHandler {
         headers: jsonHeader,
       );
     }
-    if (mfa.length == 1) {
+    if (!mfa.isValid) {
       return Response.badRequest(
+        // TODO: improve error message. There ar emultiple validation errors
         body: jsonEncode({'error': 'Can not have a single MFA provider.'}),
         headers: jsonHeader,
       );
     }
 
-    final newUser = user.user.copyWith(multiFactorAuth: mfa.toList());
+    final newUser = user.user.copyWith(multiFactorAuth: mfa);
     await config.persistence.updateUser(newUser);
 
     final fields = request.url.queryParametersAll['fields'] ?? [];
