@@ -71,7 +71,7 @@ class TimeOneTimePasswordProvider
       );
     } else {
       final base32Secret = OTP.randomSecret();
-      final providerUserId = generateStateToken(size: 30);
+      final providerUserId = generateStateToken(size: 21);
       final saved = await _saveState(
         base32Secret: base32Secret,
         providerUserId: providerUserId,
@@ -94,14 +94,16 @@ class TimeOneTimePasswordProvider
 
       return Ok(
         CredentialsResponse.continueFlow(
-          state: state,
-          qrUrl: qrUrl,
-          // TODO: make it configurable/localized
-          userMessage: 'Use the an authenticator application that supports'
-              ' Time-Base One-Time Passwords (TOTP) such as'
-              ' Google Authenticator, Twilio Authy or Microsoft Authenticator.'
-              ' Setup key: "$base32Secret".',
-          paramDescriptions: initiatedFlowParamDescriptions,
+          ResponseContinueFlow(
+            state: state,
+            qrUrl: qrUrl,
+            // TODO: make it configurable/localized
+            userMessage: 'Use the an authenticator application that supports'
+                ' Time-Base One-Time Passwords (TOTP) such as'
+                ' Google Authenticator, Twilio Authy or Microsoft Authenticator.'
+                ' Setup key: "$base32Secret".',
+            paramDescriptions: initiatedFlowParamDescriptions,
+          ),
         ),
       );
     }
@@ -182,16 +184,29 @@ class TimeOneTimePasswordProvider
 
   // TODO: improve CredentialsResponse type
   @override
-  Future<CredentialsResponse<TOTPUser>?> mfaCredentialsFlow(
-    MFAItem mfaItem,
+  Future<ResponseContinueFlow?> mfaCredentialsFlow(
+    ProviderUserId mfaItem,
   ) async {
     // final state = await saveState(user);
-    return CredentialsResponse.continueFlow(
+    return ResponseContinueFlow(
       state: null,
       // TODO: make text configurable. Should we send providerUserId to the client?
       userMessage: 'Input the TOTP code shown in your authenticator app'
           ' for the account "${mfaItem.providerUserId}".',
       paramDescriptions: initiatedFlowParamDescriptions,
+    );
+  }
+
+  @override
+  AuthUser<TOTPUser> parseUser(Map<String, Object?> userData) {
+    final user = TOTPUser.fromJson(userData);
+    return AuthUser(
+      emailIsVerified: false,
+      phoneIsVerified: false,
+      providerId: providerId,
+      providerUser: user,
+      providerUserId: user.providerUserId,
+      rawUserData: userData,
     );
   }
 }
@@ -258,5 +273,12 @@ class TOTPUser implements SerializableToJson {
       'base32Secret': base32Secret,
       'providerUserId': providerUserId,
     };
+  }
+
+  factory TOTPUser.fromJson(Map<String, Object?> json) {
+    return TOTPUser(
+      base32Secret: json['base32Secret']! as String,
+      providerUserId: json['providerUserId']! as String,
+    );
   }
 }

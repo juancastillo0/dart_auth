@@ -62,7 +62,7 @@ class OAuthProviderConfig {
   Map<String, String?>? baseTokenParams() => _baseTokenParams;
 }
 
-abstract class OAuthProvider<U> {
+abstract class OAuthProvider<U> implements AuthenticationProvider<U> {
   ///
   const OAuthProvider({
     required this.providerId,

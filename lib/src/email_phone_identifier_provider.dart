@@ -65,7 +65,7 @@ class GeneratedMagicCode {
   GeneratedMagicCode(this.code, this.paramDescription);
 }
 
-class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
+class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     extends CredentialsProvider<IdentifierPassword, U> {
   ///
   IdentifierPasswordProvider({
@@ -73,6 +73,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     required this.identifierDescription,
     required this.providerId,
     required this.makeUser,
+    required this.userFromJson,
     required this.magicCodeConfig,
     ParamDescription? passwordDescription,
     this.redirectUrl,
@@ -102,6 +103,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       redirectUrl: redirectUrl,
       useIsolateForHashing: useIsolateForHashing,
       normalizeIdentifier: normalizeEmail ?? defaultNormalizeEmail,
+      userFromJson: EmailPasswordUser.fromJson,
     );
   }
 
@@ -143,6 +145,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
       redirectUrl: redirectUrl,
       useIsolateForHashing: useIsolateForHashing,
       normalizeIdentifier: normalizePhone,
+      userFromJson: PhonePasswordUser.fromJson,
     );
   }
 
@@ -163,6 +166,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
   final String? redirectUrl;
   final bool useIsolateForHashing;
   final MakeUserFromIdentifier<U> makeUser;
+  final U Function(Map<String, Object?> json) userFromJson;
   final MagicCodeConfig<U>? magicCodeConfig;
   final String Function(String)? normalizeIdentifier;
 
@@ -295,12 +299,14 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     if (!authenticated) {
       return Ok(
         CredentialsResponse.continueFlow(
-          userMessage: ml!.userMessage,
-          redirectUrl: redirectUrl,
-          state: state!,
-          paramDescriptions: {
-            'magicCode': magicCode!.paramDescription,
-          },
+          ResponseContinueFlow(
+            userMessage: ml!.userMessage,
+            redirectUrl: redirectUrl,
+            state: state!,
+            paramDescriptions: {
+              'magicCode': magicCode!.paramDescription,
+            },
+          ),
         ),
       );
     }
@@ -322,7 +328,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
     //     ids.any((id) => id.kind == UserIdKind.verifiedPhone);
     return Ok(
       CredentialsResponse.authenticated(
-        authUser,
+        authUser.toAuthUser(providerId: providerId),
         redirectUrl: redirectUrl,
       ),
     );
@@ -406,8 +412,9 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
 
 
   @override
-  Future<CredentialsResponse<U>?> mfaCredentialsFlow(MFAItem mfaItem) async {
-    return CredentialsResponse.continueFlow(
+  Future<ResponseContinueFlow?> mfaCredentialsFlow(
+      ProviderUserId mfaItem) async {
+    return ResponseContinueFlow(
       state: null,
       userMessage: magicCodeConfig != null
           ? 'A magic code will be sent to the device'
@@ -420,10 +427,15 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser>
   }
 }
 
+  @override
+  AuthUser<U> parseUser(Map<String, Object?> userData) {
+    final providerUser = userFromJson(userData);
+    return providerUser.toAuthUser(providerId: providerId);
+  }
+}
+
 ///
-typedef MakeUserFromIdentifier<U> = AuthUser<U> Function(
-  UserIdentifierData data,
-);
+typedef MakeUserFromIdentifier<U> = U Function(UserIdentifierData data);
 
 /// Parameters for [MakeUserFromIdentifier]
 class UserIdentifierData {
@@ -452,15 +464,20 @@ class UserIdentifierData {
   });
 }
 
-class EmailPasswordUser implements IdentifierPasswordUser, SerializableToJson {
+class EmailPasswordUser
+    implements IdentifierPasswordUser<EmailPasswordUser>, SerializableToJson {
   final String email;
   @override
   final String? passwordHash;
+  final String? name;
+  @override
+  String get identifier => email;
 
   ///
   EmailPasswordUser({
     required this.email,
     required this.passwordHash,
+    required this.name,
   });
 
   @override
@@ -468,36 +485,56 @@ class EmailPasswordUser implements IdentifierPasswordUser, SerializableToJson {
     return {
       'email': email,
       'passwordHash': passwordHash,
+      'name': name,
     }..removeWhere((key, value) => value == null);
   }
 
-  static AuthUser<EmailPasswordUser> makeUser(UserIdentifierData data) {
-    final providerUser = EmailPasswordUser(
-      email: data.identifier,
-      passwordHash: data.passwordHash,
+  factory EmailPasswordUser.fromJson(Map<String, Object?> json) {
+    return EmailPasswordUser(
+      name: json['name'] as String?,
+      email: json['email']! as String,
+      passwordHash: json['passwordHash'] as String?,
     );
+  }
+
+  AuthUser<EmailPasswordUser> toAuthUser({
+    required String providerId,
+  }) {
     return AuthUser(
-      providerId: data.providerId,
-      providerUserId: data.identifier,
+      providerId: providerId,
+      providerUserId: email,
       emailIsVerified: true,
       phoneIsVerified: false,
-      rawUserData: providerUser.toJson(),
-      providerUser: providerUser,
+      rawUserData: toJson(),
+      providerUser: this,
+      email: email,
+      name: name,
+    );
+  }
+
+  static EmailPasswordUser makeUser(UserIdentifierData data) {
+    return EmailPasswordUser(
       email: data.identifier,
+      passwordHash: data.passwordHash,
       name: data.name,
     );
   }
 }
 
-class PhonePasswordUser implements IdentifierPasswordUser {
+class PhonePasswordUser implements IdentifierPasswordUser<PhonePasswordUser> {
   final String phone;
   @override
   final String? passwordHash;
+  final String? name;
+
+  @override
+  String get identifier => phone;
 
   ///
   PhonePasswordUser({
     required this.phone,
     required this.passwordHash,
+    required this.name,
   });
 
   @override
@@ -505,32 +542,54 @@ class PhonePasswordUser implements IdentifierPasswordUser {
     return {
       'phone': phone,
       'passwordHash': passwordHash,
-    };
+      'name': name,
+    }..removeWhere((key, value) => value == null);
   }
 
-  static AuthUser<PhonePasswordUser> makeUser(UserIdentifierData data) {
-    final providerUser = PhonePasswordUser(
+  factory PhonePasswordUser.fromJson(Map<String, Object?> json) {
+    return PhonePasswordUser(
+      phone: json['phone']! as String,
+      passwordHash: json['passwordHash'] as String?,
+      name: json['name'] as String?,
+    );
+  }
+
+  static PhonePasswordUser makeUser(UserIdentifierData data) {
+    return PhonePasswordUser(
       phone: data.identifier,
       passwordHash: data.passwordHash,
+      name: data.name,
     );
+  }
+
+  @override
+  AuthUser<PhonePasswordUser> toAuthUser({required String providerId}) {
     return AuthUser(
-      providerId: data.providerId,
-      providerUserId: data.identifier,
+      providerId: providerId,
+      providerUserId: phone,
       emailIsVerified: false,
       phoneIsVerified: true,
-      rawUserData: providerUser.toJson(),
-      providerUser: providerUser,
-      phone: data.identifier,
-      name: data.name,
+      rawUserData: toJson(),
+      providerUser: this,
+      phone: phone,
+      name: name,
     );
   }
 }
 
-abstract class IdentifierPasswordUser implements SerializableToJson {
+abstract class IdentifierPasswordUser<U> implements SerializableToJson {
   /// The password hash to be saved so we can validate the password
   /// on future sign in attempts.
   /// May be null if the provider does not use passwords.
   String? get passwordHash;
+
+  /// The identifier for this user
+  String get identifier;
+
+  /// Returns the user account
+  AuthUser<U> toAuthUser({
+    required String providerId,
+  });
 }
 
 class IdentifierPassword extends CredentialsData {

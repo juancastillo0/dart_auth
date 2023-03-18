@@ -11,6 +11,7 @@ export 'src/client.dart';
 export 'src/data.dart';
 export 'src/jwt_and_sessions.dart';
 export 'src/oauth_base.dart';
+export 'src/username_password_provider.dart';
 
 typedef HttpClient = http.Client;
 typedef HttpResponse = http.Response;

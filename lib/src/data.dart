@@ -126,7 +126,7 @@ class UserSessionBase implements SerializableToJson {
 
 class UserSessionOrPartial {
   final UserSession session;
-  final List<MFAItem>? leftMfa;
+  final List<ProviderUserId>? leftMfa;
 
   ///
   UserSessionOrPartial(this.session, {required this.leftMfa});
@@ -141,7 +141,7 @@ class UserSession implements SerializableToJson {
   final String? deviceId;
   final Map<String, Object?>? meta;
   final DateTime? endedAt;
-  final List<MFAItem>? mfa;
+  final List<ProviderUserId> mfa;
 
   /// A user session, persisted when the user is signed in.
   const UserSession({
@@ -149,17 +149,17 @@ class UserSession implements SerializableToJson {
     required this.refreshToken,
     required this.userId,
     required this.createdAt,
+    required this.mfa,
     this.deviceId,
     this.meta,
     this.endedAt,
-    this.mfa,
   });
 
   /// Whether the session is valid
   bool get isValid => endedAt == null;
 
   /// Whether the session is in multi-factor authentication
-  bool get isInMFA => isValid && refreshToken == null && mfa != null;
+  bool get isInMFA => isValid && refreshToken == null && mfa.isNotEmpty;
 
 // generated-dart-fixer-start{"md5Hash":"UR44W1AtB7vHXyyYToVCGQ=="}
 
@@ -172,8 +172,7 @@ class UserSession implements SerializableToJson {
     bool metaToNull = false,
     DateTime? endedAt,
     bool endedAtToNull = false,
-    List<MFAItem>? mfa,
-    bool mfaToNull = false,
+    List<ProviderUserId>? mfa,
   }) {
     return UserSession(
       refreshToken:
@@ -184,7 +183,7 @@ class UserSession implements SerializableToJson {
       deviceId: deviceId ?? (deviceIdToNull ? null : this.deviceId),
       endedAt: endedAt ?? (endedAtToNull ? null : this.endedAt),
       meta: meta ?? (metaToNull ? null : this.meta),
-      mfa: mfa ?? (mfaToNull ? null : this.mfa),
+      mfa: mfa ?? this.mfa,
     );
   }
 
@@ -371,18 +370,18 @@ class AppUser implements SerializableToJson {
 }
 
 @immutable
-class MFAItem implements SerializableToJson {
+class ProviderUserId implements SerializableToJson {
   final String providerId;
   final String providerUserId;
 
   ///
-  MFAItem({
+  const ProviderUserId({
     required this.providerId,
     required this.providerUserId,
   });
 
-  factory MFAItem.fromJson(Map<String, Object?> json) {
-    return MFAItem(
+  factory ProviderUserId.fromJson(Map<String, Object?> json) {
+    return ProviderUserId(
       providerId: json['providerId']! as String,
       providerUserId: json['providerUserId']! as String,
     );
@@ -393,7 +392,7 @@ class MFAItem implements SerializableToJson {
 
   @override
   bool operator ==(Object other) =>
-      other is MFAItem &&
+      other is ProviderUserId &&
       providerId == other.providerId &&
       providerUserId == other.providerUserId;
 
@@ -416,9 +415,9 @@ enum MFAProviderKind {
 }
 
 class MFAConfig implements SerializableToJson {
-  final Set<MFAItem> requiredItems;
+  final Set<ProviderUserId> requiredItems;
   final int optionalCount;
-  final Set<MFAItem> optionalItems;
+  final Set<ProviderUserId> optionalItems;
 
   ///
   const MFAConfig({
@@ -443,17 +442,17 @@ class MFAConfig implements SerializableToJson {
     return MFAConfig(
       requiredItems: (json['requiredItems']! as Iterable)
           .cast<Map<String, Object?>>()
-          .map(MFAItem.fromJson)
+          .map(ProviderUserId.fromJson)
           .toSet(),
       optionalCount: json['optionalCount']! as int,
       optionalItems: (json['optionalItems']! as Iterable)
           .cast<Map<String, Object?>>()
-          .map(MFAItem.fromJson)
+          .map(ProviderUserId.fromJson)
           .toSet(),
     );
   }
 
-  List<MFAItem> itemsLeft(Iterable<MFAItem> doneItems) {
+  List<ProviderUserId> itemsLeft(Iterable<ProviderUserId> doneItems) {
     final reqLeft =
         requiredItems.where((item) => !doneItems.contains(item)).toList();
     final optLeft =
@@ -466,7 +465,7 @@ class MFAConfig implements SerializableToJson {
     return reqLeft.followedBy(optLeft).toList();
   }
 
-  MFAProviderKind kind(MFAItem item) {
+  MFAProviderKind kind(ProviderUserId item) {
     if (requiredItems.contains(item)) {
       return MFAProviderKind.required;
     } else if (optionalItems.contains(item)) {
@@ -560,7 +559,7 @@ class AppUserComplete implements SerializableToJson {
                 : 'Provider id "${e['providerId']}" not found.',
           );
         }
-        return provider.parseUser(e);
+        return AuthUser.fromJson(json, provider);
       }).toList(),
     );
   }
@@ -583,12 +582,32 @@ class UserInfoMe implements SerializableToJson {
     required this.sessions,
   });
 
+  factory UserInfoMe.fromComplete(
+    AppUserComplete user,
+    Map<String, CredentialsProvider<dynamic, dynamic>>
+        allCredentialsProviders, {
+    List<UserSessionBase>? sessions,
+  }) {
+    final authUsers = user.authUsers.map((e) {
+      final p = allCredentialsProviders[e.providerId];
+      return AuthUserData(
+        authUser: e,
+        updateParams: p?.updateCredentialsParams(e.providerUser),
+      );
+    }).toList();
+    return UserInfoMe(
+      user: user.user,
+      authUsers: authUsers,
+      sessions: sessions,
+    );
+  }
+
   factory UserInfoMe.fromJson(Map<String, Object?> json) {
     return UserInfoMe(
       user: AppUser.fromJson((json['user']! as Map).cast()),
       authUsers: (json['authUsers']! as Iterable)
           .cast<Map<String, Object?>>()
-          .map(AuthUser.fromJsonRaw)
+          .map(AuthUserData.fromJson)
           .toList(),
       sessions: json['sessions'] == null
           ? null

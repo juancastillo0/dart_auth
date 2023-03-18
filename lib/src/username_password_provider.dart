@@ -120,10 +120,10 @@ class UsernamePasswordProvider
   }
 
   @override
-  Future<CredentialsResponse<UsernamePasswordUser>?> mfaCredentialsFlow(
-    MFAItem mfaItem,
+  Future<ResponseContinueFlow?> mfaCredentialsFlow(
+    ProviderUserId mfaItem,
   ) async {
-    return CredentialsResponse.continueFlow(
+    return ResponseContinueFlow(
       state: null,
       userMessage: 'Input the username and password.',
       // TODO: should we ask for the username? if we should then do not sent it to the client
@@ -190,6 +190,13 @@ class UsernamePasswordUser {
       'passwordHash': passwordHash,
     };
   }
+
+  factory UsernamePasswordUser.fromJson(Map<String, Object?> userData) {
+    return UsernamePasswordUser(
+      username: userData['username']! as String,
+      passwordHash: userData['passwordHash']! as String,
+    );
+  }
 }
 
 class UsernamePassword extends CredentialsData {
@@ -206,8 +213,18 @@ class UsernamePassword extends CredentialsData {
   String get providerUserId => username;
 }
 
-abstract class CredentialsProvider<C extends CredentialsData, U> {
+abstract class AuthenticationProvider<U> {
   /// The unique global provider identifier
+  String get providerId;
+
+  /// Parses the [userData] JSON and returns the generic [AuthUser] model.
+  AuthUser<U> parseUser(Map<String, Object?> userData);
+}
+
+abstract class CredentialsProvider<C extends CredentialsData, U>
+    implements AuthenticationProvider<U> {
+  /// The unique global provider identifier
+  @override
   String get providerId;
 
   /// The description of the params required for authentication
@@ -233,7 +250,7 @@ abstract class CredentialsProvider<C extends CredentialsData, U> {
 
   /// Returns the information required to continue a mfa credentials flow.
   /// null if not supported
-  Future<CredentialsResponse<U>?> mfaCredentialsFlow(MFAItem mfaItem);
+  Future<ResponseContinueFlow?> mfaCredentialsFlow(ProviderUserId mfaItem);
 }
 
 abstract class CredentialsData {
@@ -241,8 +258,23 @@ abstract class CredentialsData {
   String? get providerUserId;
 }
 
-class CredentialsResponse<U> implements SerializableToJson {
+class CredentialsResponse<U> {
   final AuthUser<U>? user;
+  final String? redirectUrl;
+  final ResponseContinueFlow? flow;
+
+  CredentialsResponse.continueFlow(
+    ResponseContinueFlow this.flow,
+  )   : user = null,
+        redirectUrl = flow.redirectUrl;
+
+  CredentialsResponse.authenticated(
+    AuthUser<U> this.user, {
+    this.redirectUrl,
+  }) : flow = null;
+}
+
+class ResponseContinueFlow implements SerializableToJson {
   final String? redirectUrl;
   final String? qrUrl;
   final String? userMessage;
@@ -250,26 +282,18 @@ class CredentialsResponse<U> implements SerializableToJson {
   final String? state;
   final Map<String, ParamDescription>? paramDescriptions;
 
-  CredentialsResponse.continueFlow({
+  ///
+  ResponseContinueFlow({
     required this.state,
     required String this.userMessage,
     this.redirectUrl,
     this.qrUrl,
     this.paramDescriptions,
     this.buttonText,
-  }) : user = null;
+  });
 
-  CredentialsResponse.authenticated(
-    AuthUser<U> this.user, {
-    this.redirectUrl,
-    this.userMessage,
-  })  : state = null,
-        paramDescriptions = null,
-        qrUrl = null,
-        buttonText = null;
-
-  factory CredentialsResponse.fromJson(Map<String, Object?> json) {
-    return CredentialsResponse.continueFlow(
+  factory ResponseContinueFlow.fromJson(Map<String, Object?> json) {
+    return ResponseContinueFlow(
       state: json['state'] as String?,
       userMessage: json['userMessage']! as String,
       redirectUrl: json['redirectUrl'] as String?,
@@ -290,7 +314,6 @@ class CredentialsResponse<U> implements SerializableToJson {
 
   @override
   Map<String, Object?> toJson() => {
-        'user': user,
         'state': state,
         'userMessage': userMessage,
         'redirectUrl': redirectUrl,
@@ -440,6 +463,45 @@ class ParamDescription implements SerializableToJson {
       );
     }
     return null;
+  }
+
+  ParamDescription copyWith({
+    String? name,
+    String? description,
+    bool descriptionToNull = false,
+    RegExp? regExp,
+    bool regExpToNull = false,
+    bool? required,
+    String? initialValue,
+    bool initialValueToNull = false,
+    bool? readOnly,
+    Map<String, ParamDescription>? paramsDescriptions,
+    bool paramsDescriptionsToNull = false,
+    bool? obscureText,
+    String? hint,
+    bool hintToNull = false,
+    ParamKeyboardType? keyboardType,
+    NumberParamKeyboardType? numberKeyboardType,
+    bool numberKeyboardTypeToNull = false,
+    ParamTextCapitalization? textCapitalization,
+  }) {
+    return ParamDescription(
+      name: name ?? this.name,
+      description: description ?? (descriptionToNull ? null : this.description),
+      regExp: regExp ?? (regExpToNull ? null : this.regExp),
+      required: required ?? this.required,
+      initialValue:
+          initialValue ?? (initialValueToNull ? null : this.initialValue),
+      readOnly: readOnly ?? this.readOnly,
+      paramsDescriptions: paramsDescriptions ??
+          (paramsDescriptionsToNull ? null : this.paramsDescriptions),
+      obscureText: obscureText ?? this.obscureText,
+      hint: hint ?? (hintToNull ? null : this.hint),
+      keyboardType: keyboardType ?? this.keyboardType,
+      numberKeyboardType: numberKeyboardType ??
+          (numberKeyboardTypeToNull ? null : this.numberKeyboardType),
+      textCapitalization: textCapitalization ?? this.textCapitalization,
+    );
   }
 
   @override

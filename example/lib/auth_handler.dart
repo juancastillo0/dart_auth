@@ -97,11 +97,15 @@ class AuthHandler {
         '"${config.allProviders.keys.followedBy(config.allCredentialsProviders.keys).join('", "')}"',
   );
 
-  Result<OAuthProvider, Response> getProvider(Request request) {
-    final providerId = request.url.queryParameters['provider'] ??
-        (request.url.pathSegments.length > 2
-            ? request.url.pathSegments[2]
+  String? getProviderId(Request request) {
+    return request.url.queryParameters['providerId'] ??
+        (request.url.pathSegments.isNotEmpty
+            ? request.url.pathSegments.last
             : null);
+  }
+
+  Result<OAuthProvider, Response> getProvider(Request request) {
+    final providerId = getProviderId(request);
     final providerInstance = config.allProviders[providerId];
     if (providerInstance == null) {
       return Err(wrongProviderResponse);
@@ -112,10 +116,7 @@ class AuthHandler {
   Result<CredentialsProvider, Response> getCredentialsProvider(
     Request request,
   ) {
-    final providerId = request.url.queryParameters['provider'] ??
-        (request.url.pathSegments.length > 2
-            ? request.url.pathSegments[2]
-            : null);
+    final providerId = getProviderId(request);
     final providerInstance = config.allCredentialsProviders[providerId];
     if (providerInstance == null) {
       return Err(wrongProviderResponse);
@@ -143,7 +144,10 @@ class AuthHandler {
       meta: claims.meta,
     );
     return Response.ok(
-      jsonEncode({'accessToken': jwt}),
+      jsonEncode({
+        'accessToken': jwt,
+        'expiresAt': DateTime.now().add(accessTokenDuration).toIso8601String(),
+      }),
       headers: jsonHeader,
     );
   }
@@ -291,7 +295,7 @@ class AuthHandler {
     final doneMfa = {
       ...?metaClaims?.mfaItems,
       ...?mfaSession?.mfa,
-      MFAItem(
+      ProviderUserId(
         providerId: user.providerId,
         providerUserId: user.providerUserId,
       ),
@@ -307,7 +311,7 @@ class AuthHandler {
     final userIds = found.map((e) => e.userId).toSet();
 
     final String userId;
-    List<MFAItem>? leftMfa;
+    List<ProviderUserId>? leftMfa;
     if (userIds.isEmpty) {
       // create a new user
       userId = generateStateToken();
@@ -337,7 +341,7 @@ class AuthHandler {
               optionalItems: {},
               requiredItems: providerIds
                   .map(
-                    (e) => MFAItem(
+                    (e) => ProviderUserId(
                       // TODO: imrove UserId typing. Maybe a separate ProviderUserId
                       providerId: e.id.split(':').first,
                       providerUserId: e.id.split(':').last,
@@ -350,6 +354,7 @@ class AuthHandler {
       }
     } else {
       // error multiple users
+      // TODO: Merge users? make it configurable
       return const Err('Multiple users with same credentials');
     }
 
@@ -603,7 +608,7 @@ class AuthHandler {
         'Partial isInMFA session with no leftMfa',
       );
       meta = UserMetaClaims.inMFA(
-        mfaItems: session.mfa!,
+        mfaItems: session.mfa,
         providerId: providerId,
         userId: session.userId,
       );
@@ -650,7 +655,7 @@ class AuthHandler {
     required String userId,
     required String providerId,
     required String sessionId,
-    required List<MFAItem>? mfaItems,
+    required List<ProviderUserId>? mfaItems,
   }) {
     final jwt = config.jwtMaker.createJwt(
       userId: userId,
@@ -814,7 +819,7 @@ class AuthHandler {
     final claims = await config.jwtMaker.getUserClaims(ctx(request));
     if (claims == null ||
         claims.meta == null ||
-        UserMetaClaims.fromJson(claims.meta!).userId == null) {
+        !UserMetaClaims.fromJson(claims.meta!).isLoggedIn) {
       throw Response.unauthorized(null);
     }
     return claims;
@@ -850,9 +855,9 @@ class AuthHandler {
 
     return Response.ok(
       jsonEncode(
-        UserInfoMe(
-          user: user.user,
-          authUsers: user.authUsers,
+        UserInfoMe.fromComplete(
+          user,
+          config.allCredentialsProviders,
           sessions: sessions?.map(UserSessionBase.fromSession).toList(),
         ),
       ),
@@ -863,6 +868,7 @@ class AuthHandler {
   Future<Response> userMFA(Request request) async {
     if (request.method != 'POST') return Response.notFound(null);
     final claims = await authenticatedUserOrThrow(request);
+    // TODO: limit claims authentication time
     final user = await config.persistence
         .getUserById(UserId(claims.userId, UserIdKind.innerId));
     if (user == null) return Response.notFound(null);
@@ -902,9 +908,9 @@ class AuthHandler {
 
     return Response.ok(
       jsonEncode(
-        UserInfoMe(
-          user: newUser,
-          authUsers: user.authUsers,
+        UserInfoMe.fromComplete(
+          AppUserComplete(user: newUser, authUsers: user.authUsers),
+          config.allCredentialsProviders,
           sessions: sessions?.map(UserSessionBase.fromSession).toList(),
         ),
       ),
@@ -998,7 +1004,7 @@ class AuthHandler {
         final otherUser = response.unwrap().user;
         if (otherUser == null) {
           return Response.ok(
-            jsonEncode(response.unwrap().toJson()),
+            jsonEncode(response.unwrap().flow!.toJson()),
             headers: jsonHeader,
           );
         }
@@ -1038,7 +1044,7 @@ class AuthHandler {
     if (userOrMessage.user == null) {
       // The flow keeps going
       return Response.ok(
-        jsonEncode(userOrMessage.toJson()),
+        jsonEncode(userOrMessage.flow!.toJson()),
         headers: jsonHeader,
       );
     } else {
@@ -1090,7 +1096,7 @@ class UserMetaClaims {
   final String? deviceCode;
   final int? interval;
   final String? state;
-  final List<MFAItem>? mfaItems;
+  final List<ProviderUserId>? mfaItems;
   final bool isInMFAFlow;
 
   UserMetaClaims.loggedUser({
@@ -1103,7 +1109,7 @@ class UserMetaClaims {
         isInMFAFlow = false;
 
   UserMetaClaims.inMFA({
-    required List<MFAItem> this.mfaItems,
+    required List<ProviderUserId> this.mfaItems,
     required this.providerId,
     required String this.userId,
   })  : state = null,
@@ -1138,7 +1144,7 @@ class UserMetaClaims {
         ? null
         : (json['mfaItems']! as List)
             .cast<Map<String, Object?>>()
-            .map(MFAItem.fromJson)
+            .map(ProviderUserId.fromJson)
             .toList();
 
     if (json['deviceCode'] is String) {

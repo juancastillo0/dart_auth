@@ -1,5 +1,5 @@
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
+import 'oauth.dart';
+import 'providers.dart';
 
 class AuthResponse implements SerializableToJson {
   final String? refreshToken;
@@ -9,10 +9,7 @@ class AuthResponse implements SerializableToJson {
   final String? message;
   final String? code;
   final Map<String, String>? fieldErrors;
-
-  /// TODO: make it not generic. Maybe create a CredentialsResponseContinueFlow
-  final CredentialsResponse<Object?>? credentials;
-  // TODO: 2FA Second factor
+  final ResponseContinueFlow? credentials;
   final List<MFAItemWithFlow>? leftMfaItems;
 
   ///
@@ -29,10 +26,8 @@ class AuthResponse implements SerializableToJson {
   });
 
   factory AuthResponse.fromJson(Map<String, Object?> json) {
-    // TODO: improve typing
-    final credentials = json['state'] is String
-        ? CredentialsResponse<Object?>.fromJson(json)
-        : null;
+    final credentials =
+        json['state'] is String ? ResponseContinueFlow.fromJson(json) : null;
     return AuthResponse(
       refreshToken: json['refreshToken'] as String?,
       accessToken: json['accessToken'] as String?,
@@ -90,8 +85,8 @@ class AuthResponse implements SerializableToJson {
 }
 
 class MFAItemWithFlow implements SerializableToJson {
-  final MFAItem mfa;
-  final CredentialsResponse<Object?>? credentialsInfo;
+  final ProviderUserId mfa;
+  final ResponseContinueFlow? credentialsInfo;
 
   MFAItemWithFlow(this.mfa, this.credentialsInfo);
 
@@ -105,10 +100,10 @@ class MFAItemWithFlow implements SerializableToJson {
 
   factory MFAItemWithFlow.fromJson(Map<String, Object?> json) {
     return MFAItemWithFlow(
-      MFAItem.fromJson((json['mfa']! as Map).cast()),
+      ProviderUserId.fromJson((json['mfa']! as Map).cast()),
       json['credentialsInfo'] == null
           ? null
-          : CredentialsResponse.fromJson(
+          : ResponseContinueFlow.fromJson(
               (json['credentialsInfo']! as Map).cast(),
             ),
     );
