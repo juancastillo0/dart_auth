@@ -6,6 +6,7 @@ import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import 'base_widgets.dart';
 import 'credentials_form.dart';
 import 'main.dart';
 
@@ -16,6 +17,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = getTranslations(context);
     final isDarkMode =
         Theme.of(context).colorScheme.brightness == Brightness.dark;
 
@@ -65,7 +67,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
             child: Row(
               children: [
                 image,
-                const Text('Sign Up with Device'),
+                Text(t.signUpWithDevice),
               ],
             ),
           ),
@@ -82,7 +84,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
           child: Row(
             children: [
               image,
-              const Text('Sign Up'),
+              Text(t.sigUpWithOAuth),
             ],
           ),
         ),
@@ -100,6 +102,7 @@ class OAuthFlowWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentFlow = this.currentFlow;
     final state = GlobalState.of(context).authState;
+    final t = getTranslations(context);
     if (currentFlow is OAuthProviderUrl) {
       return Card(
         child: Column(
@@ -121,7 +124,7 @@ class OAuthFlowWidget extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: state.cancelCurrentFlow,
               icon: const Icon(Icons.cancel),
-              label: const Text('Cancel'),
+              label: Text(t.cancel),
             ),
           ],
         ),
@@ -163,14 +166,13 @@ class OAuthFlowWidget extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(8),
               child: Text(
-                currentFlow.device.message ??
-                    'Enter the code in the url to authorize this device.',
+                currentFlow.device.message ?? t.enterDeviceCode,
               ),
             ),
             ElevatedButton.icon(
               onPressed: state.cancelCurrentFlow,
               icon: const Icon(Icons.cancel),
-              label: const Text('Cancel'),
+              label: Text(t.cancel),
             ),
           ],
         ),
@@ -189,7 +191,7 @@ class AuthProvidersList extends HookWidget {
     final data = useValueListenable(state.providersList);
     final leftMfaItems = useValueListenable(state.leftMfaItems);
     final isAddingMFAProvider = useValueListenable(state.isAddingMFAProvider);
-
+    final t = getTranslations(context);
     if (data == null) return const CircularProgressIndicator();
 
     bool inMFA(AuthProviderData s) {
@@ -197,39 +199,37 @@ class AuthProvidersList extends HookWidget {
           leftMfaItems.any((e) => e.mfa.providerId == s.providerId);
     }
 
-    Widget list = SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ...data.credentialsProviders
-              .where(inMFA)
-              .map(CredentialsProviderForm.new)
-              .map(
-                (w) => Card(
-                  key: Key(w.data.providerId),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 22,
-                    ),
-                    child: w,
+    Widget list = ListView(
+      children: [
+        ...data.credentialsProviders
+            .where(inMFA)
+            .map(CredentialsProviderForm.new)
+            .map(
+              (w) => Card(
+                key: Key(w.data.providerId),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 22,
                   ),
+                  child: w,
                 ),
               ),
-          ...data.providers.where(inMFA).map(OAuthProviderSignInButton.new).map(
-                (w) => Card(
-                  key: Key(w.data.providerId),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 22,
-                    ),
-                    child: w,
+            ),
+        ...data.providers.where(inMFA).map(OAuthProviderSignInButton.new).map(
+              (w) => Card(
+                key: Key(w.data.providerId),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 22,
                   ),
+                  child: w,
                 ),
               ),
-        ],
-      ),
+            ),
+        const SizedBox(height: 25),
+      ],
     );
     if (leftMfaItems != null || isAddingMFAProvider) {
       list = Column(
@@ -245,8 +245,7 @@ class AuthProvidersList extends HookWidget {
                   ),
                 Expanded(
                   child: Text(
-                    '${isAddingMFAProvider ? 'Add ' : ''}'
-                    'Multi-Factor Authentication (MFA)',
+                    '${isAddingMFAProvider ? '${t.add} ' : ''}${t.multiFactorAuthentication}',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),

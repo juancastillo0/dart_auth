@@ -2,18 +2,39 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:oauth/endpoint_models.dart';
-import 'package:oauth/providers.dart';
+import 'package:oauth/oauth.dart';
 
 import 'auth_client.dart';
+import 'base_widgets.dart';
 import 'main.dart';
+
+class UpdateCredentialsParams {
+  final AuthUserData data;
+  final void Function() onUpdate;
+  final void Function() onCancelFlow;
+
+  ///
+  UpdateCredentialsParams({
+    required this.data,
+    required this.onUpdate,
+    required this.onCancelFlow,
+  });
+}
 
 class CredentialsProviderForm extends HookWidget {
   final CredentialsProviderData data;
+  final UpdateCredentialsParams? updateParams;
 
-  const CredentialsProviderForm(this.data, {super.key});
+  ///
+  const CredentialsProviderForm(
+    this.data, {
+    super.key,
+    this.updateParams,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final t = getTranslations(context);
     final state = GlobalState.of(context).authState;
     // TODO: extract state into a separate class
     final leftMfaItems = useValueListenable(state.leftMfaItems);
@@ -40,17 +61,83 @@ class CredentialsProviderForm extends HookWidget {
     final params = useState(<String, String>{});
     final errorMessage = useState<String?>(null);
     final fieldErrorMessage = useState<Map<String, String>?>(null);
-    final credentials = useState<CredentialsResponse<Object?>?>(null);
+    final credentials = useState<ResponseContinueFlow?>(null);
     final cred = useMemoized(
-      () => credentials.value ?? mfaItem?.credentialsInfo,
+      () =>
+          credentials.value ??
+          updateParams?.data.updateParams ??
+          mfaItem?.credentialsInfo,
       [credentials.value, mfaItem?.credentialsInfo],
     );
     final paramDescriptions = cred?.paramDescriptions ?? data.paramDescriptions;
     final formKey = useMemoized(GlobalKey<FormState>.new);
+    final isLoading = useState(false);
+
+    Future<void> onSubmit() async {
+      if (!formKey.currentState!.validate()) return;
+      if (isLoading.value) return;
+      isLoading.value = true;
+      try {
+        // TODO: handle required
+        errorMessage.value = null;
+        fieldErrorMessage.value = null;
+        final authState = GlobalState.of(context).authState;
+        final AuthResponse? response;
+        final reqParams = CredentialsParams(data.providerId, {
+          if (cred != null) 'state': cred.state,
+          // TODO: maybe use an opaque id?
+          if (updateParams != null)
+            'providerUserId': updateParams!.data.authUser.providerUserId
+          else if (mfa.isNotEmpty)
+            'providerUserId': mfaItem!.mfa.providerUserId,
+          ...?(paramDescriptions
+              ?.map((key, value) => MapEntry(key, value.initialValue)))
+            ?..removeWhere(
+              (key, value) => value == null || params.value.containsKey(key),
+            ),
+          ...params.value,
+        });
+        if (updateParams != null) {
+          final user = await authState.updateCredentials(reqParams);
+          if (user == null) {
+            // TODO: manage errors
+            return;
+          } else if (user.error != null) {
+            response = user.error;
+          } else {
+            return updateParams!.onUpdate();
+          }
+        } else if (mfa.isNotEmpty) {
+          response = await authState.signInWithCredentials(reqParams);
+        } else {
+          response = await authState.signUpWithCredentials(reqParams);
+        }
+        if (response == null) return;
+        if (response.error != null) {
+          final message = response.message == null || response.message!.isEmpty
+              ? response.error
+              : '${response.error}: ${response.message}';
+          errorMessage.value = message;
+        }
+        if (response.fieldErrors != null) {
+          fieldErrorMessage.value = response.fieldErrors;
+        }
+        if (response.credentials != null) {
+          credentials.value = response.credentials;
+        }
+      } finally {
+        isLoading.value = false;
+      }
+    }
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(data.providerId),
+        Text(
+          '${updateParams == null ? '' : '${t.update} '}${data.providerId}',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 10),
         Form(
           key: formKey,
           child: Column(
@@ -73,11 +160,12 @@ class CredentialsProviderForm extends HookWidget {
                   value: mfaItem!.mfa.providerUserId,
                   onChanged: (v) => providerUserIdState.value = v,
                 ),
-              ...?paramDescriptions?.entries.map((e) {
+              const SizedBox(height: 10),
+              ...?paramDescriptions?.entries.expand((e) sync* {
                 final value = e.value;
                 final regExp = value.regExp;
 
-                return TextFormField(
+                yield TextFormField(
                   key: Key(e.key),
                   decoration: InputDecoration(
                     labelText: value.name,
@@ -104,6 +192,7 @@ class CredentialsProviderForm extends HookWidget {
                     fieldErrorMessage.value = null;
                   },
                 );
+                yield const SizedBox(height: 10);
               }),
             ],
           ),
@@ -125,15 +214,6 @@ class CredentialsProviderForm extends HookWidget {
                   width: 200,
                   height: 200,
                 ),
-              TextButton(
-                onPressed: () {
-                  params.value = {};
-                  credentials.value = null;
-                  errorMessage.value = null;
-                  fieldErrorMessage.value = null;
-                },
-                child: const Text('Cancel Flow'),
-              )
             ],
           )
         else
@@ -149,44 +229,42 @@ class CredentialsProviderForm extends HookWidget {
         else
           const SizedBox(),
         const SizedBox(height: 12),
-        ElevatedButton(
-          onPressed: () async {
-            if (!formKey.currentState!.validate()) return;
-
-            // TODO: handle required
-            errorMessage.value = null;
-            fieldErrorMessage.value = null;
-            final authState = GlobalState.of(context).authState;
-            final AuthResponse? response;
-            final reqParams = CredentialsParams(data.providerId, {
-              if (cred != null) 'state': cred.state,
-              // TODO: maybe use an opaque id?
-              if (mfa.isNotEmpty) 'providerUserId': mfaItem!.mfa.providerUserId,
-              ...params.value,
-            });
-            if (mfa.isNotEmpty) {
-              response = await authState.signInWithCredentials(reqParams);
-            } else {
-              response = await authState.signUpWithCredentials(reqParams);
-            }
-            if (response == null) return;
-            if (response.error != null) {
-              final message =
-                  response.message == null || response.message!.isEmpty
-                      ? response.error
-                      : '${response.error}: ${response.message}';
-              errorMessage.value = message;
-            }
-            if (response.fieldErrors != null) {
-              fieldErrorMessage.value = response.fieldErrors;
-            }
-            if (response.credentials != null) {
-              credentials.value = response.credentials;
-            }
-          },
-          child: credentials.value?.buttonText != null
-              ? Text(credentials.value!.buttonText!)
-              : const Text('Submit'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (cred != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: TextButton(
+                  onPressed: () {
+                    params.value = {};
+                    credentials.value = null;
+                    errorMessage.value = null;
+                    fieldErrorMessage.value = null;
+                    if (updateParams != null) {
+                      updateParams!.onCancelFlow();
+                    } else if (credentials.value == null &&
+                        state.leftMfaItems.value != null) {
+                      state.cancelCurrentFlow();
+                    }
+                  },
+                  child: Text(t.cancel),
+                ),
+              ),
+            ElevatedButton(
+              onPressed: onSubmit,
+              child: credentials.value?.buttonText != null
+                  ? Text(credentials.value!.buttonText!)
+                  : Text(t.submit),
+            ),
+          ],
+        ),
+        Visibility(
+          visible: isLoading.value,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: LinearProgressIndicator(),
+          ),
         ),
       ],
     );

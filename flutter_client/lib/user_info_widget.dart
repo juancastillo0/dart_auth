@@ -2,10 +2,12 @@ import 'dart:convert' show jsonEncode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 
 import 'auth_client.dart';
-import 'hooks_mobx.dart';
+import 'base_widgets.dart';
+import 'credentials_form.dart';
 import 'main.dart';
 
 class UserInfoWidget extends HookWidget {
@@ -16,41 +18,45 @@ class UserInfoWidget extends HookWidget {
 
   final UserInfoMe userInfo;
 
+  static const addMfaWidgetKey = Key('addMfa');
+
   @override
   Widget build(BuildContext context) {
+    final t = getTranslations(context);
     final state = GlobalState.of(context).authState;
-    final isEditingMFA = useState<MFAConfig?>(null);
+    final editedMFA = useState<MFAConfig?>(null);
     final isLoadingEditingMFA = useState(false);
     final optionalCountController = useTextEditingController(
       text: userInfo.user.multiFactorAuth.optionalCount.toString(),
     );
-    final mfaItems = isEditingMFA.value ?? userInfo.user.multiFactorAuth;
+    final mfaItems = editedMFA.value ?? userInfo.user.multiFactorAuth;
 
-    Widget authUserItem(AuthUser<Object?> e) {
-      final item = MFAItem(
+    Widget authUserItem(AuthUserData data) {
+      final e = data.authUser;
+      final item = ProviderUserId(
         providerId: e.providerId,
         providerUserId: e.providerUserId,
       );
-      final kind = mfaItems.kind(item);
-      final current = isEditingMFA.value;
-      void updateKind() {
+      final current = editedMFA.value;
+      void updateKind(MFAProviderKind kind) {
         if (current == null) return;
         switch (kind) {
           case MFAProviderKind.required:
-            isEditingMFA.value = current.addOptional(item);
+            editedMFA.value = current.addRequired(item);
             break;
           case MFAProviderKind.optional:
-            isEditingMFA.value = current.removeItem(item);
+            editedMFA.value = current.addOptional(item);
             break;
           case MFAProviderKind.none:
-            isEditingMFA.value = current.addRequired(item);
+            editedMFA.value = current.removeItem(item);
             break;
         }
       }
 
+      final kind = mfaItems.kind(item);
       return AuthProviderWidget(
         key: Key(e.key),
-        e: e,
+        data: data,
         mfaItems: MFAChip(
           kind: kind,
           onTap: current != null ? updateKind : null,
@@ -58,66 +64,64 @@ class UserInfoWidget extends HookWidget {
       );
     }
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(38),
-          child: Text(jsonEncode(userInfo)),
-        ),
-        ElevatedButton.icon(
-          onPressed: state.signOut,
-          icon: const Icon(Icons.close),
-          label: const Text('Sign Out'),
-        ),
-        const SizedBox(height: 20),
-        if (!mfaItems.isEmpty)
-          MFAProvidersWidget(
-            isLoadingEditingMFA: isLoadingEditingMFA,
-            mfaItems: mfaItems,
-            isEditingMFA: isEditingMFA,
-            optionalCountController: optionalCountController,
-            state: state,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 500),
+      child: ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(38),
+            child: Text(jsonEncode(userInfo)),
           ),
-        Expanded(
-          child: Container(
+          ElevatedButton.icon(
+            onPressed: state.signOut,
+            icon: const Icon(Icons.close),
+            label: Text(t.signOut),
+          ),
+          const SizedBox(height: 20),
+          Container(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(14),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Authentication Providers',
+                        t.authenticationProviders,
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        ...userInfo.authUsers.map(authUserItem),
-                      ],
-                    ),
-                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ...userInfo.authUsers.map(authUserItem),
+                  ],
                 ),
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: ElevatedButton.icon(
-                    key: const Key('addMfa'),
+                    key: addMfaWidgetKey,
                     onPressed: state.addMFAProvider,
                     icon: const Icon(Icons.add),
-                    label: const Text('Add Multi-Factor Authentication'),
+                    label: Text(t.addMultiFactorAuthentication),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          if (!mfaItems.isEmpty || editedMFA.value != null)
+            MFAProvidersWidget(
+              isLoadingEditingMFA: isLoadingEditingMFA,
+              userMfaItems: userInfo.user.multiFactorAuth,
+              editedMFA: editedMFA,
+              optionalCountController: optionalCountController,
+            ),
+          const SizedBox(height: 25),
+        ],
+      ),
     );
   }
 }
@@ -127,33 +131,43 @@ class MFAProvidersWidget extends StatelessWidget {
   const MFAProvidersWidget({
     super.key,
     required this.isLoadingEditingMFA,
-    required this.mfaItems,
-    required this.isEditingMFA,
+    required this.userMfaItems,
+    required this.editedMFA,
     required this.optionalCountController,
-    required this.state,
   });
 
   final ValueNotifier<bool> isLoadingEditingMFA;
-  final MFAConfig mfaItems;
-  final ValueNotifier<MFAConfig?> isEditingMFA;
+  final MFAConfig userMfaItems;
+  final ValueNotifier<MFAConfig?> editedMFA;
   final TextEditingController optionalCountController;
-  final AuthState state;
+
+  static const mfaLoadingWidgetKey = Key('mfaLoading');
+  static const mfaWidgetKey = Key('mfa');
+  static const mfaOptionalCountWidgetKey = Key('mfaOptionalCount');
+  static const mfaEditWidgetKey = Key('mfaEdit');
+  static const mfaRevertWidgetKey = Key('mfaRevert');
+  static const mfaSubmitUpdateWidgetKey = Key('mfaSubmitUpdate');
 
   @override
   Widget build(BuildContext context) {
+    final state = GlobalState.of(context).authState;
+    final t = getTranslations(context);
+    final mfaItems = editedMFA.value ?? userMfaItems;
     return Card(
       child: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(16),
         constraints: const BoxConstraints(maxWidth: 400),
         child: Column(
-          key: const Key('mfa'),
+          key: mfaWidgetKey,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (isLoadingEditingMFA.value)
-              const LinearProgressIndicator(key: Key('mfa-loading')),
-            Center(
+              const LinearProgressIndicator(key: mfaLoadingWidgetKey),
+            Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(14),
               child: Text(
-                'MFA',
+                t.multiFactorAuthentication,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
@@ -161,11 +175,16 @@ class MFAProvidersWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'Required Providers',
+                  t.requiredProviders,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
             ),
+            if (mfaItems.requiredItems.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Text(t.noRequiredProviders),
+              ),
             ...mfaItems.requiredItems.map(
               (e) => Padding(
                 padding: const EdgeInsets.all(6),
@@ -177,34 +196,34 @@ class MFAProvidersWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'Optional Providers',
+                  t.optionalProviders,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 SizedBox(
-                  width: 120,
+                  width: 135,
                   child: TextFormField(
-                    key: const Key('mfa-optional-count'),
-                    readOnly: isEditingMFA.value == null,
-                    enabled: isEditingMFA.value != null,
+                    key: mfaOptionalCountWidgetKey,
+                    readOnly: editedMFA.value == null,
+                    enabled: editedMFA.value != null,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Optional Count',
+                    decoration: InputDecoration(
+                      labelText: t.optionalAmount,
                     ),
                     controller: optionalCountController,
                     onChanged: (value) {
                       final intValue = int.tryParse(value);
                       if (intValue == null) return;
-                      isEditingMFA.value =
-                          isEditingMFA.value!.changeOptionalCount(intValue);
+                      editedMFA.value =
+                          editedMFA.value!.changeOptionalCount(intValue);
                     },
                   ),
                 ),
               ],
             ),
             if (mfaItems.optionalItems.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(14),
-                child: Text('No optional providers'),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Text(t.noOptionalProviders),
               ),
             ...mfaItems.optionalItems.map(
               (e) => Padding(
@@ -212,52 +231,46 @@ class MFAProvidersWidget extends StatelessWidget {
                 child: Text('- ${e.providerId}: ${e.providerUserId}'),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (isEditingMFA.value == null)
+                if (editedMFA.value == null)
                   ElevatedButton.icon(
-                    key: const Key('mfa-edit'),
+                    key: mfaEditWidgetKey,
                     onPressed: () {
-                      isEditingMFA.value = mfaItems;
+                      editedMFA.value = userMfaItems;
                     },
                     icon: const Icon(Icons.edit),
-                    label: const Text('Edit MFA'),
+                    label: Text(t.editMFA),
                   )
                 else
                   ElevatedButton.icon(
-                    key: const Key('mfa-revert'),
+                    key: mfaRevertWidgetKey,
                     onPressed: () {
-                      isEditingMFA.value = null;
+                      editedMFA.value = null;
                       optionalCountController.text =
-                          mfaItems.optionalCount.toString();
-                      // showDialog(
-                      //   context: context,
-                      //   builder: (context) => SimpleDialog(
-                      //     children: [],
-                      //   ),
-                      // );
+                          userMfaItems.optionalCount.toString();
                     },
                     icon: const Icon(Icons.close),
-                    label: const Text('Revert MFA'),
+                    label: Text(t.revertMFA),
                   ),
-                if (isEditingMFA.value != null)
+                if (editedMFA.value != null)
                   ElevatedButton.icon(
-                    key: const Key('mfa-submit-update'),
+                    key: mfaSubmitUpdateWidgetKey,
                     onPressed: () async {
-                      if (!isEditingMFA.value!.isValid) {
+                      if (!editedMFA.value!.isValid) {
                         // TODO: validate fields
                       }
                       if (isLoadingEditingMFA.value) return;
                       isLoadingEditingMFA.value = true;
-                      await state.setUserMFA(MFAPostData(isEditingMFA.value!));
+                      await state.setUserMFA(MFAPostData(editedMFA.value!));
                       // TODO: errors
-                      isEditingMFA.value = null;
+                      editedMFA.value = null;
                       isLoadingEditingMFA.value = false;
                     },
                     icon: const Icon(Icons.check),
-                    label: const Text('Submit MFA Update'),
+                    label: Text(t.submitMFAUpdate),
                   ),
               ],
             ),
@@ -269,17 +282,31 @@ class MFAProvidersWidget extends StatelessWidget {
 }
 
 class AuthProviderWidget extends HookMobxWidget {
+  ///
   const AuthProviderWidget({
     super.key,
     required this.mfaItems,
-    required this.e,
+    required this.data,
   });
 
   final Widget mfaItems;
-  final AuthUser<void> e;
+  final AuthUserData data;
+
+  static const editWidgetKey = Key('providerEdit');
+  static const deleteWidgetKey = Key('providerDelete');
+  static const providerWidgetKey = Key('provider');
+  static const nameWidgetKey = Key('name');
+  static const emailWidgetKey = Key('email');
+  static const phoneWidgetKey = Key('phone');
+  static const pictureWidgetKey = Key('picture');
 
   @override
   Widget build(BuildContext context) {
+    final t = getTranslations(context);
+    final state = GlobalState.of(context).authState;
+    final userInfo = useValueListenable(state.userInfo);
+    final isDeleting = useState(false);
+    final e = data.authUser;
     final memoryPicture = useMemoized(
       () {
         if (e.picture == null) return null;
@@ -288,13 +315,119 @@ class AuthProviderWidget extends HookMobxWidget {
       },
       [e.picture],
     );
+    final providerUserId = ProviderUserId(
+      providerId: data.authUser.providerId,
+      providerUserId: data.authUser.providerUserId,
+    );
+    final mounted = useIsMounted();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    Future<void> deleteAuthProvider() async {
+      isDeleting.value = true;
+      Navigator.of(context).pop();
+      final result = await state.deleteAuthProvider(providerUserId);
+      if (!mounted()) return;
+      isDeleting.value = false;
+      final error = result?.error?.message ?? result?.error?.error;
+      if (error != null) {
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: colorScheme.error,
+            content: Text(error),
+          ),
+        );
+      }
+    }
+
+    final buttons = Row(
+      children: [
+        if (data.updateParams != null)
+          ElevatedButton.icon(
+            key: editWidgetKey,
+            onPressed: () {
+              showDialog<dynamic>(
+                context: context,
+                builder: (context) {
+                  final navigator = Navigator.of(context);
+                  return Dialog(
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: CredentialsProviderForm(
+                        CredentialsProviderData(
+                          paramDescriptions:
+                              data.updateParams!.paramDescriptions,
+                          providerId: data.authUser.providerId,
+                        ),
+                        updateParams: UpdateCredentialsParams(
+                          data: data,
+                          onUpdate: navigator.pop,
+                          onCancelFlow: navigator.pop,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+            icon: const Icon(Icons.edit),
+            label: Text(t.edit),
+          ),
+        if (userInfo != null && userInfo.authUsers.length > 1)
+          AnimatedCrossFade(
+            duration: const Duration(seconds: 2),
+            crossFadeState: isDeleting.value
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            secondChild: const CircularProgressIndicator(),
+            firstChild: IconButton(
+              key: deleteWidgetKey,
+              // TODO: Delete provider
+              onPressed: userInfo.user.multiFactorAuth.kind(providerUserId) ==
+                      MFAProviderKind.none
+                  ? () async {
+                      await showDialog<void>(
+                        context: context,
+                        builder: (context) {
+                          final navigator = Navigator.of(context);
+                          final colorScheme = Theme.of(context).colorScheme;
+                          return AlertDialog(
+                            content: Text(
+                              t.deleteAuthenticationProviderConfirmation,
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: navigator.pop,
+                                child: Text(t.cancel),
+                              ),
+                              TextButton(
+                                onPressed: deleteAuthProvider,
+                                style: TextButton.styleFrom(
+                                  backgroundColor: colorScheme.error,
+                                  foregroundColor: colorScheme.onError,
+                                ),
+                                child: Text(t.delete),
+                              )
+                            ],
+                          );
+                        },
+                      );
+                    }
+                  : null,
+              icon: const Icon(Icons.delete),
+            ),
+          ),
+      ],
+    );
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           children: [
             Column(
-              key: const Key('provider'),
+              key: providerWidgetKey,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -302,7 +435,7 @@ class AuthProviderWidget extends HookMobxWidget {
                     Row(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.only(right: 14),
                           child: Text(
                             e.providerId,
                             style: Theme.of(context).textTheme.titleMedium,
@@ -311,13 +444,7 @@ class AuthProviderWidget extends HookMobxWidget {
                         mfaItems,
                       ],
                     ),
-                    ElevatedButton.icon(
-                      key: const Key('provider-edit'),
-                      // TODO: change email/phone/password. Delete provider
-                      onPressed: () {},
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Edit'),
-                    ),
+                    buttons,
                   ],
                 ),
               ],
@@ -330,15 +457,15 @@ class AuthProviderWidget extends HookMobxWidget {
                     children: [
                       Row(
                         children: [
-                          const Text('Identifier: '),
+                          Text('${t.identifier}: '),
                           Expanded(child: Text(e.providerUserId)),
                         ],
                       ),
                       if (e.name != null)
                         Row(
-                          key: const Key('name'),
+                          key: nameWidgetKey,
                           children: [
-                            const Text('Name: '),
+                            Text('${t.name}: '),
                             Expanded(
                               child: Text(
                                 e.name!,
@@ -346,28 +473,28 @@ class AuthProviderWidget extends HookMobxWidget {
                             ),
                           ],
                         ),
-                      // TODO: change email/phone/password
                       if (e.email != null)
                         Row(
-                          key: const Key('email'),
+                          key: emailWidgetKey,
                           children: [
-                            const Text('Email: '),
+                            Text('${t.email}: '),
                             Text(e.email!),
+                            const SizedBox(width: 6),
                             Chip(
                               backgroundColor: !e.emailIsVerified
                                   ? Theme.of(context).colorScheme.errorContainer
                                   : null,
                               label: Text(
-                                e.emailIsVerified ? 'verified' : 'not verified',
+                                e.emailIsVerified ? t.verified : t.notVerified,
                               ),
                             ),
                           ],
                         ),
                       if (e.phone != null)
                         Row(
-                          key: const Key('phone'),
+                          key: phoneWidgetKey,
                           children: [
-                            const Text('Phone: '),
+                            Text('${t.phone}: '),
                             Padding(
                               padding: const EdgeInsets.only(right: 4),
                               child: Text(e.phone!),
@@ -377,7 +504,7 @@ class AuthProviderWidget extends HookMobxWidget {
                                   ? Theme.of(context).colorScheme.errorContainer
                                   : null,
                               label: Text(
-                                e.phoneIsVerified ? 'verified' : 'not verified',
+                                e.phoneIsVerified ? t.verified : t.notVerified,
                               ),
                             ),
                           ],
@@ -388,17 +515,18 @@ class AuthProviderWidget extends HookMobxWidget {
                 if (e.picture != null)
                   memoryPicture != null
                       ? Image.memory(
-                          key: const Key('picture'),
+                          key: pictureWidgetKey,
                           memoryPicture,
                           width: 100,
                         )
                       : Image.network(
-                          key: const Key('picture'),
+                          key: pictureWidgetKey,
                           e.picture!,
                           width: 100,
                         ),
               ],
             ),
+            const SizedBox(height: 6),
           ],
         ),
       ),
@@ -415,36 +543,30 @@ class MFAChip extends StatelessWidget {
   });
 
   final MFAProviderKind kind;
-  final void Function()? onTap;
+  final void Function(MFAProviderKind)? onTap;
 
   @override
   Widget build(BuildContext context) {
-    // TODO: use dropdown
-    switch (kind) {
-      case MFAProviderKind.required:
-        return Chip(
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          onDeleted: onTap,
-          label: const Text('MFA req'),
-        );
-      case MFAProviderKind.optional:
-        return Chip(
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          onDeleted: onTap,
-          label: const Text('MFA opt'),
-        );
-      case MFAProviderKind.none:
-        return Chip(
-          backgroundColor: Theme.of(context).colorScheme.background,
-          onDeleted: onTap,
-          label: const Text('no MFA'),
-        );
-    }
+    return SizedBox(
+      width: 120,
+      child: DropdownButtonFormField<MFAProviderKind>(
+        items: MFAProviderKind.values.map(
+          (e) {
+            return DropdownMenuItem(
+              value: e,
+              child: Text(e.name),
+            );
+          },
+        ).toList(),
+        onChanged: onTap == null ? null : (value) => onTap!.call(value!),
+        value: kind,
+      ),
+    );
   }
 }
 
 extension MFAConfigChange on MFAConfig {
-  MFAConfig addRequired(MFAItem item) {
+  MFAConfig addRequired(ProviderUserId item) {
     return MFAConfig(
       requiredItems: {...requiredItems, item},
       optionalCount: optionalCount,
@@ -452,7 +574,7 @@ extension MFAConfigChange on MFAConfig {
     );
   }
 
-  MFAConfig addOptional(MFAItem item) {
+  MFAConfig addOptional(ProviderUserId item) {
     return MFAConfig(
       optionalItems: {...optionalItems, item},
       optionalCount: optionalCount,
@@ -460,7 +582,7 @@ extension MFAConfigChange on MFAConfig {
     );
   }
 
-  MFAConfig removeItem(MFAItem item) {
+  MFAConfig removeItem(ProviderUserId item) {
     return MFAConfig(
       requiredItems: {...requiredItems}..remove(item),
       optionalCount: optionalCount,
