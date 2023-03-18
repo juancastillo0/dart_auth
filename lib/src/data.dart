@@ -1,7 +1,8 @@
 import 'package:meta/meta.dart';
-import 'package:oauth/flow.dart';
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
+
+import '../flow.dart';
+import '../oauth.dart';
+import '../providers.dart';
 
 abstract class Persistence {
   /// Retrieves a saved [AuthStateModel] associated with [key],
@@ -44,6 +45,9 @@ abstract class Persistence {
   /// Retrieves a user by [id].
   Future<AppUserComplete?> getUserById(UserId id) =>
       getUsersById([id]).then((value) => value.first);
+
+  /// Deletes an user account
+  Future<void> deleteAuthUser(String userId, AuthUser<Object?> authUser);
 }
 
 @immutable
@@ -572,7 +576,7 @@ class AppUserComplete implements SerializableToJson {
 
 class UserInfoMe implements SerializableToJson {
   final AppUser user;
-  final List<AuthUser<void>> authUsers;
+  final List<AuthUserData> authUsers;
   final List<UserSessionBase>? sessions;
 
   ///
@@ -624,6 +628,36 @@ class UserInfoMe implements SerializableToJson {
       'user': user,
       'authUsers': authUsers,
       'sessions': sessions,
+    }..removeWhere((key, value) => value == null);
+  }
+}
+
+class AuthUserData implements SerializableToJson {
+  final AuthUser<void> authUser;
+  final ResponseContinueFlow? updateParams;
+
+  ///
+  AuthUserData({
+    required this.authUser,
+    required this.updateParams,
+  });
+
+  factory AuthUserData.fromJson(Map<String, Object?> json) {
+    return AuthUserData(
+      authUser: AuthUser.fromJsonRaw(json['authUser']! as Map<String, Object?>),
+      updateParams: json['updateParams'] == null
+          ? null
+          : ResponseContinueFlow.fromJson(
+              json['updateParams']! as Map<String, Object?>,
+            ),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'authUser': authUser,
+      'updateParams': updateParams,
     }..removeWhere((key, value) => value == null);
   }
 }

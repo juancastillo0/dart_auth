@@ -57,6 +57,15 @@ class UsernamePasswordProvider
   }
 
   @override
+  Future<Result<CredentialsResponse<UsernamePasswordUser>, AuthError>>
+      updateCredentials(
+    UsernamePasswordUser user,
+    UsernamePassword credentials,
+  ) async {
+    return getUser(credentials);
+  }
+
+  @override
   Future<Result<CredentialsResponse<UsernamePasswordUser>, AuthError>> getUser(
     UsernamePassword credentials,
   ) async {
@@ -128,6 +137,33 @@ class UsernamePasswordProvider
       userMessage: 'Input the username and password.',
       // TODO: should we ask for the username? if we should then do not sent it to the client
       paramDescriptions: paramDescriptions,
+    );
+  }
+
+  @override
+  ResponseContinueFlow? updateCredentialsParams(UsernamePasswordUser user) {
+    return ResponseContinueFlow(
+      state: null,
+      // TODO: null user message
+      userMessage: '',
+      paramDescriptions: {
+        'username': usernameDescription.copyWith(initialValue: user.username),
+        // TODO: test empty password
+        'password': passwordDescription,
+      },
+    );
+  }
+
+  @override
+  AuthUser<UsernamePasswordUser> parseUser(Map<String, Object?> userData) {
+    final providerUser = UsernamePasswordUser.fromJson(userData);
+    return AuthUser(
+      providerId: providerId,
+      providerUserId: providerUser.username,
+      emailIsVerified: false,
+      phoneIsVerified: false,
+      rawUserData: userData,
+      providerUser: providerUser,
     );
   }
 }
@@ -240,6 +276,19 @@ abstract class CredentialsProvider<C extends CredentialsData, U>
   /// May return a [CredentialsResponse] without an user if the flow
   /// requires additional verification.
   Future<Result<Option<CredentialsResponse<U>>, AuthError>> verifyCredentials(
+    U user,
+    C credentials,
+  );
+
+  /// The form configuration for the [updateCredentials] flow.
+  /// If it is null, then the credentials cant be updated.
+  ResponseContinueFlow? updateCredentialsParams(U user);
+
+  /// Updates the credentials for the the [user] with the new values
+  /// in [credentials].
+  /// May return a [CredentialsResponse] without an user if the flow
+  /// requires additional verification.
+  Future<Result<CredentialsResponse<U>, AuthError>> updateCredentials(
     U user,
     C credentials,
   );

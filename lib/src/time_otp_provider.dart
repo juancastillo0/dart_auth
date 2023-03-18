@@ -198,6 +198,25 @@ class TimeOneTimePasswordProvider
   }
 
   @override
+  Future<Result<CredentialsResponse<TOTPUser>, AuthError>> updateCredentials(
+    TOTPUser user,
+    TOTPCredentials credentials,
+  ) async {
+    return Err(
+      AuthError(
+        error: 'unsupported',
+        message:
+            'Can not update credentials for ${TimeOneTimePasswordProvider}',
+      ),
+    );
+  }
+
+  @override
+  ResponseContinueFlow? updateCredentialsParams(TOTPUser user) {
+    return null;
+  }
+
+  @override
   AuthUser<TOTPUser> parseUser(Map<String, Object?> userData) {
     final user = TOTPUser.fromJson(userData);
     return AuthUser(

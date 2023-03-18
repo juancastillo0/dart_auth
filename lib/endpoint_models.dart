@@ -275,3 +275,18 @@ class OAuthProviderDevice implements OAuthProviderFlowData {
         json['accessToken']! as String,
       );
 }
+
+class UserMeOrResponse {
+  final UserInfoMe? user;
+  final AuthResponse? error;
+
+  UserMeOrResponse(this.user, this.error);
+
+  factory UserMeOrResponse.fromJson(Map<String, Object?> json) {
+    final isUser = json['user'] is Map;
+    return UserMeOrResponse(
+      isUser ? UserInfoMe.fromJson(json) : null,
+      isUser ? null : AuthResponse.fromJson(json),
+    );
+  }
+}

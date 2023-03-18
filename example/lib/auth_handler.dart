@@ -5,11 +5,12 @@ import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth_example/main.dart';
-import 'package:oauth_example/shelf_helpers.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'main.dart';
+import 'shelf_helpers.dart';
 
 extension ThrowErr<O extends Object, E extends Object> on Result<O, E> {
   /// throws [E] if this is an [Err], else it returns [O] if it is [Ok].
@@ -31,6 +32,7 @@ Handler makeHandler(Config config) {
     if (path == '') {
       if (request.method != 'GET') return Response.notFound(null);
       return Response.ok('<html><body></body></html>');
+      // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
     } else if (path == 'oauth/providers') {
       if (request.method != 'GET') return Response.notFound(null);
       return Response.ok(
@@ -66,6 +68,10 @@ Handler makeHandler(Config config) {
       return handler.getUserMeInfo(request);
     } else if (path == 'user/mfa') {
       return handler.userMFA(request);
+    } else if (RegExp('providers/delete$pIdRegExp').hasMatch(path)) {
+      return handler.authenticationProviderDelete(request);
+    } else if (RegExp('credentials/update$pIdRegExp').hasMatch(path)) {
+      return handler.credentialsUpdate(request);
     } else if (RegExp('credentials/signin$pIdRegExp').hasMatch(path)) {
       return handler.credentialsSignIn(request, signUp: false);
     } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
@@ -912,6 +918,214 @@ class AuthHandler {
           AppUserComplete(user: newUser, authUsers: user.authUsers),
           config.allCredentialsProviders,
           sessions: sessions?.map(UserSessionBase.fromSession).toList(),
+        ),
+      ),
+      headers: jsonHeader,
+    );
+  }
+
+  Future<Response> authenticationProviderDelete(Request request) async {
+    if (request.method != 'DELETE') return Response.notFound(null);
+    final providerId = getProviderId(request);
+    final providerInstance = config.allProviders[providerId] ??
+        config.allCredentialsProviders[providerId];
+    if (providerId == null || providerInstance == null) {
+      return wrongProviderResponse;
+    }
+    final claims = await authenticatedUserOrThrow(request);
+    // TODO: limit claims authentication time
+    final data = await parseBodyOrUrlData(request);
+    if (data is! Map<String, Object?>) {
+      return Response.badRequest();
+    }
+    final providerUserId = data['providerUserId'];
+    if (providerUserId is! String) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'providerUserId is required.'}),
+        headers: jsonHeader,
+      );
+    }
+    final mfaItem = ProviderUserId(
+      providerId: providerInstance.providerId,
+      providerUserId: providerUserId,
+    );
+    final user = await config.persistence
+        .getUserById(UserId(claims.userId, UserIdKind.innerId));
+
+    final authUserIndex = user?.authUsers.indexWhere(
+      (e) =>
+          e.providerUserId == providerUserId &&
+          e.providerId == providerInstance.providerId,
+    );
+    if (user == null) {
+      return Response.internalServerError();
+    } else if (authUserIndex == -1) {
+      // No account found
+      return Response.badRequest(
+        body: jsonEncode(
+          AuthResponse.error('No authentication provider found.'),
+        ),
+        headers: jsonHeader,
+      );
+    } else if (user.authUsers.length == 1) {
+      // Can't delete the only provider
+      return Response.badRequest(
+        body: jsonEncode(
+          AuthResponse.error(
+            'Can not delete the only authentication provider.',
+          ),
+        ),
+        headers: jsonHeader,
+      );
+    } else if (user.user.multiFactorAuth.kind(mfaItem) !=
+        MFAProviderKind.none) {
+      // Can't delete a provider in MFA
+      return Response.badRequest(
+        body: jsonEncode(
+          AuthResponse.error(
+            'Can not delete an authentication provider used in MFA.',
+          ),
+        ),
+        headers: jsonHeader,
+      );
+    }
+
+    final authUser = user.authUsers[authUserIndex!];
+    await config.persistence.deleteAuthUser(
+      user.userId,
+      authUser,
+    );
+
+    return Response.ok(
+      jsonEncode(
+        UserInfoMe.fromComplete(
+          AppUserComplete(
+            user: user.user,
+            authUsers: [...user.authUsers]..removeAt(authUserIndex),
+          ),
+          config.allCredentialsProviders,
+        ),
+      ),
+      headers: jsonHeader,
+    );
+  }
+
+  Future<Response> credentialsUpdate(
+    Request request,
+  ) async {
+    if (request.method != 'PUT') return Response.notFound(null);
+    final providerInstance = getCredentialsProvider(request).throwErr();
+    return _credentialsUpdate(request, providerInstance);
+  }
+
+  Future<Response> _credentialsUpdate<C extends CredentialsData, U>(
+    Request request,
+    CredentialsProvider<C, U> providerInstance,
+  ) async {
+    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claimsMeta =
+        claims?.meta == null ? null : UserMetaClaims.fromJson(claims!.meta!);
+    if (claims == null || claimsMeta == null || !claimsMeta.isLoggedIn) {
+      // TODO: limit claims authentication time
+      return Response.unauthorized(null, headers: jsonHeader);
+    }
+    final data = await parseBodyOrUrlData(request);
+    if (data is! Map<String, Object?>) {
+      return Response.badRequest();
+    }
+    final providerUserId = data['providerUserId'];
+    if (providerUserId is! String) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'providerUserId is required.'}),
+        headers: jsonHeader,
+      );
+    }
+    final credentialsResult = providerInstance.parseCredentials(data);
+    if (credentialsResult.isErr()) {
+      return Response.badRequest(
+        body: jsonEncode({
+          'fieldErrors': credentialsResult
+              .unwrapErr()
+              .map((key, value) => MapEntry(key, value.message)),
+        }),
+        headers: jsonHeader,
+      );
+    }
+
+    final credentials = credentialsResult.unwrap();
+    if (providerUserId != credentials.providerUserId &&
+        credentials.providerUserId != null) {
+      final newUser = await config.persistence.getUserById(
+        UserId(
+          '${providerInstance.providerId}:${credentials.providerUserId}',
+          UserIdKind.providerId,
+        ),
+      );
+      if (newUser != null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Duplicate User.'}),
+          headers: jsonHeader,
+        );
+      }
+    }
+    final userId = UserId(
+      '${providerInstance.providerId}:${providerUserId}',
+      UserIdKind.providerId,
+    );
+    final foundUser = await config.persistence.getUserById(userId);
+    if (foundUser == null) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'User not found.'}),
+        headers: jsonHeader,
+      );
+    } else if (foundUser.userId != claims.userId) {
+      return Response.unauthorized(
+        jsonEncode({'error': 'User not found.'}),
+        headers: jsonHeader,
+      );
+    }
+    final previousUser =
+        foundUser.authUsers.firstWhere((u) => u.userIds().contains(userId));
+    final validation = await providerInstance.updateCredentials(
+      previousUser.providerUser as U,
+      credentials,
+    );
+
+    if (validation.isErr()) {
+      return Response.unauthorized(
+        jsonEncode(validation.unwrapErr().toJson()),
+        headers: jsonHeader,
+      );
+    }
+    final response = validation.unwrap();
+    if (response.flow != null) {
+      return Response.ok(
+        jsonEncode(response.flow!.toJson()),
+        headers: jsonHeader,
+      );
+    }
+
+    // TODO: transaction
+    if (response.user!.key != previousUser.key) {
+      // delete previous user
+      // TODO: should we use a different generated primary key instead of providerId-providerUserId?
+      //  We would not need to delete, just make the update
+      await config.persistence.deleteAuthUser(
+        claims.userId,
+        previousUser,
+      );
+    }
+    // update user
+    final userComplete = await config.persistence.saveUser(
+      claims.userId,
+      response.user!,
+    );
+
+    return Response.ok(
+      jsonEncode(
+        UserInfoMe.fromComplete(
+          userComplete,
+          config.allCredentialsProviders,
         ),
       ),
       headers: jsonHeader,

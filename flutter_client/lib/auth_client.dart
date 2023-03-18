@@ -18,7 +18,7 @@ abstract class ClientPersistence {
 class AuthState {
   ///
   AuthState._({
-    this.baseUrl = 'http://localhost:3000',
+    required this.baseUrl,
     required this.persistence,
   }) {
     _setUpClient();
@@ -236,6 +236,24 @@ class AuthState {
     return response.data;
   }
 
+  Future<UserMeOrResponse?> updateCredentials(CredentialsParams params) async {
+    final response = await credentialsProviderUpdate.request(client, params);
+    if (_isError(response)) return null;
+    if (response.data?.user != null) {
+      userInfo.value = response.data!.user;
+    }
+    return response.data;
+  }
+
+  Future<UserMeOrResponse?> deleteAuthProvider(ProviderUserId params) async {
+    final response = await authenticationProviderDelete.request(client, params);
+    if (_isError(response)) return null;
+    if (response.data?.user != null) {
+      userInfo.value = response.data!.user;
+    }
+    return response.data;
+  }
+
   Future<void> signOut() async {
     if (authenticatedClient.value == null) return;
     final response = await revokeTokenEndpoint.request(client, null);
@@ -292,6 +310,22 @@ class AuthState {
     method: 'POST',
     deserialize: AuthResponse.fromJson,
     serialize: (params) => params.toParams(),
+  );
+
+  static final credentialsProviderUpdate =
+      Endpoint<CredentialsParams, UserMeOrResponse>(
+    path: 'credentials/update',
+    method: 'PUT',
+    deserialize: UserMeOrResponse.fromJson,
+    serialize: (params) => params.toParams(),
+  );
+
+  static final authenticationProviderDelete =
+      Endpoint<ProviderUserId, UserMeOrResponse>(
+    path: 'providers/delete',
+    method: 'DELETE',
+    deserialize: UserMeOrResponse.fromJson,
+    serialize: (params) => ReqParams([params.providerId], params.toJson()),
   );
 
   static final refreshTokenEndpoint = Endpoint<void, AuthResponse>(

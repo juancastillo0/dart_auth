@@ -23,6 +23,13 @@ linter:
     cascade_invocations: false
     constant_identifier_names: false
     non_constant_identifier_names: false
+    prefer_relative_imports: true
+    always_use_package_imports: false
+    avoid_relative_lib_imports: true
+
+analyzer:
+  errors:
+    unrelated_type_equality_checks: error
 
 # analyzer:
 #   exclude:

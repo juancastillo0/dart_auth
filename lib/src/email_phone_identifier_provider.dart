@@ -339,7 +339,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     Map<String, Object?> json,
   ) {
     final password = json['password'];
-    final identifier = json[identifierName];
+    final identifier = json[identifierName] ?? json['providerUserId'];
     final magicCode = json['magicCode'];
     final state = json['state'];
     final name = json['name'];
@@ -425,7 +425,32 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
       },
     );
   }
-}
+
+  @override
+  Future<Result<CredentialsResponse<U>, AuthError>> updateCredentials(
+    U user,
+    IdentifierPassword credentials,
+  ) {
+    // TODO should we do more?
+    return getUser(credentials);
+  }
+
+  @override
+  ResponseContinueFlow? updateCredentialsParams(U user) {
+    return ResponseContinueFlow(
+      state: null,
+      // TODO: null user message
+      userMessage: '',
+      paramDescriptions: {
+        identifierName: identifierDescription.copyWith(
+          initialValue: user.identifier,
+        ),
+        // TODO: test empty password
+        if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
+        // TODO: Name param
+      },
+    );
+  }
 
   @override
   AuthUser<U> parseUser(Map<String, Object?> userData) {

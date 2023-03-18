@@ -95,4 +95,15 @@ class InMemoryPersistance extends Persistence {
       authUsers: prevUser.authUsers,
     );
   }
+
+  @override
+  Future<void> deleteAuthUser(String userId, AuthUser<Object?> authUser) async {
+    mapAuthUser.remove(authUser.key);
+    final prevUser = mapAppUser[userId]!;
+    mapAppUser[userId] = AppUserComplete(
+      user: prevUser.user,
+      authUsers: [...prevUser.authUsers]
+        ..removeWhere((e) => e.key == authUser.key),
+    );
+  }
 }
