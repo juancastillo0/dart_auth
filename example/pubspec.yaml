@@ -11,6 +11,7 @@ dependencies:
   shelf:
   oauth2: ^2.0.1
   pointycastle: ^3.6.2
+  sqlite3: ^1.9.3
   shelf_web_socket: ^1.0.0
   web_socket_channel: ^2.3.0
   shelf_hotreload: ^1.4.0

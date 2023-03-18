@@ -1,3 +1,5 @@
+import 'dart:convert' show jsonDecode;
+
 import 'package:meta/meta.dart';
 
 import '../flow.dart';
@@ -199,16 +201,19 @@ class UserSession implements SerializableToJson {
       userId: json['userId'] as String,
       meta: json['meta'] == null
           ? null
-          : (json['meta'] as Map).map((k, v) => MapEntry(k as String, v)),
+          : ((json['meta'] is String
+                  ? jsonDecode(json['meta'] as String)
+                  : json['meta']) as Map)
+              .map((k, v) => MapEntry(k as String, v)),
       endedAt: json['endedAt'] == null
           ? null
           : DateTime.parse(json['endedAt'] as String),
-      mfa: json['mfa'] == null
-          ? null
-          : (json['mfa'] as Iterable)
-              .cast<Map<String, Object?>>()
-              .map(MFAItem.fromJson)
-              .toList(),
+      mfa: ((json['mfa'] is String
+              ? jsonDecode(json['mfa'] as String)
+              : json['mfa']) as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(ProviderUserId.fromJson)
+          .toList(),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -740,9 +745,15 @@ class AuthUser<T> implements SerializableToJson {
 
   static AuthUser<U> fromJson<U>(
     Map<String, Object?> json,
-    OAuthProvider<U> provider,
-  ) =>
-      provider.parseUser(json);
+    AuthenticationProvider<U> provider,
+  ) {
+    final param = json['rawUserData'] is String
+        ? (jsonDecode(json['rawUserData']! as String) as Map)
+        : json['rawUserData'] is Map
+            ? (json['rawUserData']! as Map)
+            : json;
+    return provider.parseUser(param.cast());
+  }
 
   @override
   Map<String, Object?> toJson() => {

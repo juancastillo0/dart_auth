@@ -6,10 +6,11 @@ import 'package:oauth/providers.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_hotreload/shelf_hotreload.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 import 'auth_handler.dart';
-import 'persistence.dart';
 import 'shelf_helpers.dart';
+import 'sql_database_persistence.dart';
 
 void main() async {
   // ignore: unnecessary_lambdas
@@ -17,43 +18,51 @@ void main() async {
 }
 
 Future<HttpServer> init() async {
-  final persistence = InMemoryPersistance();
-  final credentials = AppCredentialsConfig.fromEnvironment();
-  final allProviders = await credentials.providersMap();
+  final allCredentialsProviders =
+      <String, CredentialsProvider<CredentialsData, dynamic>>{};
+  final persistence = await SQLitePersistence(
+    database: sqlite3.open('./database.sqlite3'),
+    providers: allCredentialsProviders,
+  ).init();
+  // final credentials = AppCredentialsConfig.fromEnvironment();
+  // final allProviders = await credentials.providersMap();
 
-  const port = 8080;
+  const port = 3000;
   const host = 'localhost';
 
-  final config = Config(
-    allProviders: allProviders,
-    allCredentialsProviders: {
-      ImplementedProviders.username: UsernamePasswordProvider(),
-      'phone_no_password': IdentifierPasswordProvider.phone(
-        providerId: 'phone_no_password',
-        magicCodeConfig: MagicCodeConfig(
-          onlyMagicCodeNoPassword: true,
-          sendMagicCode: ({required identifier, required magicCode}) async {
-            print('MAGIC_CODE phone_no_password: $identifier $magicCode');
-            return const Ok(unit);
-          },
-          persistence: persistence,
-        ),
-      ),
-      ImplementedProviders.email: IdentifierPasswordProvider.email(
-        magicCodeConfig: MagicCodeConfig(
-          onlyMagicCodeNoPassword: false,
-          sendMagicCode: ({required identifier, required magicCode}) async {
-            print('MAGIC_CODE email: $identifier $magicCode');
-            return const Ok(unit);
-          },
-          persistence: persistence,
-        ),
-      ),
-      ImplementedProviders.totp: TimeOneTimePasswordProvider(
-        issuer: 'oauth_example',
+  allCredentialsProviders.addAll({
+    ImplementedProviders.username: UsernamePasswordProvider(),
+    'phone_no_password': IdentifierPasswordProvider.phone(
+      providerId: 'phone_no_password',
+      magicCodeConfig: MagicCodeConfig(
+        onlyMagicCodeNoPassword: true,
+        sendMagicCode: ({required identifier, required magicCode}) async {
+          print('MAGIC_CODE phone_no_password: $identifier $magicCode');
+          return const Ok(unit);
+        },
         persistence: persistence,
-      )
-    },
+      ),
+    ),
+    ImplementedProviders.email: IdentifierPasswordProvider.email(
+      magicCodeConfig: MagicCodeConfig(
+        onlyMagicCodeNoPassword: false,
+        sendMagicCode: ({required identifier, required magicCode}) async {
+          print('MAGIC_CODE email: $identifier $magicCode');
+          return const Ok(unit);
+        },
+        persistence: persistence,
+      ),
+    ),
+    ImplementedProviders.totp: TimeOneTimePasswordProvider(
+      issuer: 'oauth_example',
+      persistence: persistence,
+    )
+  });
+
+  final config = Config(
+    // allProviders: allProviders,
+    allProviders: {},
+    allCredentialsProviders: allCredentialsProviders,
     persistence: persistence,
     host: host,
     port: port,
