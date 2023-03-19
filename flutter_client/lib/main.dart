@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:oauth/endpoint_models.dart';
 
 import 'auth_client.dart';
 import 'auth_widgets.dart';
 import 'base_widgets.dart';
+import 'frontend_translations.dart';
 import 'secure_storage.dart';
-import 'translations.dart';
 import 'user_info_widget.dart';
 
 void main() async {
@@ -28,33 +29,46 @@ void main() async {
 }
 
 class GlobalState {
-  final AuthState authState;
-  final List<Translations> supportedTranslations;
-  late final ValueNotifier<Translations> translations;
+  late final AuthState authState;
+  final List<FrontEndTranslations> supportedTranslations;
+  final List<Translations> supportedBackendTranslations;
+  late final ValueNotifier<FrontEndTranslations> translations;
   final ValueNotifier<bool?> darkTheme = ValueNotifier(null);
 
   ///
-  GlobalState(
-    this.authState, {
-    Translations? translations,
+  GlobalState({
+    FrontEndTranslations? translations,
     this.supportedTranslations = const [
-      Translations.defaultEnglish,
-      Translations.defaultSpanish,
+      FrontEndTranslations.defaultEnglish,
+      FrontEndTranslations.defaultSpanish,
     ],
+    this.supportedBackendTranslations = const [],
   }) {
     this.translations =
         ValueNotifier(translations ?? supportedTranslations.first);
   }
 
-  static Future<GlobalState> load({Translations? translations}) async {
-    final authState =
-        await AuthState.load(persistence: SecureStorageClientPersistence());
-
-    return GlobalState(authState, translations: translations);
+  static Future<GlobalState> load({FrontEndTranslations? translations}) async {
+    final globalState = GlobalState(translations: translations);
+    final authState = await AuthState.load(
+      globalState: globalState,
+      persistence: SecureStorageClientPersistence(),
+    );
+    globalState.authState = authState;
+    return globalState;
   }
 
   static GlobalState of(BuildContext context) {
     return InheritedGeneric.get(context);
+  }
+
+  String translate(Translation value) {
+    for (final backendTranslation in supportedBackendTranslations) {
+      if (backendTranslation.languageCode == translations.value.languageCode) {
+        return value.getMessage(backendTranslation);
+      }
+    }
+    return value.msg ?? value.key;
   }
 }
 
@@ -176,7 +190,7 @@ class MainHomePage extends HookWidget {
                         child: ValueListenableBuilder(
                           valueListenable: globalState.translations,
                           builder: (context, translations, _) =>
-                              DropdownButtonFormField<Translations>(
+                              DropdownButtonFormField<FrontEndTranslations>(
                             value: translations,
                             items: [
                               ...globalState.supportedTranslations.map(

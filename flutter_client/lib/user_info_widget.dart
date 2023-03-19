@@ -328,7 +328,7 @@ class AuthProviderWidget extends HookMobxWidget {
       final result = await state.deleteAuthProvider(providerUserId);
       if (!mounted()) return;
       isDeleting.value = false;
-      final error = result?.error?.message ?? result?.error?.error;
+      final error = result?.response?.message ?? result?.response?.error;
       if (error != null) {
         // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(

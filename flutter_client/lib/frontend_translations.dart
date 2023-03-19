@@ -1,12 +1,12 @@
-class Translations {
+class FrontEndTranslations {
   ///
-  const Translations();
+  const FrontEndTranslations();
 
   /// The default english translations
-  static const defaultEnglish = Translations();
+  static const defaultEnglish = FrontEndTranslations();
 
   /// The default spanish translations
-  static const defaultSpanish = SpanishTranslations();
+  static const defaultSpanish = SpanishFrontEndTranslations();
 
   String get languageCode => 'en';
   String? get countryCode => null;
@@ -109,9 +109,9 @@ class Translations {
   String get phone => 'Phone';
 }
 
-class SpanishTranslations implements Translations {
+class SpanishFrontEndTranslations implements FrontEndTranslations {
   ///
-  const SpanishTranslations();
+  const SpanishFrontEndTranslations();
 
   String get languageCode => 'es';
   String? get countryCode => null;

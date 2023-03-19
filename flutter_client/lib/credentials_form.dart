@@ -35,7 +35,8 @@ class CredentialsProviderForm extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getTranslations(context);
-    final state = GlobalState.of(context).authState;
+    final globalState = GlobalState.of(context);
+    final state = globalState.authState;
     // TODO: extract state into a separate class
     final leftMfaItems = useValueListenable(state.leftMfaItems);
     final providerUserIdState = useState<String?>(null);
@@ -102,8 +103,8 @@ class CredentialsProviderForm extends HookWidget {
           if (user == null) {
             // TODO: manage errors
             return;
-          } else if (user.error != null) {
-            response = user.error;
+          } else if (user.response != null) {
+            response = user.response;
           } else {
             return updateParams!.onUpdate();
           }
@@ -120,7 +121,8 @@ class CredentialsProviderForm extends HookWidget {
           errorMessage.value = message;
         }
         if (response.fieldErrors != null) {
-          fieldErrorMessage.value = response.fieldErrors;
+          fieldErrorMessage.value = response.fieldErrors!
+              .map((key, value) => MapEntry(key, globalState.translate(value)));
         }
         if (response.credentials != null) {
           credentials.value = response.credentials;
@@ -168,8 +170,10 @@ class CredentialsProviderForm extends HookWidget {
                 yield TextFormField(
                   key: Key(e.key),
                   decoration: InputDecoration(
-                    labelText: value.name,
-                    helperText: value.description,
+                    labelText: globalState.translate(value.name),
+                    helperText: value.description == null
+                        ? null
+                        : globalState.translate(value.description!),
                     hintText: value.hint,
                     errorText: fieldErrorMessage.value?[e.key],
                     errorMaxLines: 100,
@@ -186,7 +190,9 @@ class CredentialsProviderForm extends HookWidget {
                       ? null
                       : (str) => regExp.hasMatch(str ?? '')
                           ? null
-                          : (value.description ?? ''),
+                          : globalState.translate(
+                              value.description ?? Translation.empty,
+                            ),
                   onChanged: (value) {
                     params.value[e.key] = value;
                     fieldErrorMessage.value = null;
@@ -203,7 +209,7 @@ class CredentialsProviderForm extends HookWidget {
               if (cred.userMessage != null)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(cred.userMessage!),
+                  child: Text(globalState.translate(cred.userMessage!)),
                 ),
               if (cred.qrUrl != null)
                 BarcodeWidget(
@@ -254,7 +260,7 @@ class CredentialsProviderForm extends HookWidget {
             ElevatedButton(
               onPressed: onSubmit,
               child: credentials.value?.buttonText != null
-                  ? Text(credentials.value!.buttonText!)
+                  ? Text(globalState.translate(credentials.value!.buttonText!))
                   : Text(t.submit),
             ),
           ],

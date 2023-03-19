@@ -50,6 +50,14 @@ class OAuthErrorResponse implements Exception, SerializableToJson {
   /// The raw JSON object or additional data for the error.
   final Map<String, Object?>? jsonData;
 
+  /// Returns a error message with [error], [errorDescription] and [errorUri].
+  static String? errorUserMessage(OAuthErrorResponse e) {
+    if (e.error == null) return null;
+    final desc = e.errorDescription == null ? '' : ': ${e.errorDescription}';
+    final url = e.errorUri == null ? '' : ' (${e.errorUri})';
+    return '${e.error}$desc$url';
+  }
+
   @override
   String toString() {
     return 'OAuthErrorResponse(${{

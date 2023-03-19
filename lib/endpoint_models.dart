@@ -1,14 +1,17 @@
 import 'oauth.dart';
 import 'providers.dart';
+import 'src/backend_translation.dart';
 
+export 'src/backend_translation.dart';
+
+// TODO maybe split AuthResponseSuccess and AuthResponseError?
 class AuthResponse implements SerializableToJson {
   final String? refreshToken;
   final String? accessToken;
   final DateTime? expiresAt;
   final String? error;
   final String? message;
-  final String? code;
-  final Map<String, String>? fieldErrors;
+  final Map<String, Translation>? fieldErrors;
   final ResponseContinueFlow? credentials;
   final List<MFAItemWithFlow>? leftMfaItems;
 
@@ -19,7 +22,6 @@ class AuthResponse implements SerializableToJson {
     required this.expiresAt,
     required this.error,
     required this.message,
-    required this.code,
     this.credentials,
     this.fieldErrors,
     this.leftMfaItems,
@@ -36,9 +38,9 @@ class AuthResponse implements SerializableToJson {
           : DateTime.parse(json['expiresAt']! as String),
       error: json['error'] as String?,
       message: json['message'] as String?,
-      code: json['code'] as String?,
       credentials: credentials,
-      fieldErrors: (json['fieldErrors'] as Map?)?.cast(),
+      fieldErrors: (json['fieldErrors'] as Map?)
+          ?.map((k, v) => MapEntry(k as String, Translation.fromJson(v))),
       leftMfaItems: json['leftMfaItems'] == null
           ? null
           : (json['leftMfaItems']! as Iterable)
@@ -51,7 +53,7 @@ class AuthResponse implements SerializableToJson {
   factory AuthResponse.error(
     String error, {
     String? message,
-    String? code,
+    Map<String, Translation>? fieldErrors,
   }) {
     return AuthResponse(
       refreshToken: null,
@@ -59,7 +61,27 @@ class AuthResponse implements SerializableToJson {
       expiresAt: null,
       error: error,
       message: message,
-      code: code,
+      fieldErrors: fieldErrors,
+    );
+  }
+
+  factory AuthResponse.fromError(AuthError error) {
+    return AuthResponse.error(error.error, message: error.message);
+  }
+
+  factory AuthResponse.success({
+    required String? refreshToken,
+    required String? accessToken,
+    required DateTime? expiresAt,
+    List<MFAItemWithFlow>? leftMfaItems,
+  }) {
+    return AuthResponse(
+      refreshToken: refreshToken,
+      accessToken: accessToken,
+      expiresAt: expiresAt,
+      leftMfaItems: leftMfaItems,
+      error: null,
+      message: null,
     );
   }
 
@@ -72,7 +94,6 @@ class AuthResponse implements SerializableToJson {
       'expiresAt': expiresAt?.toIso8601String(),
       'error': error,
       'message': message,
-      'code': code,
       'fieldErrors': fieldErrors,
       'leftMfaItems': leftMfaItems,
     }..removeWhere((key, value) => value == null);
@@ -88,7 +109,7 @@ class MFAItemWithFlow implements SerializableToJson {
   final ProviderUserId mfa;
   final ResponseContinueFlow? credentialsInfo;
 
-  MFAItemWithFlow(this.mfa, this.credentialsInfo);
+  const MFAItemWithFlow(this.mfa, this.credentialsInfo);
 
   @override
   Map<String, Object?> toJson() {
@@ -248,45 +269,72 @@ abstract class OAuthProviderFlowData {
   String get accessToken;
 }
 
-class OAuthProviderUrl implements OAuthProviderFlowData {
+class OAuthProviderUrl implements OAuthProviderFlowData, SerializableToJson {
   final String url;
   final String accessToken;
 
   ///
-  OAuthProviderUrl(this.url, this.accessToken);
+  OAuthProviderUrl({
+    required this.url,
+    required this.accessToken,
+  });
 
   factory OAuthProviderUrl.fromJson(Map<String, Object?> json) =>
       OAuthProviderUrl(
-        json['url']! as String,
-        json['accessToken']! as String,
+        url: json['url']! as String,
+        accessToken: json['accessToken']! as String,
       );
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'url': url,
+      'accessToken': accessToken,
+    };
+  }
 }
 
-class OAuthProviderDevice implements OAuthProviderFlowData {
+class OAuthProviderDevice implements OAuthProviderFlowData, SerializableToJson {
   final DeviceCodeResponse device;
   final String accessToken;
 
   ///
-  OAuthProviderDevice(this.device, this.accessToken);
+  OAuthProviderDevice({
+    required this.device,
+    required this.accessToken,
+  });
 
   factory OAuthProviderDevice.fromJson(Map<String, Object?> json) =>
       OAuthProviderDevice(
-        DeviceCodeResponse.fromJson(json['device']! as Map),
-        json['accessToken']! as String,
+        device: DeviceCodeResponse.fromJson(json['device']! as Map),
+        accessToken: json['accessToken']! as String,
       );
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'device': device,
+      'accessToken': accessToken,
+    };
+  }
 }
 
-class UserMeOrResponse {
+class UserMeOrResponse implements SerializableToJson {
   final UserInfoMe? user;
-  final AuthResponse? error;
+  final AuthResponse? response;
 
-  UserMeOrResponse(this.user, this.error);
+  UserMeOrResponse.user(UserInfoMe this.user) : response = null;
+  UserMeOrResponse.response(AuthResponse this.response) : user = null;
 
   factory UserMeOrResponse.fromJson(Map<String, Object?> json) {
     final isUser = json['user'] is Map;
-    return UserMeOrResponse(
-      isUser ? UserInfoMe.fromJson(json) : null,
-      isUser ? null : AuthResponse.fromJson(json),
-    );
+    return isUser
+        ? UserMeOrResponse.user(UserInfoMe.fromJson(json))
+        : UserMeOrResponse.response(AuthResponse.fromJson(json));
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return user == null ? response!.toJson() : user!.toJson();
   }
 }

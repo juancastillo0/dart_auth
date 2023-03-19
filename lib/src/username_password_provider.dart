@@ -1,6 +1,7 @@
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
-import 'package:oauth/src/password.dart';
+import '../oauth.dart';
+import '../providers.dart';
+import 'backend_translation.dart';
+import 'password.dart';
 
 class UsernamePasswordProvider
     extends CredentialsProvider<UsernamePassword, UsernamePasswordUser> {
@@ -15,14 +16,13 @@ class UsernamePasswordProvider
         passwordDescription = passwordDescription ?? defaultPasswordDescription;
 
   static final defaultUsernameDescription = ParamDescription(
-    name: 'Username',
-    description: 'Alphanumeric username with at least 3 characters.'
-        ' This will be your identifier to sign in.',
+    name: const Translation(key: Translations.usernameNameKey),
+    description: const Translation(key: Translations.usernameDescriptionKey),
     regExp: RegExp(r'^[a-zA-Z0-9_-]{3,}$'),
   );
   static final defaultPasswordDescription = ParamDescription(
-    name: 'Password',
-    description: 'Should be at least 8 characters.',
+    name: const Translation(key: Translations.passwordNameKey),
+    description: const Translation(key: Translations.passwordDescriptionKey),
     regExp: RegExp(r'[\s\S]{8,}'),
     obscureText: true,
   );
@@ -99,7 +99,7 @@ class UsernamePasswordProvider
       {'username': usernameDescription, 'password': passwordDescription};
 
   @override
-  Result<UsernamePassword, Map<String, FormatException>> parseCredentials(
+  Result<UsernamePassword, Map<String, Translation>> parseCredentials(
     Map<String, Object?> json,
   ) {
     final password = json['password'];
@@ -107,12 +107,14 @@ class UsernamePasswordProvider
     if (password is! String || username is! String) {
       return Err({
         if (username is! String)
-          'username': const FormatException(
-            'Should have an username.',
+          'username': const Translation(
+            key: Translations.requiredArgumentKey,
+            args: {'name': 'username'},
           ),
         if (password is! String)
-          'password': const FormatException(
-            'Should have a password.',
+          'password': const Translation(
+            key: Translations.requiredArgumentKey,
+            args: {'name': 'password'},
           ),
       });
     }
@@ -134,7 +136,9 @@ class UsernamePasswordProvider
   ) async {
     return ResponseContinueFlow(
       state: null,
-      userMessage: 'Input the username and password.',
+      userMessage: const Translation(
+        key: Translations.usernamePasswordFlowMessageKey,
+      ),
       // TODO: should we ask for the username? if we should then do not sent it to the client
       paramDescriptions: paramDescriptions,
     );
@@ -144,8 +148,7 @@ class UsernamePasswordProvider
   ResponseContinueFlow? updateCredentialsParams(UsernamePasswordUser user) {
     return ResponseContinueFlow(
       state: null,
-      // TODO: null user message
-      userMessage: '',
+      userMessage: Translation.empty,
       paramDescriptions: {
         'username': usernameDescription.copyWith(initialValue: user.username),
         // TODO: test empty password
@@ -181,6 +184,7 @@ class AuthError {
     return {
       'error': error,
       'message': message,
+      'translation': Translation(key: error, msg: message),
     };
   }
 
@@ -267,8 +271,8 @@ abstract class CredentialsProvider<C extends CredentialsData, U>
   Map<String, ParamDescription>? get paramDescriptions;
 
   /// Parses a [json] Map into the credentials [C] or returns a Map of
-  /// [FormatException]s for the fields that contain an error.
-  Result<C, Map<String, FormatException>> parseCredentials(
+  /// [Translation]s for the fields that contain an error.
+  Result<C, Map<String, Translation>> parseCredentials(
     Map<String, Object?> json,
   );
 
@@ -326,15 +330,15 @@ class CredentialsResponse<U> {
 class ResponseContinueFlow implements SerializableToJson {
   final String? redirectUrl;
   final String? qrUrl;
-  final String? userMessage;
-  final String? buttonText;
+  final Translation? userMessage;
+  final Translation? buttonText;
   final String? state;
   final Map<String, ParamDescription>? paramDescriptions;
 
   ///
   ResponseContinueFlow({
     required this.state,
-    required String this.userMessage,
+    required Translation this.userMessage,
     this.redirectUrl,
     this.qrUrl,
     this.paramDescriptions,
@@ -344,10 +348,12 @@ class ResponseContinueFlow implements SerializableToJson {
   factory ResponseContinueFlow.fromJson(Map<String, Object?> json) {
     return ResponseContinueFlow(
       state: json['state'] as String?,
-      userMessage: json['userMessage']! as String,
+      userMessage: Translation.fromJson(json['userMessage']),
       redirectUrl: json['redirectUrl'] as String?,
       qrUrl: json['qrUrl'] as String?,
-      buttonText: json['buttonText'] as String?,
+      buttonText: json['buttonText'] == null
+          ? null
+          : Translation.fromJson(json['buttonText']),
       paramDescriptions: json['paramDescriptions'] == null
           ? null
           : (json['paramDescriptions']! as Map).map(
@@ -441,8 +447,8 @@ class NumberParamKeyboardType implements SerializableToJson {
 }
 
 class ParamDescription implements SerializableToJson {
-  final String name;
-  final String? description;
+  final Translation name;
+  final Translation? description;
   final RegExp? regExp;
   final bool required;
   final String? initialValue;
@@ -473,8 +479,10 @@ class ParamDescription implements SerializableToJson {
 
   factory ParamDescription.fromJson(Map<String, Object?> json) {
     return ParamDescription(
-      name: json['name']! as String,
-      description: json['description'] as String?,
+      name: Translation.fromJson(json['name']),
+      description: json['description'] == null
+          ? null
+          : Translation.fromJson(json['description']),
       regExp: json['regExp'] == null ? null : RegExp(json['regExp']! as String),
       paramsDescriptions: json['paramsDescriptions'] == null
           ? null
@@ -504,19 +512,23 @@ class ParamDescription implements SerializableToJson {
     );
   }
 
-  FormatException? validate(String value) {
+  Translation? validate(String value) {
     if (regExp != null && !regExp!.hasMatch(value)) {
-      return FormatException(
-        '$name does not match ${description ?? 'validation'}'
-        ' (${regExp!.pattern}).',
+      return Translation(
+        key: Translations.validationErrorKey,
+        args: {
+          'name': name,
+          'description': description,
+          'pattern': regExp!.pattern,
+        },
       );
     }
     return null;
   }
 
   ParamDescription copyWith({
-    String? name,
-    String? description,
+    Translation? name,
+    Translation? description,
     bool descriptionToNull = false,
     RegExp? regExp,
     bool regExpToNull = false,

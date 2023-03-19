@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert' show base64Encode, jsonDecode, utf8;
 
-import 'package:oauth/flow.dart';
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
-import 'package:oauth/src/openid_configuration.dart';
+import '../flow.dart';
+import '../oauth.dart';
+import '../providers.dart';
+import 'openid_configuration.dart';
 
 export 'package:oauth/src/code_challenge.dart';
 export 'package:oauth/src/response_models.dart';
@@ -12,6 +12,7 @@ export 'package:oauth/src/response_models.dart';
 class Headers {
   static const contentType = 'content-type';
   static const accept = 'accept';
+  static const acceptLanguage = 'accept-language';
   static const authorization = 'authorization';
   static const appJson = 'application/json';
   static const appFormUrlEncoded = 'application/x-www-form-urlencoded';

@@ -1,7 +1,9 @@
-import 'package:oauth/flow.dart';
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
 import 'package:otp/otp.dart';
+
+import '../flow.dart';
+import '../oauth.dart';
+import '../providers.dart';
+import 'backend_translation.dart';
 
 class TimeOneTimePasswordProvider
     implements CredentialsProvider<TOTPCredentials, TOTPUser> {
@@ -11,11 +13,13 @@ class TimeOneTimePasswordProvider
     required this.persistence,
     this.providerId = ImplementedProviders.totp,
     this.config = const TOTPConfig(),
+    this.createFlowUserMessage,
     ParamDescription? totpDescription,
   }) : totpDescription = totpDescription ??
             ParamDescription(
-              name: 'One Time Password Code',
-              description: 'The code presented in your authenticator app.',
+              name: const Translation(key: Translations.totpNameKey),
+              description:
+                  const Translation(key: Translations.totpDescriptionKey),
               regExp: RegExp('^[0-9]{${config.digits}}\$'),
               keyboardType: ParamKeyboardType.number,
             );
@@ -25,6 +29,8 @@ class TimeOneTimePasswordProvider
   final String issuer;
   final Persistence persistence;
   final TOTPConfig config;
+  final Translation Function({required String base32Secret})?
+      createFlowUserMessage;
   // TODO: allow sign in with providerUserId
 
   final ParamDescription totpDescription;
@@ -97,11 +103,12 @@ class TimeOneTimePasswordProvider
           ResponseContinueFlow(
             state: state,
             qrUrl: qrUrl,
-            // TODO: make it configurable/localized
-            userMessage: 'Use the an authenticator application that supports'
-                ' Time-Base One-Time Passwords (TOTP) such as'
-                ' Google Authenticator, Twilio Authy or Microsoft Authenticator.'
-                ' Setup key: "$base32Secret".',
+            userMessage:
+                createFlowUserMessage?.call(base32Secret: base32Secret) ??
+                    Translation(
+                      key: Translations.totpCreateFlowKey,
+                      args: {'base32Secret': base32Secret},
+                    ),
             paramDescriptions: initiatedFlowParamDescriptions,
           ),
         ),
@@ -110,7 +117,7 @@ class TimeOneTimePasswordProvider
   }
 
   @override
-  Result<TOTPCredentials, Map<String, FormatException>> parseCredentials(
+  Result<TOTPCredentials, Map<String, Translation>> parseCredentials(
     Map<String, Object?> json,
   ) {
     final totp = json['totp'];
@@ -119,15 +126,23 @@ class TimeOneTimePasswordProvider
     if ((totp is! String?) ||
         (state is! String?) ||
         (providerUserId is! String?)) {
-      return Err({
-        if (totp is! String?)
-          'totp': const FormatException('totp should be a String'),
-        if (state is! String?)
-          'state': const FormatException('state should be a String'),
-        if (providerUserId is! String?)
-          'providerUserId':
-              const FormatException('providerUserId should be a String'),
-      });
+      return Err(
+        Map.fromEntries(
+          [
+            if (totp is! String?) 'totp',
+            if (state is! String?) 'state',
+            if (providerUserId is! String?) 'providerUserId',
+          ].map(
+            (e) => MapEntry(
+              e,
+              Translation(
+                key: Translations.requiredStringArgumentKey,
+                args: {'name': e},
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     return Ok(
@@ -182,7 +197,6 @@ class TimeOneTimePasswordProvider
     return model;
   }
 
-  // TODO: improve CredentialsResponse type
   @override
   Future<ResponseContinueFlow?> mfaCredentialsFlow(
     ProviderUserId mfaItem,
@@ -190,9 +204,11 @@ class TimeOneTimePasswordProvider
     // final state = await saveState(user);
     return ResponseContinueFlow(
       state: null,
-      // TODO: make text configurable. Should we send providerUserId to the client?
-      userMessage: 'Input the TOTP code shown in your authenticator app'
-          ' for the account "${mfaItem.providerUserId}".',
+      // TODO: Should we send providerUserId to the client?
+      userMessage: Translation(
+        key: Translations.totpAuthenticateFlowKey,
+        args: {'providerUserId': mfaItem.providerUserId},
+      ),
       paramDescriptions: initiatedFlowParamDescriptions,
     );
   }

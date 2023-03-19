@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:oauth/endpoint_models.dart' show Translation;
 
-import 'translations.dart';
+import 'frontend_translations.dart';
+import 'main.dart';
 
 export 'hooks_mobx.dart' show HookMobxWidget;
 
-Translations getTranslations(BuildContext context) {
+FrontEndTranslations getTranslations(BuildContext context) {
   return InheritedGeneric.depend(context);
+}
+
+String translate(BuildContext context, Translation value) {
+  return GlobalState.of(context).translate(value);
 }
 
 class InheritedGeneric<T> extends InheritedWidget {

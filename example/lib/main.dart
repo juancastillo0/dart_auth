@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 import 'package:shelf/shelf.dart';
@@ -67,6 +68,10 @@ Future<HttpServer> init() async {
     host: host,
     port: port,
     baseRedirectUri: 'http://${host}:${port}',
+    translations: const [
+      Translations.defaultEnglish,
+      Translations.defaultSpanish,
+    ],
     jwtMaker: JsonWebTokenMaker(
       issuer: Uri.parse('oauth_example'),
       // TODO:
@@ -96,6 +101,7 @@ Future<HttpServer> startServer(Config config) async {
 class Config {
   final Map<String, OAuthProvider> allProviders;
   final Map<String, CredentialsProvider> allCredentialsProviders;
+  final List<Translations> translations;
   final Persistence persistence;
   final String baseRedirectUri;
   final JsonWebTokenMaker jwtMaker;
@@ -114,6 +120,22 @@ class Config {
     required this.jwtMaker,
     required this.port,
     required this.host,
+    this.translations = const [Translations.defaultEnglish],
     HttpClient? client,
   }) : client = client ?? HttpClient();
+
+  Translations getTranslationForLanguage(List<String>? languages) {
+    if (languages == null || languages.isEmpty) {
+      return translations.first;
+    }
+    for (final lang in languages) {
+      final langKey = lang.split('-').first.toLowerCase();
+      for (final translation in translations) {
+        if (translation.languageCode == langKey) {
+          return translation;
+        }
+      }
+    }
+    return translations.first;
+  }
 }

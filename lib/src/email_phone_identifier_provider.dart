@@ -1,9 +1,10 @@
 import 'dart:math';
 
-import 'package:oauth/flow.dart';
-import 'package:oauth/oauth.dart';
-import 'package:oauth/providers.dart';
-import 'package:oauth/src/password.dart';
+import '../flow.dart';
+import '../oauth.dart';
+import '../providers.dart';
+import 'backend_translation.dart';
+import 'password.dart';
 
 class MagicCodeConfig<U> {
   ///
@@ -11,7 +12,7 @@ class MagicCodeConfig<U> {
     required this.onlyMagicCodeNoPassword,
     required this.sendMagicCode,
     required this.persistence,
-    this.userMessage = 'A code has been sent',
+    this.userMessage = const Translation(key: Translations.magicCodeSentKey),
     this.generateMagicCode = defaultGenerateMagicCode,
   });
 
@@ -33,8 +34,9 @@ class MagicCodeConfig<U> {
     return GeneratedMagicCode(
       code,
       ParamDescription(
-        name: 'Code',
-        description: 'The code sent to your device',
+        name: const Translation(key: Translations.magicCodeNameKey),
+        description:
+            const Translation(key: Translations.magicCodeDescriptionKey),
         regExp: RegExp('^[${RegExp.escape(alphabet)}]{${count}}\$'),
         keyboardType: RegExp(r'^[0-9]+$').hasMatch(alphabet)
             ? ParamKeyboardType.number
@@ -43,7 +45,7 @@ class MagicCodeConfig<U> {
     );
   }
 
-  final String userMessage;
+  final Translation userMessage;
   final bool onlyMagicCodeNoPassword;
   final Future<Result<Unit, AuthError>> Function({
     required String identifier,
@@ -79,6 +81,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     this.redirectUrl,
     this.useIsolateForHashing = true,
     this.normalizeIdentifier,
+    this.withName = true,
   }) : passwordDescription = passwordDescription ??
             UsernamePasswordProvider.defaultPasswordDescription;
 
@@ -92,6 +95,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     String? redirectUrl,
     bool useIsolateForHashing = true,
     String Function(String)? normalizeEmail,
+    bool withName = true,
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -104,14 +108,15 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
       useIsolateForHashing: useIsolateForHashing,
       normalizeIdentifier: normalizeEmail ?? defaultNormalizeEmail,
       userFromJson: EmailPasswordUser.fromJson,
+      withName: withName,
     );
   }
 
   /// The default identifier parameter description
   /// used in [IdentifierPasswordProvider.email]
   static final defaultEmailDescription = ParamDescription(
-    name: 'Email',
-    description: 'The email address. This will be your identifier to sign in.',
+    name: const Translation(key: Translations.emailNameKey),
+    description: const Translation(key: Translations.emailDescriptionKey),
     regExp: RegExp('@'),
     keyboardType: ParamKeyboardType.emailAddress,
   );
@@ -134,6 +139,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     String? redirectUrl,
     bool useIsolateForHashing = true,
     String Function(String)? normalizePhone,
+    bool withName = true,
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -146,14 +152,15 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
       useIsolateForHashing: useIsolateForHashing,
       normalizeIdentifier: normalizePhone,
       userFromJson: PhonePasswordUser.fromJson,
+      withName: withName,
     );
   }
 
   /// The default identifier parameter description
   /// used in [IdentifierPasswordProvider.phone]
   static final defaultPhoneDescription = ParamDescription(
-    name: 'Phone',
-    description: 'The phone number. This will be your identifier to sign in.',
+    name: const Translation(key: Translations.phoneNameKey),
+    description: const Translation(key: Translations.phoneDescriptionKey),
     regExp: RegExp(r'^[0-9]{7,}$'),
     keyboardType: ParamKeyboardType.phone,
   );
@@ -169,6 +176,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
   final U Function(Map<String, Object?> json) userFromJson;
   final MagicCodeConfig<U>? magicCodeConfig;
   final String Function(String)? normalizeIdentifier;
+  final bool withName;
 
   bool get onlyMagicCodeNoPassword =>
       magicCodeConfig?.onlyMagicCodeNoPassword ?? false;
@@ -178,14 +186,15 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     return {
       identifierName: identifierDescription,
       if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
-      // TODO: make it required? configurable? localization/internationalization
-      'name': ParamDescription(
-        name: 'Name',
-        description: null,
-        regExp: null,
-        keyboardType: ParamKeyboardType.name,
-        textCapitalization: ParamTextCapitalization.words,
-      ),
+      // TODO: make it required?
+      if (withName)
+        'name': ParamDescription(
+          name: const Translation(key: Translations.nameNameKey),
+          description: null,
+          regExp: null,
+          keyboardType: ParamKeyboardType.name,
+          textCapitalization: ParamTextCapitalization.words,
+        ),
     };
   }
 
@@ -335,7 +344,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
   }
 
   @override
-  Result<IdentifierPassword, Map<String, FormatException>> parseCredentials(
+  Result<IdentifierPassword, Map<String, Translation>> parseCredentials(
     Map<String, Object?> json,
   ) {
     final password = json['password'];
@@ -348,28 +357,25 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
         (magicCode is! String?) ||
         (state is! String?) ||
         (name is! String?)) {
-      return Err({
-        if (identifier is! String?)
-          identifierName: const FormatException(
-            'Should have an String identifier.',
+      return Err(
+        Map.fromEntries(
+          [
+            if (identifier is! String?) 'identifier',
+            if (password is! String?) 'password',
+            if (magicCode is! String?) 'magicCode',
+            if (state is! String?) 'state',
+            if (name is! String?) 'name',
+          ].map(
+            (e) => MapEntry(
+              e,
+              Translation(
+                key: Translations.requiredStringArgumentKey,
+                args: {'name': e},
+              ),
+            ),
           ),
-        if (password is! String?)
-          'password': const FormatException(
-            'Should have a String password.',
-          ),
-        if (magicCode is! String?)
-          'magicCode': const FormatException(
-            'Should have a String magicCode.',
-          ),
-        if (state is! String?)
-          'state': const FormatException(
-            'Should have a String state.',
-          ),
-        if (name is! String?)
-          'name': const FormatException(
-            'Should have a String name.',
-          ),
-      });
+        ),
+      );
     }
 
     // onlyMagicCodeNoPassword -> identifier -> magicCode
@@ -379,12 +385,14 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
         identifier is! String) {
       return Err({
         if (identifier is! String)
-          identifierName: const FormatException(
-            'Should have an identifier.',
+          identifierName: Translation(
+            key: Translations.requiredArgumentKey,
+            args: {'name': identifierName},
           ),
         if (password is! String)
-          'password': const FormatException(
-            'Should have a password.',
+          'password': const Translation(
+            key: Translations.requiredArgumentKey,
+            args: {'name': 'password'},
           ),
       });
     }
@@ -417,8 +425,8 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     return ResponseContinueFlow(
       state: null,
       userMessage: magicCodeConfig != null
-          ? 'A magic code will be sent to the device'
-          : 'Input the credentials',
+          ? const Translation(key: Translations.magiCodeHelperTextKey)
+          : const Translation(key: Translations.passwordHelperTextKey),
       paramDescriptions: {
         identifierName: identifierDescription,
         if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
@@ -439,8 +447,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
   ResponseContinueFlow? updateCredentialsParams(U user) {
     return ResponseContinueFlow(
       state: null,
-      // TODO: null user message
-      userMessage: '',
+      userMessage: Translation.empty,
       paramDescriptions: {
         identifierName: identifierDescription.copyWith(
           initialValue: user.identifier,

@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'endpoint.dart';
+import 'main.dart';
 
 abstract class ClientPersistence {
   FutureOr<String?> read(String key);
@@ -20,6 +22,7 @@ class AuthState {
   AuthState._({
     required this.baseUrl,
     required this.persistence,
+    required this.globalState,
   }) {
     _setUpClient();
     authenticatedClient.addListener(_setUpClient);
@@ -27,10 +30,15 @@ class AuthState {
 
   static Future<AuthState> load({
     required ClientPersistence persistence,
+    required GlobalState globalState,
     String baseUrl = 'http://localhost:3000',
   }) async {
     final token = await persistence.read(persistenceTokenKey);
-    final state = AuthState._(baseUrl: baseUrl, persistence: persistence);
+    final state = AuthState._(
+      globalState: globalState,
+      baseUrl: baseUrl,
+      persistence: persistence,
+    );
     if (token != null) {
       await state._processAuthResponse(
         AuthResponse.fromJson(
@@ -43,18 +51,33 @@ class AuthState {
 
   static const persistenceTokenKey = 'authStateTokenKey';
 
+  final GlobalState globalState;
   final ClientPersistence persistence;
   late ClientWithConfig client;
   final String baseUrl;
 
+  http.Request _mapRequest(http.Request request) {
+    final t = globalState.translations.value;
+    if (!request.headers.containsKey(Headers.acceptLanguage)) {
+      final countrySuffix = t.countryCode == null ? '' : '-${t.countryCode}';
+      final headerValue = '${t.languageCode}${countrySuffix}';
+      request.headers[Headers.acceptLanguage] = headerValue;
+    }
+    return request;
+  }
+
   void _setUpClient() {
     if (authenticatedClient.value == null) {
-      client = ClientWithConfig(baseUrl: baseUrl);
+      client = ClientWithConfig(
+        baseUrl: baseUrl,
+        mapRequest: _mapRequest,
+      );
     } else {
       // TODO: revert authenticated client on change of access token
       client = ClientWithConfig(
         baseUrl: baseUrl,
         client: authenticatedClient.value,
+        mapRequest: _mapRequest,
       );
     }
   }
