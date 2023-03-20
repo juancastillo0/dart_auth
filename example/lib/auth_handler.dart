@@ -103,20 +103,16 @@ shelf.Handler makeHandler(Config config) {
       // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
     } else if (path == 'oauth/providers') {
       if (request.method != 'GET') return shelf.Response.notFound(null);
-      return shelf.Response.ok(
-        // TODO: jsonEncodeWithTranslate
-        jsonEncode(
-          AuthProvidersData(
-            config.allProviders.values
-                .map(OAuthProviderData.fromProvider)
-                .toList(),
-            config.allCredentialsProviders.values
-                .map(CredentialsProviderData.fromProvider)
-                .toList(),
-            // TODO: maybe leave it to the front end?
-          ).toJson(basePath: config.baseRedirectUri),
+      response = Response.ok(
+        AuthProvidersData(
+          config.allProviders.values
+              .map(OAuthProviderData.fromProvider)
+              .toList(),
+          config.allCredentialsProviders.values
+              .map(CredentialsProviderData.fromProvider)
+              .toList(),
+          // TODO: .toJson(basePath: config.baseRedirectUri) maybe leave it to the front end?
         ),
-        headers: jsonHeader,
       );
     } else if (RegExp('oauth/url$pIdRegExp').hasMatch(path)) {
       response = await handler.getOAuthUrl(request);

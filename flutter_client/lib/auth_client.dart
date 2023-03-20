@@ -26,6 +26,7 @@ class AuthState {
   }) {
     _setUpClient();
     authenticatedClient.addListener(_setUpClient);
+    globalState.translations.addListener(_refetchOnLanguageChange);
   }
 
   static Future<AuthState> load({
@@ -79,6 +80,13 @@ class AuthState {
         client: authenticatedClient.value,
         mapRequest: _mapRequest,
       );
+    }
+  }
+
+  void _refetchOnLanguageChange() {
+    getProviders();
+    if (userInfo.value != null) {
+      getUserInfoMe();
     }
   }
 
@@ -144,6 +152,9 @@ class AuthState {
     if (authenticatedClient.value == null) return null;
     final response = await getUserMeEndpoint.request(client, null);
     if (_isError(response)) return null;
+    if (response.data != null) {
+      userInfo.value = response.data;
+    }
     return response.data;
   }
 
@@ -211,8 +222,6 @@ class AuthState {
         authenticatedClient.value = null;
 
         await persistence.delete(persistenceTokenKey);
-      } else {
-        userInfo.value = userInfoResponse;
       }
       cancelCurrentFlow();
     } else if (response.leftMfaItems != null) {

@@ -655,7 +655,7 @@ class SpanishTranslations implements Translations {
   String get userNotFound => 'Usuario no encontrado';
   @override
   String get usernameDescription =>
-      'Identificador alpha-numérico de al menos caracteres.'
+      'Identificador alpha-numérico de al menos 3 caracteres.'
       ' Este será tu identificador para iniciar sesión.';
   @override
   String get usernameName => 'Identificador de Usuario';
