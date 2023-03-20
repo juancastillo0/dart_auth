@@ -132,11 +132,12 @@ class CredentialsProviderForm extends HookWidget {
       }
     }
 
+    final providerName = globalState.translate(data.providerName);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '${updateParams == null ? '' : '${t.update} '}${data.providerId}',
+          '${updateParams == null ? '' : '${t.update} '}$providerName',
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 10),

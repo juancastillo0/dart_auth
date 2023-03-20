@@ -593,15 +593,18 @@ class UserInfoMe implements SerializableToJson {
 
   factory UserInfoMe.fromComplete(
     AppUserComplete user,
-    Map<String, CredentialsProvider<dynamic, dynamic>>
-        allCredentialsProviders, {
+    Map<String, AuthenticationProvider<dynamic>> allProviders, {
     List<UserSessionBase>? sessions,
   }) {
     final authUsers = user.authUsers.map((e) {
-      final p = allCredentialsProviders[e.providerId];
+      final p = allProviders[e.providerId];
       return AuthUserData(
         authUser: e,
-        updateParams: p?.updateCredentialsParams(e.providerUser),
+        providerName:
+            p?.providerName ?? Translation(key: '${e.providerId}ProviderName'),
+        updateParams: p is CredentialsProvider
+            ? p.updateCredentialsParams(e.providerUser)
+            : null,
       );
     }).toList();
     return UserInfoMe(
@@ -639,17 +642,20 @@ class UserInfoMe implements SerializableToJson {
 
 class AuthUserData implements SerializableToJson {
   final AuthUser<void> authUser;
+  final Translation providerName;
   final ResponseContinueFlow? updateParams;
 
   ///
   AuthUserData({
     required this.authUser,
+    required this.providerName,
     required this.updateParams,
   });
 
   factory AuthUserData.fromJson(Map<String, Object?> json) {
     return AuthUserData(
       authUser: AuthUser.fromJsonRaw(json['authUser']! as Map<String, Object?>),
+      providerName: Translation.fromJson(json['providerName']),
       updateParams: json['updateParams'] == null
           ? null
           : ResponseContinueFlow.fromJson(
@@ -662,6 +668,7 @@ class AuthUserData implements SerializableToJson {
   Map<String, Object?> toJson() {
     return {
       'authUser': authUser,
+      'providerName': providerName,
       'updateParams': updateParams,
     }..removeWhere((key, value) => value == null);
   }

@@ -99,6 +99,7 @@ Future<HttpServer> startServer(Config config) async {
 class Config {
   final Map<String, OAuthProvider> allOAuthProviders;
   final Map<String, CredentialsProvider> allCredentialsProviders;
+  late final Map<String, AuthenticationProvider> allProviders;
   final List<Translations> translations;
   final Persistence persistence;
   final String baseRedirectUri;
@@ -125,7 +126,7 @@ class Config {
   }
 
   void _validate() {
-    final allProviders = {...allOAuthProviders, ...allCredentialsProviders};
+    allProviders = {...allOAuthProviders, ...allCredentialsProviders};
     if (allProviders.length !=
         allOAuthProviders.length + allCredentialsProviders.length) {
       throw Exception(

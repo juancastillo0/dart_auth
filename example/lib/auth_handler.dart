@@ -977,7 +977,7 @@ class AuthHandler {
     return Response.ok(
       UserInfoMe.fromComplete(
         user,
-        config.allCredentialsProviders,
+        config.allProviders,
         sessions: sessions?.map(UserSessionBase.fromSession).toList(),
       ),
     );
@@ -1026,7 +1026,7 @@ class AuthHandler {
     return Response.ok(
       UserInfoMe.fromComplete(
         AppUserComplete(user: newUser, authUsers: user.authUsers),
-        config.allCredentialsProviders,
+        config.allProviders,
         sessions: sessions?.map(UserSessionBase.fromSession).toList(),
       ),
     );
@@ -1101,7 +1101,7 @@ class AuthHandler {
           user: user.user,
           authUsers: [...user.authUsers]..removeAt(authUserIndex),
         ),
-        config.allCredentialsProviders,
+        config.allProviders,
       ),
     );
   }
@@ -1205,7 +1205,7 @@ class AuthHandler {
     return Response.ok(
       UserInfoMe.fromComplete(
         userComplete,
-        config.allCredentialsProviders,
+        config.allProviders,
       ),
     );
   }

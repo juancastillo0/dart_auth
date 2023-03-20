@@ -165,7 +165,7 @@ class MFAProvidersWidget extends StatelessWidget {
               const LinearProgressIndicator(key: mfaLoadingWidgetKey),
             Container(
               alignment: Alignment.center,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Text(
                 t.multiFactorAuthentication,
                 style: Theme.of(context).textTheme.headlineSmall,
@@ -358,6 +358,7 @@ class AuthProviderWidget extends HookMobxWidget {
                         CredentialsProviderData(
                           paramDescriptions:
                               data.updateParams!.paramDescriptions,
+                          providerName: data.providerName,
                           providerId: data.authUser.providerId,
                         ),
                         updateParams: UpdateCredentialsParams(
@@ -437,7 +438,7 @@ class AuthProviderWidget extends HookMobxWidget {
                         Padding(
                           padding: const EdgeInsets.only(right: 14),
                           child: Text(
-                            e.providerId,
+                            translate(context, data.providerName),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                         ),

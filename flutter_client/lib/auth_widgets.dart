@@ -53,7 +53,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(data.providerId),
+            Text(translate(context, data.providerName)),
             Text(data.defaultScopes.toString()),
           ],
         ),

@@ -1,6 +1,5 @@
-import 'oauth.dart';
-import 'providers.dart';
-import 'src/backend_translation.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
 
 export 'src/backend_translation.dart';
 
@@ -135,6 +134,9 @@ class MFAItemWithFlow implements SerializableToJson {
 abstract class AuthProviderData {
   /// The identifier of this provider
   String get providerId;
+
+  /// The name of this provider
+  Translation get providerName;
 }
 
 class AuthProvidersData implements SerializableToJson {
@@ -169,17 +171,21 @@ class AuthProvidersData implements SerializableToJson {
 class CredentialsProviderData implements SerializableToJson, AuthProviderData {
   @override
   final String providerId;
+  @override
+  final Translation providerName;
   final Map<String, ParamDescription>? paramDescriptions;
 
   ///
   CredentialsProviderData({
     required this.providerId,
+    required this.providerName,
     required this.paramDescriptions,
   });
 
   factory CredentialsProviderData.fromJson(Map<String, Object?> json) {
     return CredentialsProviderData(
       providerId: json['providerId']! as String,
+      providerName: Translation.fromJson(json['providerName']),
       paramDescriptions: json['paramDescriptions'] == null
           ? null
           : (json['paramDescriptions']! as Map).map(
@@ -196,6 +202,7 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
   ) {
     return CredentialsProviderData(
       providerId: e.providerId,
+      providerName: e.providerName,
       paramDescriptions: e.paramDescriptions,
     );
   }
@@ -204,6 +211,7 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
   Map<String, Object?> toJson() {
     return {
       'providerId': providerId,
+      'providerName': providerName,
       'paramDescriptions': paramDescriptions,
     };
   }
@@ -212,6 +220,8 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
 class OAuthProviderData implements SerializableToJson, AuthProviderData {
   @override
   final String providerId;
+  @override
+  final Translation providerName;
   final List<String> defaultScopes;
   final OAuthButtonStyles buttonStyles;
   final bool openIdConnectSupported;
@@ -221,6 +231,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   ///
   OAuthProviderData({
     required this.providerId,
+    required this.providerName,
     required this.defaultScopes,
     required this.buttonStyles,
     required this.openIdConnectSupported,
@@ -231,6 +242,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   factory OAuthProviderData.fromJson(Map<String, Object?> json) {
     return OAuthProviderData(
       providerId: json['providerId']! as String,
+      providerName: Translation.fromJson(json['providerName']),
       defaultScopes: (json['defaultScopes']! as List).cast(),
       buttonStyles:
           OAuthButtonStyles.fromJson((json['buttonStyles']! as Map).cast()),
@@ -243,6 +255,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   factory OAuthProviderData.fromProvider(OAuthProvider<Object?> e) {
     return OAuthProviderData(
       providerId: e.providerId,
+      providerName: e.providerName,
       defaultScopes: e.defaultScopes,
       buttonStyles: e.buttonStyles,
       openIdConnectSupported: e.defaultScopes.contains('openid'),
@@ -255,6 +268,7 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
   Map<String, Object?> toJson({String? basePath}) {
     return {
       'providerId': providerId,
+      'providerName': providerName,
       'defaultScopes': defaultScopes,
       'buttonStyles': buttonStyles.toJson(basePath: basePath),
       'openIdConnectSupported': openIdConnectSupported,
@@ -266,11 +280,13 @@ class OAuthProviderData implements SerializableToJson, AuthProviderData {
 
 /// Either [OAuthProviderUrl] or [OAuthProviderDevice]
 abstract class OAuthProviderFlowData {
+  /// The JWT token to be used for this flow
   String get accessToken;
 }
 
 class OAuthProviderUrl implements OAuthProviderFlowData, SerializableToJson {
   final String url;
+  @override
   final String accessToken;
 
   ///
@@ -296,6 +312,7 @@ class OAuthProviderUrl implements OAuthProviderFlowData, SerializableToJson {
 
 class OAuthProviderDevice implements OAuthProviderFlowData, SerializableToJson {
   final DeviceCodeResponse device;
+  @override
   final String accessToken;
 
   ///
