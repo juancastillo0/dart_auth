@@ -149,32 +149,34 @@ class MainHomePage extends HookWidget {
           final t = getTranslations(context);
           return AlertDialog(
             content: SizedBox(
-              width: 300,
+              width: 400,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      SizedBox(width: 180, child: Text('Theme Brightness')),
+                      SizedBox(
+                        width: 200,
+                        child: Text(t.themeBrightnessSetting),
+                      ),
                       Expanded(
                         child: ValueListenableBuilder(
                           valueListenable: globalState.darkTheme,
                           builder: (context, darkTheme, _) =>
                               DropdownButtonFormField<bool?>(
                             value: darkTheme,
-                            items: const [
-                              // TODO: translate
+                            items: [
                               DropdownMenuItem(
                                 value: null,
-                                child: Text('System'),
+                                child: Text(t.themeBrightnessSystem),
                               ),
                               DropdownMenuItem(
                                 value: false,
-                                child: Text('Light'),
+                                child: Text(t.themeBrightnessLight),
                               ),
                               DropdownMenuItem(
                                 value: true,
-                                child: Text('Dark'),
+                                child: Text(t.themeBrightnessDark),
                               ),
                             ],
                             onChanged: (v) => globalState.darkTheme.value = v,
@@ -183,9 +185,10 @@ class MainHomePage extends HookWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 5),
                   Row(
                     children: [
-                      SizedBox(width: 180, child: Text('Language')),
+                      SizedBox(width: 200, child: Text(t.languageSetting)),
                       Expanded(
                         child: ValueListenableBuilder(
                           valueListenable: globalState.translations,

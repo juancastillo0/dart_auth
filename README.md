@@ -20,6 +20,7 @@ and the Flutter guide for
     - [Log Out](#log-out)
       - [Log Out multiple sessions](#log-out-multiple-sessions)
     - [JSON Web Tokens (JWT)](#json-web-tokens-jwt)
+      - [Multiple Sessions](#multiple-sessions)
       - [Refresh Token](#refresh-token)
     - [OAuth2 Callbacks](#oauth2-callbacks)
       - [OAuth2 Notifications Webhooks](#oauth2-notifications-webhooks)
@@ -73,6 +74,8 @@ know whether this package might be useful for them.
 
 
 ### JSON Web Tokens (JWT)
+
+#### Multiple Sessions
 
 #### Refresh Token
 

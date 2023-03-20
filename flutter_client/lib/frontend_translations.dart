@@ -8,12 +8,37 @@ class FrontEndTranslations {
   /// The default spanish translations
   static const defaultSpanish = SpanishFrontEndTranslations();
 
+  /// The language code in lowercase
   String get languageCode => 'en';
+
+  /// The country code in uppercase
   String? get countryCode => null;
+
+  // Settings
+
+  /// The name used for selecting this translation in the user interface
   String get localeName => 'English';
 
+  /// Translation for 'Close'
   String get close => 'Close';
+
+  /// Translation for 'Settings'
   String get settings => 'Settings';
+
+  /// Translation for 'Language'
+  String get languageSetting => 'Language';
+
+  /// Translation for 'Brightness'
+  String get themeBrightnessSetting => 'Theme Brightness';
+
+  /// Translation for 'Predetermined'
+  String get themeBrightnessSystem => 'Predetermined';
+
+  /// Translation for 'Light'
+  String get themeBrightnessLight => 'Light';
+
+  /// Translation for 'Dark'
+  String get themeBrightnessDark => 'Dark';
 
   // Credentials
 
@@ -113,12 +138,27 @@ class SpanishFrontEndTranslations implements FrontEndTranslations {
   ///
   const SpanishFrontEndTranslations();
 
+  @override
   String get languageCode => 'es';
+  @override
   String? get countryCode => null;
+  @override
   String get localeName => 'Español';
 
+  @override
   String get close => 'Cerrar';
+  @override
   String get settings => 'Configuración';
+  @override
+  String get languageSetting => 'Lenguaje';
+  @override
+  String get themeBrightnessSetting => 'Claridad de Interfaz';
+  @override
+  String get themeBrightnessSystem => 'Predeterminada';
+  @override
+  String get themeBrightnessLight => 'Clara';
+  @override
+  String get themeBrightnessDark => 'Oscura';
 
   /// Credentials
   @override
