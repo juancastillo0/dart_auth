@@ -3,8 +3,8 @@ import 'dart:convert' show jsonDecode;
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
-export 'package:oauth/src/providers/twitter_user.dart';
-export 'package:oauth/src/providers/twitter_verify_credentials.dart';
+export 'twitter_user.dart';
+export 'twitter_verify_credentials.dart';
 
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/user-access-token
 /// https://developer.twitter.com/en/docs/authentication/oauth-2-0/authorization-code
@@ -15,6 +15,10 @@ class TwitterProvider extends OAuthProvider<TwitterUserData> {
   /// https://developer.twitter.com/en/docs/authentication/guides/v2-authentication-mapping
   const TwitterProvider({
     super.providerId = ImplementedProviders.twitter,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.twitter}ProviderName',
+      msg: 'Twitter',
+    ),
     required super.clientId,
     required super.clientSecret,
     super.config = const OAuthProviderConfig(

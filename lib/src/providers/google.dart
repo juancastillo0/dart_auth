@@ -21,11 +21,15 @@ class GoogleProvider extends OpenIdConnectProvider<GoogleClaims> {
   /// https://developers.google.com/identity/openid-connect/openid-connect
   /// https://developers.google.com/identity/protocols/oauth2/web-server
   GoogleProvider({
-    super.providerId = ImplementedProviders.google,
-    OAuthProviderConfig? config,
     required super.openIdConfig,
     required super.clientId,
     required super.clientSecret,
+    super.providerId = ImplementedProviders.google,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.google}ProviderName',
+      msg: 'Google',
+    ),
+    OAuthProviderConfig? config,
     OAuthButtonStyles? buttonStyles,
   }) : super(
           buttonStyles: buttonStyles ??

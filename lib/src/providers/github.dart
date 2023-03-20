@@ -1,11 +1,9 @@
-// ignore_for_file: non_constant_identifier_names, constant_identifier_names
-
 import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
-export 'package:oauth/src/providers/github_token.dart';
+export 'github_token.dart';
 
 /// https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps
 class GithubProvider extends OAuthProvider<GithubToken> {
@@ -14,6 +12,10 @@ class GithubProvider extends OAuthProvider<GithubToken> {
     required super.clientId,
     required super.clientSecret,
     super.providerId = ImplementedProviders.github,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.github}ProviderName',
+      msg: 'Github',
+    ),
     super.config = const GithubProviderConfig(scope: 'read:user user:email'),
     super.buttonStyles = const OAuthButtonStyles(
       logo: 'github.svg',

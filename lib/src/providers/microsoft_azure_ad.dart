@@ -8,7 +8,7 @@ import 'dart:convert' show base64Encode;
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
-export 'package:oauth/src/openid_claims.dart';
+export '../openid_claims.dart';
 
 /// https://learn.microsoft.com/en-us/azure/active-directory/develop/scopes-oidc
 /// https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app
@@ -20,6 +20,10 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     required super.clientId,
     required super.clientSecret,
     super.providerId = ImplementedProviders.microsoft,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.microsoft}ProviderName',
+      msg: 'Microsoft',
+    ),
     super.config = const MicrosoftAuthParams(),
     OAuthButtonStyles? buttonStyles,
     this.profilePictureSize = 96,

@@ -105,7 +105,7 @@ shelf.Handler makeHandler(Config config) {
       if (request.method != 'GET') return shelf.Response.notFound(null);
       response = Response.ok(
         AuthProvidersData(
-          config.allProviders.values
+          config.allOAuthProviders.values
               .map(OAuthProviderData.fromProvider)
               .toList(),
           config.allCredentialsProviders.values
@@ -175,7 +175,7 @@ class AuthHandler {
 
   Response<O, AuthResponse>
       wrongProviderResponse<O extends SerializableToJson>() {
-    final providers = config.allProviders.keys
+    final providers = config.allOAuthProviders.keys
         .followedBy(config.allCredentialsProviders.keys)
         .join('", "');
     return Response.badRequest(
@@ -198,7 +198,7 @@ class AuthHandler {
 
   Result<OAuthProvider, Response> getProvider(Request request) {
     final providerId = getProviderId(request);
-    final providerInstance = config.allProviders[providerId];
+    final providerInstance = config.allOAuthProviders[providerId];
     if (providerInstance == null) {
       return Err(wrongProviderResponse());
     }
@@ -605,7 +605,7 @@ class AuthHandler {
     } else if (meta.token == null) {
       return const Ok(None());
     } else {
-      final providerInstance = config.allProviders[claimsMeta.providerId]!;
+      final providerInstance = config.allOAuthProviders[claimsMeta.providerId]!;
       final result = await processOAuthToken(
         meta.token!,
         providerInstance,
@@ -638,7 +638,7 @@ class AuthHandler {
       return Response.forbidden(null);
     }
     final meta = UserMetaClaims.fromJson(claims!.meta!);
-    final providerInstance = config.allProviders[meta.providerId];
+    final providerInstance = config.allOAuthProviders[meta.providerId];
     if (providerInstance == null) {
       return Response.internalServerError(
         body: AuthResponse.error('Provider not found'),
@@ -832,7 +832,7 @@ class AuthHandler {
         }
 
         final meta = UserMetaClaims.fromJson(claims!.meta!);
-        final provider = config.allProviders[meta.providerId];
+        final provider = config.allOAuthProviders[meta.providerId];
         if (provider == null) {
           // TODO: maybe other error
           return _closeUnauthorized();
@@ -1037,7 +1037,7 @@ class AuthHandler {
   ) async {
     if (request.method != 'DELETE') return Response.notFound(null);
     final providerId = getProviderId(request);
-    final providerInstance = config.allProviders[providerId] ??
+    final providerInstance = config.allOAuthProviders[providerId] ??
         config.allCredentialsProviders[providerId];
     if (providerId == null || providerInstance == null) {
       return wrongProviderResponse();

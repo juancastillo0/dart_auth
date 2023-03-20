@@ -1,9 +1,8 @@
+import 'package:oauth/flow.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/backend_translation.dart';
 import 'package:otp/otp.dart';
-
-import '../flow.dart';
-import '../oauth.dart';
-import '../providers.dart';
-import 'backend_translation.dart';
 
 class TimeOneTimePasswordProvider
     implements CredentialsProvider<TOTPCredentials, TOTPUser> {
@@ -12,6 +11,9 @@ class TimeOneTimePasswordProvider
     required this.issuer,
     required this.persistence,
     this.providerId = ImplementedProviders.totp,
+    this.providerName = const Translation(
+      key: Translations.totpProviderNameKey,
+    ),
     this.config = const TOTPConfig(),
     this.createFlowUserMessage,
     ParamDescription? totpDescription,
@@ -26,14 +28,30 @@ class TimeOneTimePasswordProvider
 
   @override
   final String providerId;
+  @override
+  final Translation providerName;
+
+  /// The issuer uri of the secret token. This will be shown in the user
+  /// interface of the user's authenticator app. Could be an identifier or name
+  /// of you application.
   final String issuer;
+
+  /// The persistence, used to save the authentication state
   final Persistence persistence;
+
+  /// Configuration for generating the totp
   final TOTPConfig config;
+
+  /// Returns a message for the user to save the account in the authentication
+  /// app and input the totp given the secret key
   final Translation Function({required String base32Secret})?
       createFlowUserMessage;
   // TODO: allow sign in with providerUserId
 
+  /// The description of the totp field
   final ParamDescription totpDescription;
+
+  /// The field description for sign in with an already created account
   Map<String, ParamDescription> get initiatedFlowParamDescriptions =>
       {'totp': totpDescription};
 
@@ -246,16 +264,28 @@ class TimeOneTimePasswordProvider
   }
 }
 
-///
+/// The algorithm used to hash the time
 typedef TOTPAlgorithm = Algorithm;
 
+/// The configuration for generating the totp.
+/// You probably should not change the default since some authentication
+/// applications may not work with different configurations.
 class TOTPConfig {
+  /// The number of digits that a totp has
   final int digits;
+
+  /// The seconds to recompute the new totp
   final int period;
+
+  /// The algorithm used to hash the time
   final TOTPAlgorithm algorithm;
+
+  /// Whether it is using Google's padding
   final bool isGoogle;
 
-  ///
+  /// The configuration for generating the totp.
+  /// You probably should not change the default since some authentication
+  /// applications may not work with different configurations.
   const TOTPConfig({
     this.digits = 6,
     this.period = 30,
@@ -263,6 +293,7 @@ class TOTPConfig {
     this.isGoogle = true,
   });
 
+  /// Maps the configuration to query parameters
   Map<String, String> toQueryParameters() {
     return {
       'digits': digits.toString(),
@@ -293,7 +324,10 @@ class TOTPCredentials implements CredentialsData {
 }
 
 class TOTPUser implements SerializableToJson {
+  /// The secret used to hash the totp
   final String base32Secret;
+
+  /// The account identifier
   final String providerUserId;
 
   ///

@@ -10,11 +10,15 @@ class AppleProvider extends OpenIdConnectProvider<AppleClaims> {
   /// https://developer.apple.com/documentation/sign_in_with_apple/configuring_your_environment_for_sign_in_with_apple
   /// https://developer.apple.com/documentation/sign_in_with_apple/sign_in_with_apple_js/incorporating_sign_in_with_apple_into_other_platforms
   AppleProvider({
+    required super.clientId,
+    required super.clientSecret,
     super.providerId = ImplementedProviders.apple,
     // TODO: openid shows up in the .well-known/openid-configuration, but not in the docs , response_type='code id_token' shows in the docs, but not in the configuration
     super.config = const AppleAuthParams(scope: 'openid name email'),
-    required super.clientId,
-    required super.clientSecret,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.apple}ProviderName',
+      msg: 'Apple',
+    ),
     super.buttonStyles = const OAuthButtonStyles(
       logo: 'apple.svg',
       logoDark: 'apple-dark.svg',

@@ -9,9 +9,13 @@ class DiscordProvider extends OAuthProvider<DiscordOAuth2Me> {
   /// https://discord.com/developers/docs/topics/oauth2
   /// https://discord.com/developers/applications
   const DiscordProvider({
-    super.providerId = ImplementedProviders.discord,
     required super.clientId,
     required super.clientSecret,
+    super.providerId = ImplementedProviders.discord,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.discord}ProviderName',
+      msg: 'Discord',
+    ),
 
     /// https://discord.com/developers/docs/topics/oauth2#webhooks Send messages to a channel
     /// scopes -> webhook.incoming

@@ -3,7 +3,7 @@ import 'dart:convert' show jsonDecode;
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
-export 'package:oauth/src/providers/facebook_user.dart';
+export 'facebook_user.dart';
 
 /// https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow#confirm
 class FacebookProvider extends OAuthProvider<FacebookUser> {
@@ -15,6 +15,10 @@ class FacebookProvider extends OAuthProvider<FacebookUser> {
     // required for device code flow
     required this.clientToken,
     super.providerId = ImplementedProviders.facebook,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.facebook}ProviderName',
+      msg: 'Facebook',
+    ),
     // comma separated scopes, TODO: 'openid,public_profile,email'
     super.config = const OAuthProviderConfig(scope: 'public_profile,email'),
     super.buttonStyles = const OAuthButtonStyles(

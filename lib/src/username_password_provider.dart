@@ -1,7 +1,7 @@
-import '../oauth.dart';
-import '../providers.dart';
-import 'backend_translation.dart';
-import 'password.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/backend_translation.dart';
+import 'package:oauth/src/password.dart';
 
 class UsernamePasswordProvider
     extends CredentialsProvider<UsernamePassword, UsernamePasswordUser> {
@@ -12,6 +12,9 @@ class UsernamePasswordProvider
     ParamDescription? passwordDescription,
     this.redirectUrl,
     this.useIsolateForHashing = true,
+    this.providerName = const Translation(
+      key: Translations.usernameProviderNameKey,
+    ),
   })  : usernameDescription = usernameDescription ?? defaultUsernameDescription,
         passwordDescription = passwordDescription ?? defaultPasswordDescription;
 
@@ -29,6 +32,8 @@ class UsernamePasswordProvider
 
   @override
   final String providerId;
+  @override
+  final Translation providerName;
   // TODO: add name description
   final ParamDescription usernameDescription;
   final ParamDescription passwordDescription;
@@ -214,7 +219,7 @@ class AuthError {
   );
 }
 
-class UsernamePasswordUser {
+class UsernamePasswordUser implements SerializableToJson {
   final String username;
   final String passwordHash;
 
@@ -224,6 +229,7 @@ class UsernamePasswordUser {
     required this.passwordHash,
   });
 
+  @override
   Map<String, Object?> toJson() {
     return {
       'username': username,
@@ -257,8 +263,14 @@ abstract class AuthenticationProvider<U> {
   /// The unique global provider identifier
   String get providerId;
 
+  /// The name of the provider to be presented to the user
+  Translation get providerName;
+
   /// Parses the [userData] JSON and returns the generic [AuthUser] model.
   AuthUser<U> parseUser(Map<String, Object?> userData);
+
+  /// The regular expression the [providerId] must match
+  static final providerIdRegExp = RegExp(r'^[a-zA-Z0-9-_]+$');
 }
 
 abstract class CredentialsProvider<C extends CredentialsData, U>

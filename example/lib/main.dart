@@ -4,14 +4,13 @@ import 'dart:io';
 import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+import 'package:oauth_example/auth_handler.dart';
+import 'package:oauth_example/shelf_helpers.dart';
+import 'package:oauth_example/sql_database_persistence.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_hotreload/shelf_hotreload.dart';
 import 'package:sqlite3/sqlite3.dart';
-
-import 'auth_handler.dart';
-import 'shelf_helpers.dart';
-import 'sql_database_persistence.dart';
 
 void main() async {
   // ignore: unnecessary_lambdas
@@ -61,8 +60,7 @@ Future<HttpServer> init() async {
   });
 
   final config = Config(
-    // allProviders: allProviders,
-    allProviders: {},
+    allOAuthProviders: {},
     allCredentialsProviders: allCredentialsProviders,
     persistence: persistence,
     host: host,
@@ -97,9 +95,9 @@ Future<HttpServer> startServer(Config config) async {
   return server;
 }
 
-/// The main configuration por the server
+/// The main configuration for the server
 class Config {
-  final Map<String, OAuthProvider> allProviders;
+  final Map<String, OAuthProvider> allOAuthProviders;
   final Map<String, CredentialsProvider> allCredentialsProviders;
   final List<Translations> translations;
   final Persistence persistence;
@@ -111,9 +109,9 @@ class Config {
 
   final HttpClient client;
 
-  /// The main configuration por the server
+  /// The main configuration for the server
   Config({
-    required this.allProviders,
+    required this.allOAuthProviders,
     required this.allCredentialsProviders,
     required this.persistence,
     required this.baseRedirectUri,
@@ -122,14 +120,49 @@ class Config {
     required this.host,
     this.translations = const [Translations.defaultEnglish],
     HttpClient? client,
-  }) : client = client ?? HttpClient();
+  }) : client = client ?? HttpClient() {
+    _validate();
+  }
 
+  void _validate() {
+    final allProviders = {...allOAuthProviders, ...allCredentialsProviders};
+    if (allProviders.length !=
+        allOAuthProviders.length + allCredentialsProviders.length) {
+      throw Exception(
+        'Duplicate authentication provider ids found.'
+        '\n$allOAuthProviders\n$allCredentialsProviders',
+      );
+    }
+    final wrongProviderId = allProviders.entries
+        .where(
+          (e) =>
+              e.key != e.value.providerId ||
+              !AuthenticationProvider.providerIdRegExp.hasMatch(e.key),
+        )
+        .toList();
+    if (wrongProviderId.isNotEmpty) {
+      throw Exception('Wrong provider ids $wrongProviderId.');
+    }
+    if (translations.isEmpty) {
+      throw Exception(
+        'Can not have an empty translations list.'
+        ' You could use Translations.defaultEnglish as a default.',
+      );
+    }
+  }
+
+  /// Retrieves the [Translations] from [translations] given the [languages]
+  /// in a https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept-Language header
+  /// format.
+  ///
+  /// Returns the first translation if no [languages] matches any of
+  /// the supported [translations].
   Translations getTranslationForLanguage(List<String>? languages) {
     if (languages == null || languages.isEmpty) {
       return translations.first;
     }
     for (final lang in languages) {
-      final langKey = lang.split('-').first.toLowerCase();
+      final langKey = lang.split(';').first.split('-').first.toLowerCase();
       for (final translation in translations) {
         if (translation.languageCode == langKey) {
           return translation;

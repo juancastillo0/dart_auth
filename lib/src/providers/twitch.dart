@@ -12,6 +12,10 @@ class TwitchProvider extends OpenIdConnectProvider<TwitchUser> {
     required super.clientSecret,
     super.config = const OAuthProviderConfig(scope: defaultScopesString),
     super.providerId = ImplementedProviders.twitch,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.twitch}ProviderName',
+      msg: 'Twitch',
+    ),
     super.buttonStyles = const OAuthButtonStyles(
       logo: 'twitch.svg',
       logoDark: 'twitch-dark.svg',

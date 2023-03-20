@@ -69,7 +69,7 @@ void main() async {
 
     setUpAll(() async {
       config = Config(
-        allProviders: allProviders,
+        allOAuthProviders: allProviders,
         allCredentialsProviders: {
           // TODO: test isolates
           ImplementedProviders.username: UsernamePasswordProvider(),

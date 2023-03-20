@@ -67,6 +67,7 @@ abstract class OAuthProvider<U> implements AuthenticationProvider<U> {
   ///
   const OAuthProvider({
     required this.providerId,
+    required this.providerName,
     required this.authorizationEndpoint,
     required this.tokenEndpoint,
     required this.revokeTokenEndpoint,
@@ -79,10 +80,12 @@ abstract class OAuthProvider<U> implements AuthenticationProvider<U> {
 
   /// A unique id for the provider. One of [ImplementedProviders]
   /// or a custom for the ones you implement.
-  /// Should match [providerIdRegExp].
+  /// Should match [AuthenticationProvider.providerIdRegExp].
+  @override
   final String providerId;
 
-  static final providerIdRegExp = RegExp(r'$[a-zA-Z0-9-_]+^');
+  @override
+  final Translation providerName;
 
   /// The client identifier for the application.
   /// Typically found in the dashboard, developer portal/console of the provider.
@@ -109,10 +112,13 @@ abstract class OAuthProvider<U> implements AuthenticationProvider<U> {
   /// The supported authorization flows.
   List<GrantType> get supportedFlows;
 
+  /// The base configuration for this OAuth provider
   final OAuthProviderConfig config;
 
+  /// The colors and images used for the button of the providers
   final OAuthButtonStyles buttonStyles;
 
+  /// The list of default scopes asked by this provider, taken from [config]
   List<String> get defaultScopes => config.scope.split(RegExp('[ ,]+'));
 
   /// Retrieves the user information given an authenticated [client]
@@ -123,6 +129,7 @@ abstract class OAuthProvider<U> implements AuthenticationProvider<U> {
   );
 
   /// Parses the [userData] JSON and returns the generic [AuthUser] model.
+  @override
   AuthUser<U> parseUser(Map<String, Object?> userData);
 
   /// The authentication method used for [tokenEndpoint].
@@ -363,6 +370,7 @@ abstract class OpenIdConnectProvider<U> extends OAuthProvider<U> {
     required super.clientSecret,
     required super.config,
     required super.providerId,
+    required super.providerName,
     required super.buttonStyles,
   }) : super(
           authorizationEndpoint: openIdConfig.authorizationEndpoint,

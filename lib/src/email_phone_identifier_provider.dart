@@ -1,10 +1,10 @@
 import 'dart:math';
 
-import '../flow.dart';
-import '../oauth.dart';
-import '../providers.dart';
-import 'backend_translation.dart';
-import 'password.dart';
+import 'package:oauth/flow.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/backend_translation.dart';
+import 'package:oauth/src/password.dart';
 
 class MagicCodeConfig<U> {
   ///
@@ -74,6 +74,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     required this.identifierName,
     required this.identifierDescription,
     required this.providerId,
+    required this.providerName,
     required this.makeUser,
     required this.userFromJson,
     required this.magicCodeConfig,
@@ -85,6 +86,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
   }) : passwordDescription = passwordDescription ??
             UsernamePasswordProvider.defaultPasswordDescription;
 
+  /// Email authentication provider with password or [magicCodeConfig].
   static IdentifierPasswordProvider<EmailPasswordUser> email({
     required MagicCodeConfig<EmailPasswordUser> magicCodeConfig,
     String providerId = ImplementedProviders.email,
@@ -94,8 +96,11 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     ParamDescription? passwordDescription,
     String? redirectUrl,
     bool useIsolateForHashing = true,
-    String Function(String)? normalizeEmail,
+    String Function(String)? normalizeEmail = defaultNormalizeEmail,
     bool withName = true,
+    Translation providerName = const Translation(
+      key: Translations.emailProviderNameKey,
+    ),
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -106,9 +111,10 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
       passwordDescription: passwordDescription,
       redirectUrl: redirectUrl,
       useIsolateForHashing: useIsolateForHashing,
-      normalizeIdentifier: normalizeEmail ?? defaultNormalizeEmail,
+      normalizeIdentifier: normalizeEmail,
       userFromJson: EmailPasswordUser.fromJson,
       withName: withName,
+      providerName: providerName,
     );
   }
 
@@ -129,6 +135,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     return '${split.first}@${domain}';
   }
 
+  /// Phone authentication provider with password or [magicCodeConfig].
   static IdentifierPasswordProvider<PhonePasswordUser> phone({
     required MagicCodeConfig<PhonePasswordUser> magicCodeConfig,
     String providerId = ImplementedProviders.phone,
@@ -140,6 +147,9 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     bool useIsolateForHashing = true,
     String Function(String)? normalizePhone,
     bool withName = true,
+    Translation providerName = const Translation(
+      key: Translations.phoneProviderNameKey,
+    ),
   }) {
     return IdentifierPasswordProvider(
       magicCodeConfig: magicCodeConfig,
@@ -153,6 +163,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
       normalizeIdentifier: normalizePhone,
       userFromJson: PhonePasswordUser.fromJson,
       withName: withName,
+      providerName: providerName,
     );
   }
 
@@ -167,15 +178,37 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
 
   @override
   final String providerId;
+  @override
+  final Translation providerName;
+
+  /// The identifier field key
   final String identifierName;
+
+  /// The description for the identifier field
   final ParamDescription identifierDescription;
+
+  /// The description for the password field
   final ParamDescription passwordDescription;
   final String? redirectUrl;
+
+  /// Whether to use isolate for password hashing
   final bool useIsolateForHashing;
+
+  /// Creates an user model from [UserIdentifierData]
   final MakeUserFromIdentifier<U> makeUser;
+
+  /// Parser [U] from a json [Map]
   final U Function(Map<String, Object?> json) userFromJson;
+
+  /// If you are using a magic code sent to a device or server
+  /// (phone or email, for example), this will be the configuration.
   final MagicCodeConfig<U>? magicCodeConfig;
+
+  /// Maps an identifier string to a normalized string.
+  /// For example: lowercasing emails.
   final String Function(String)? normalizeIdentifier;
+
+  /// Whether to use name as a parameter to signing up
   final bool withName;
 
   bool get onlyMagicCodeNoPassword =>
@@ -319,10 +352,6 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
         ),
       );
     }
-    // final providerUser = UsernamePasswordUser(
-    //   username: credentials.identifier,
-    //   passwordHash: passwordHash,
-    // );
     final authUser = makeUser(
       UserIdentifierData(
         identifier: credentials.identifier,
@@ -331,10 +360,6 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
         name: name,
       ),
     );
-    // final emailVerified = ids.any((id) => id.kind ==
-    //     UserIdKind.verifiedEmail);
-    // final phoneIsVerified =
-    //     ids.any((id) => id.kind == UserIdKind.verifiedPhone);
     return Ok(
       CredentialsResponse.authenticated(
         authUser.toAuthUser(providerId: providerId),

@@ -34,7 +34,7 @@ class OAuthErrorResponse implements Exception, SerializableToJson {
   /// The original response from the endpoint
   final HttpResponse? response;
 
-  /// See error code.
+  /// The error code.
   final String? error;
 
   /// A specific error message that can help a developer identify the cause of
@@ -143,6 +143,7 @@ class AuthRedirectResponse implements OAuthErrorResponse {
         errorUri: json['error_uri'] as String?,
       );
 
+  @override
   Map<String, Object?> toJson() {
     return {
       ...?jsonData,
@@ -157,7 +158,6 @@ class AuthRedirectResponse implements OAuthErrorResponse {
   @override
   HttpResponse? get response => null;
 
-  /// See error code.
   @override
   final String? error;
 

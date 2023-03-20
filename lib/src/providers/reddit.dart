@@ -3,13 +3,17 @@ import 'dart:convert';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
 
-export 'package:oauth/src/providers/reddit_user.dart';
+export 'reddit_user.dart';
 
 /// https://github.com/reddit-archive/reddit/wiki/OAuth2
 class RedditProvider extends OAuthProvider<RedditUser> {
   /// https://github.com/reddit-archive/reddit/wiki/OAuth2
   const RedditProvider({
     super.providerId = ImplementedProviders.reddit,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.reddit}ProviderName',
+      msg: 'Reddit',
+    ),
     super.config =
         const RedditAuthParams(duration: RedditAuthDuration.permanent),
     required super.clientId,

@@ -8,6 +8,10 @@ class SpotifyProvider extends OAuthProvider<SpotifyUser> {
   /// https://developer.spotify.com/documentation/general/guides/authorization/
   const SpotifyProvider({
     super.providerId = ImplementedProviders.spotify,
+    super.providerName = const Translation(
+      key: '${ImplementedProviders.spotify}ProviderName',
+      msg: 'Spotify',
+    ),
     super.config = const SpotifyAuthParams(),
     required super.clientId,
     required super.clientSecret,

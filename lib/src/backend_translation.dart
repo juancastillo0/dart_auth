@@ -1,15 +1,31 @@
 import 'dart:convert' show jsonEncode;
 
-import '../oauth.dart';
+import 'package:oauth/oauth.dart';
 
 class Translations {
   ///
   const Translations();
 
+  /// The language code for this translation
   String get languageCode => 'en';
 
+  /// The default english translation
   static const defaultEnglish = Translations();
+
+  /// The default spanish translation
   static const defaultSpanish = SpanishTranslations();
+
+  /// Translation for 'Username and Password'
+  String get usernameProviderName => 'Username and Password';
+
+  /// Translation for 'Email'
+  String get emailProviderName => 'Email';
+
+  /// Translation for 'Phone'
+  String get phoneProviderName => 'Phone';
+
+  /// Translation for 'Time One-Time Password (TOTP)'
+  String get totpProviderName => 'Time One-Time Password (TOTP)';
 
   /// EMAIL - PHONE - IDENTIFIER
   ///
@@ -218,6 +234,10 @@ class Translations {
   // KEYS
   //
 
+  static const usernameProviderNameKey = 'usernameProviderName';
+  static const emailProviderNameKey = 'emailProviderName';
+  static const phoneProviderNameKey = 'phoneProviderName';
+  static const totpProviderNameKey = 'totpProviderName';
   static const magicCodeSentKey = 'magicCodeSent';
   static const magicCodeNameKey = 'magicCodeName';
   static const magicCodeDescriptionKey = 'magicCodeDescription';
@@ -275,6 +295,10 @@ class Translations {
   static const credentialsNotFoundKey = 'credentialsNotFound';
 
   static const allKeys = {
+    usernameProviderNameKey,
+    emailProviderNameKey,
+    phoneProviderNameKey,
+    totpProviderNameKey,
     magicCodeSentKey,
     magicCodeNameKey,
     magicCodeDescriptionKey,
@@ -331,6 +355,14 @@ class Translations {
 
   static Object? getValue(Translations t, String key) {
     switch (key) {
+      case usernameProviderNameKey:
+        return t.usernameProviderName;
+      case emailProviderNameKey:
+        return t.emailProviderName;
+      case phoneProviderNameKey:
+        return t.phoneProviderName;
+      case totpProviderNameKey:
+        return t.totpProviderName;
       case magicCodeSentKey:
         return t.magicCodeSent;
       case magicCodeNameKey:
@@ -534,6 +566,15 @@ class SpanishTranslations implements Translations {
 
   @override
   String get languageCode => 'es';
+
+  @override
+  String get usernameProviderName => 'Usuario y Contraseña';
+  @override
+  String get emailProviderName => 'Correo Electrónico';
+  @override
+  String get phoneProviderName => 'Teléfono Celular';
+  @override
+  String get totpProviderName => 'Contraseña de un solo uso (TOTP)';
   @override
   String get authProviderNotFoundToDelete =>
       'No se encontró el proveedor de autenticación.';
