@@ -127,8 +127,25 @@ class Translations {
   /// Translation for 'Input the username and password.'
   String get usernamePasswordFlowMessage => 'Input the username and password.';
 
-  /// ERRORS
-  ///
+  // ERRORS
+
+  /// Translation for 'Flow endpoint error'
+  String get oauthEndpointError => 'Flow endpoint error';
+
+  /// Translation for 'No state'
+  String get oauthNoState => 'No state';
+
+  /// Translation for 'No code'
+  String get oauthNoCode => 'No code';
+
+  /// Translation for 'State not found'
+  String get oauthNotFoundState => 'State not found';
+
+  /// Translation for 'Token endpoint error'
+  String get oauthTokenResponseError => 'Token endpoint error';
+
+  /// Translation for 'State is not valid'
+  String get oauthInvalidState => 'State is not valid';
 
   /// Translation for 'Bad request'
   String get noState => 'Bad request';
@@ -147,6 +164,9 @@ class Translations {
 
   /// Translation for 'Unauthorized, wrong identifier'
   String get invalidIdentifier => 'Unauthorized, wrong identifier';
+
+  /// Translation for 'Unsupported'
+  String get unsupported => 'Unsupported';
 
   // 'Could not verify the idToken'
   // 'Could not validate the idToken claims'
@@ -185,8 +205,28 @@ class Translations {
   /// Translation for 'Timeout'
   String get timeout => 'Timeout';
 
-  /// Translation for 'notFoundMethods'
-  String get notFoundMethods => 'notFoundMethods';
+  /// Translation for 'Could not find authentication providers.'
+  String get notFoundMethods => 'Could not find authentication providers.';
+
+  /// Translation for 'Optional amount can not be negative.'
+  String get mfaEditOptionalCountNegative =>
+      'Optional amount can not be negative.';
+
+  /// Translation for 'Should not have optional items with a zero optional
+  /// amount.'
+  String get mfaEditOptionalCountZeroWithItems =>
+      'Should not have optional items with a zero optional amount.';
+
+  /// Translation for 'The optional amount should be less than the number of
+  /// optional providers.'
+  String get mfaEditOptionalCountMoreThanItems =>
+      'The optional amount should be less than the number'
+      ' of optional providers.';
+
+  /// Translation for 'Can not have a provider be simultaneously optional and
+  /// required.'
+  String get mfaEditDuplicateRequiredAndOptional =>
+      'Can not have a provider be simultaneously optional and required.';
 
   /// Translation for 'Can not have a single MFA provider.'
   String get canNotHaveSingleMFAProvider =>
@@ -260,12 +300,19 @@ class Translations {
   static const passwordNameKey = 'passwordName';
   static const passwordDescriptionKey = 'passwordDescription';
   static const usernamePasswordFlowMessageKey = 'usernamePasswordFlowMessage';
+  static const oauthEndpointErrorKey = 'oauthEndpointError';
+  static const oauthNoStateKey = 'oauthNoState';
+  static const oauthNoCodeKey = 'oauthNoCode';
+  static const oauthNotFoundStateKey = 'oauthNotFoundState';
+  static const oauthTokenResponseErrorKey = 'oauthTokenResponseError';
+  static const oauthInvalidStateKey = 'oauthInvalidState';
   static const noStateKey = 'noState';
   static const noPasswordKey = 'noPassword';
   static const invalidStateKey = 'invalidState';
   static const invalidPasswordKey = 'invalidPassword';
   static const invalidCodeKey = 'invalidCode';
   static const invalidIdentifierKey = 'invalidIdentifier';
+  static const unsupportedKey = 'unsupported';
   static const providerNotFoundKey = 'providerNotFound';
   static const sessionRevokedKey = 'sessionRevoked';
   static const multipleUsersWithSameCredentialsKey =
@@ -280,6 +327,13 @@ class Translations {
   static const unauthorizedKey = 'unauthorized';
   static const timeoutKey = 'timeout';
   static const notFoundMethodsKey = 'notFoundMethods';
+  static const mfaEditOptionalCountNegativeKey = 'mfaEditOptionalCountNegative';
+  static const mfaEditOptionalCountZeroWithItemsKey =
+      'mfaEditOptionalCountZeroWithItems';
+  static const mfaEditOptionalCountMoreThanItemsKey =
+      'mfaEditOptionalCountMoreThanItems';
+  static const mfaEditDuplicateRequiredAndOptionalKey =
+      'mfaEditDuplicateRequiredAndOptional';
   static const canNotHaveSingleMFAProviderKey = 'canNotHaveSingleMFAProvider';
   static const authProviderNotFoundToDeleteKey = 'authProviderNotFoundToDelete';
   static const canNotDeleteOnlyProviderKey = 'canNotDeleteOnlyProvider';
@@ -321,12 +375,19 @@ class Translations {
     passwordNameKey,
     passwordDescriptionKey,
     usernamePasswordFlowMessageKey,
+    oauthEndpointErrorKey,
+    oauthNoStateKey,
+    oauthNoCodeKey,
+    oauthNotFoundStateKey,
+    oauthTokenResponseErrorKey,
+    oauthInvalidStateKey,
     noStateKey,
     noPasswordKey,
     invalidStateKey,
     invalidPasswordKey,
     invalidCodeKey,
     invalidIdentifierKey,
+    unsupportedKey,
     providerNotFoundKey,
     sessionRevokedKey,
     multipleUsersWithSameCredentialsKey,
@@ -338,6 +399,10 @@ class Translations {
     unauthorizedKey,
     timeoutKey,
     notFoundMethodsKey,
+    mfaEditOptionalCountNegativeKey,
+    mfaEditOptionalCountZeroWithItemsKey,
+    mfaEditOptionalCountMoreThanItemsKey,
+    mfaEditDuplicateRequiredAndOptionalKey,
     canNotHaveSingleMFAProviderKey,
     authProviderNotFoundToDeleteKey,
     canNotDeleteOnlyProviderKey,
@@ -407,6 +472,18 @@ class Translations {
         return t.passwordDescription;
       case usernamePasswordFlowMessageKey:
         return t.usernamePasswordFlowMessage;
+      case oauthEndpointErrorKey:
+        return t.oauthEndpointError;
+      case oauthNoStateKey:
+        return t.oauthNoState;
+      case oauthNoCodeKey:
+        return t.oauthNoCode;
+      case oauthNotFoundStateKey:
+        return t.oauthNotFoundState;
+      case oauthTokenResponseErrorKey:
+        return t.oauthTokenResponseError;
+      case oauthInvalidStateKey:
+        return t.oauthInvalidState;
       case noStateKey:
         return t.noState;
       case noPasswordKey:
@@ -419,6 +496,8 @@ class Translations {
         return t.invalidCode;
       case invalidIdentifierKey:
         return t.invalidIdentifier;
+      case unsupportedKey:
+        return t.unsupported;
       case providerNotFoundKey:
         return t.providerNotFound;
       case sessionRevokedKey:
@@ -441,6 +520,14 @@ class Translations {
         return t.timeout;
       case notFoundMethodsKey:
         return t.notFoundMethods;
+      case mfaEditOptionalCountNegativeKey:
+        return t.mfaEditOptionalCountNegative;
+      case mfaEditOptionalCountZeroWithItemsKey:
+        return t.mfaEditOptionalCountZeroWithItems;
+      case mfaEditOptionalCountMoreThanItemsKey:
+        return t.mfaEditOptionalCountMoreThanItems;
+      case mfaEditDuplicateRequiredAndOptionalKey:
+        return t.mfaEditDuplicateRequiredAndOptional;
       case canNotHaveSingleMFAProviderKey:
         return t.canNotHaveSingleMFAProvider;
       case authProviderNotFoundToDeleteKey:
@@ -538,6 +625,7 @@ class Translation implements TranslationSerializableToJson {
         args?.map((key, value) => MapEntry(Symbol(key), value)),
       ) as String;
     } else {
+      // TODO: Translations.getValue with otherTranslations Map and replace args in String
       return value as String;
     }
   }
@@ -549,7 +637,7 @@ class Translation implements TranslationSerializableToJson {
     final message = getMessage(translations);
     return {
       'key': key,
-      if (message != key) 'msg': getMessage(translations),
+      if (message != key) 'msg': message,
       if (msg != null && message != msg) 'defaultMsg': msg,
       if (args != null) 'args': args,
     };
@@ -633,13 +721,41 @@ class SpanishTranslations implements Translations {
       'Varios usuarios tienen las mismas credenciales.';
   @override
   String get nameName => 'Nombre';
+
+  @override
+  String get oauthEndpointError => 'Error en respuesta de flujo';
+  @override
+  String get oauthNoState => 'Sin estado';
+  @override
+  String get oauthNoCode => 'Sin código';
+  @override
+  String get oauthNotFoundState => 'El estado no existe';
+  @override
+  String get oauthTokenResponseError => 'Error en respuesta de token';
+  @override
+  String get oauthInvalidState => 'El estado no es válido';
   @override
   String get noPassword => 'La contraseña es requerida';
   @override
   String get noState => 'Flujo incorrecto';
   @override
+  String get unsupported => 'No soportado';
+  @override
   String get notFoundMethods =>
       'No se encontraron algunos proveedores de autenticación.';
+  @override
+  String get mfaEditOptionalCountNegative =>
+      'La cantidad opcional no puede ser negativa.';
+  @override
+  String get mfaEditOptionalCountZeroWithItems =>
+      'No debería tener proveedores opcionales con cantidad opcional de cero.';
+  @override
+  String get mfaEditOptionalCountMoreThanItems =>
+      'La cantidad opcional debería ser menor al número '
+      'de proveedores opcionales.';
+  @override
+  String get mfaEditDuplicateRequiredAndOptional =>
+      'Can not have a provider be simultaneously optional and required.';
   @override
   String get passwordDescription => 'Debería tener al menos 8 caracteres.';
   @override

@@ -176,49 +176,6 @@ class UsernamePasswordProvider
   }
 }
 
-class AuthError {
-  final String error;
-  final String? message;
-
-  const AuthError({
-    required this.error,
-    required this.message,
-  });
-
-  Map<String, Object?> toJson() {
-    return {
-      'error': error,
-      'message': message,
-      'translation': Translation(key: error, msg: message),
-    };
-  }
-
-  static const noState = AuthError(
-    error: 'no_state',
-    message: 'Bad request',
-  );
-  static const noPassword = AuthError(
-    error: 'no_password',
-    message: 'Password is required',
-  );
-  static const invalidState = AuthError(
-    error: 'invalid_state',
-    message: 'Bad request',
-  );
-  static const invalidPassword = AuthError(
-    error: 'invalid_password',
-    message: 'Invalid credentials',
-  );
-  static const invalidCode = AuthError(
-    error: 'invalid_code',
-    message: 'Unauthorized, wrong code',
-  );
-  static const invalidIdentifier = AuthError(
-    error: 'invalid_identifier',
-    message: 'Unauthorized, wrong identifier',
-  );
-}
-
 class UsernamePasswordUser implements SerializableToJson {
   final String username;
   final String passwordHash;
@@ -340,9 +297,9 @@ class CredentialsResponse<U> {
 }
 
 class ResponseContinueFlow implements SerializableToJson {
+  final Translation userMessage;
   final String? redirectUrl;
   final String? qrUrl;
-  final Translation? userMessage;
   final Translation? buttonText;
   final String? state;
   final Map<String, ParamDescription>? paramDescriptions;
@@ -350,7 +307,7 @@ class ResponseContinueFlow implements SerializableToJson {
   ///
   ResponseContinueFlow({
     required this.state,
-    required Translation this.userMessage,
+    required this.userMessage,
     this.redirectUrl,
     this.qrUrl,
     this.paramDescriptions,

@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 
 class OAuthFlow<U> {
@@ -231,7 +232,36 @@ enum AuthResponseErrorKind {
   noCode,
   notFoundState,
   tokenResponseError,
-  invalidState,
+  invalidState;
+
+  AuthError get error {
+    switch (this) {
+      case endpointError:
+        return const AuthError(
+          Translation(key: Translations.oauthEndpointErrorKey),
+        );
+      case noState:
+        return const AuthError(
+          Translation(key: Translations.oauthNoStateKey),
+        );
+      case noCode:
+        return const AuthError(
+          Translation(key: Translations.oauthNoCodeKey),
+        );
+      case notFoundState:
+        return const AuthError(
+          Translation(key: Translations.oauthNotFoundStateKey),
+        );
+      case tokenResponseError:
+        return const AuthError(
+          Translation(key: Translations.oauthTokenResponseErrorKey),
+        );
+      case invalidState:
+        return const AuthError(
+          Translation(key: Translations.oauthInvalidStateKey),
+        );
+    }
+  }
 }
 
 /// The data saved for authentication flows
@@ -290,7 +320,7 @@ class OAuthCodeStateMeta implements SerializableToJson {
   final UserClaims? claims;
   final TokenResponse? token;
   final AuthResponseError? error;
-  final String? getUserError;
+  final AuthError? getUserError;
 
   ///
   OAuthCodeStateMeta({
@@ -321,7 +351,9 @@ class OAuthCodeStateMeta implements SerializableToJson {
       error: json['error'] == null
           ? null
           : AuthResponseError.fromJson((json['error']! as Map).cast()),
-      getUserError: json['getUserError'] as String?,
+      getUserError: json['getUserError'] == null
+          ? null
+          : AuthError.fromJson(json['getUserError']! as Map<String, Object?>),
     );
   }
 }

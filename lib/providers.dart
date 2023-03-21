@@ -1,5 +1,6 @@
 import 'package:oauth/providers.dart';
 
+export './endpoint_models.dart' show AuthError;
 export './src/email_phone_identifier_provider.dart';
 export './src/providers/apple.dart';
 export './src/providers/discord.dart';

@@ -238,7 +238,7 @@ class TimeOneTimePasswordProvider
   ) async {
     return Err(
       AuthError(
-        error: 'unsupported',
+        const Translation(key: Translations.unsupportedKey),
         message:
             'Can not update credentials for ${TimeOneTimePasswordProvider}',
       ),

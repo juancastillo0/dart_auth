@@ -1,45 +1,84 @@
+import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+import 'package:oauth/src/backend_translation.dart';
 
 export 'src/backend_translation.dart';
 
-// TODO maybe split AuthResponseSuccess and AuthResponseError?
+// TODO: should we use this?
+enum AuthResponseKind {
+  error,
+  success,
+  credentialsFlow,
+}
+
 class AuthResponse implements SerializableToJson {
-  final String? refreshToken;
-  final String? accessToken;
-  final DateTime? expiresAt;
-  final String? error;
-  final String? message;
-  final Map<String, Translation>? fieldErrors;
+  final AuthResponseSuccess? success;
+  final AuthError? error;
   final ResponseContinueFlow? credentials;
-  final List<MFAItemWithFlow>? leftMfaItems;
 
   ///
   AuthResponse({
-    required this.refreshToken,
-    required this.accessToken,
-    required this.expiresAt,
+    required this.success,
     required this.error,
-    required this.message,
     this.credentials,
-    this.fieldErrors,
-    this.leftMfaItems,
   });
 
+  factory AuthResponse.fromError(AuthError error) {
+    return AuthResponse(success: null, error: error);
+  }
+
+  factory AuthResponse.fromSuccess(AuthResponseSuccess value) {
+    return AuthResponse(success: value, error: null);
+  }
+
   factory AuthResponse.fromJson(Map<String, Object?> json) {
+    // TODO: improve this
     final credentials =
         json['state'] is String ? ResponseContinueFlow.fromJson(json) : null;
     return AuthResponse(
-      refreshToken: json['refreshToken'] as String?,
-      accessToken: json['accessToken'] as String?,
-      expiresAt: json['expiresAt'] == null
+      error: json['error'] == null ? null : AuthError.fromJson(json),
+      success: json['accessToken'] == null
           ? null
-          : DateTime.parse(json['expiresAt']! as String),
-      error: json['error'] as String?,
-      message: json['message'] as String?,
+          : AuthResponseSuccess.fromJson(json),
       credentials: credentials,
-      fieldErrors: (json['fieldErrors'] as Map?)
-          ?.map((k, v) => MapEntry(k as String, Translation.fromJson(v))),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      ...?credentials?.toJson(),
+      ...?error?.toJson(),
+      ...?success?.toJson(),
+    }..removeWhere((key, value) => value == null);
+  }
+
+  @override
+  String toString() {
+    return 'AuthResponse${toJson()}';
+  }
+}
+
+class AuthResponseSuccess implements SerializableToJson {
+  final String accessToken;
+  final DateTime expiresAt;
+  final String? refreshToken;
+  final List<MFAItemWithFlow>? leftMfaItems;
+
+  ///
+  AuthResponseSuccess({
+    required this.refreshToken,
+    required this.accessToken,
+    required this.expiresAt,
+    this.leftMfaItems,
+  });
+
+  factory AuthResponseSuccess.fromJson(Map<String, Object?> json) {
+    return AuthResponseSuccess(
+      accessToken: json['accessToken']! as String,
+      expiresAt: DateTime.parse(json['expiresAt']! as String),
+      refreshToken: json['refreshToken'] as String?,
       leftMfaItems: json['leftMfaItems'] == null
           ? null
           : (json['leftMfaItems']! as Iterable)
@@ -49,58 +88,110 @@ class AuthResponse implements SerializableToJson {
     );
   }
 
-  factory AuthResponse.error(
-    String error, {
-    String? message,
-    Map<String, Translation>? fieldErrors,
-  }) {
-    return AuthResponse(
-      refreshToken: null,
-      accessToken: null,
-      expiresAt: null,
-      error: error,
-      message: message,
-      fieldErrors: fieldErrors,
-    );
-  }
-
-  factory AuthResponse.fromError(AuthError error) {
-    return AuthResponse.error(error.error, message: error.message);
-  }
-
-  factory AuthResponse.success({
-    required String? refreshToken,
-    required String? accessToken,
-    required DateTime? expiresAt,
-    List<MFAItemWithFlow>? leftMfaItems,
-  }) {
-    return AuthResponse(
-      refreshToken: refreshToken,
-      accessToken: accessToken,
-      expiresAt: expiresAt,
-      leftMfaItems: leftMfaItems,
-      error: null,
-      message: null,
-    );
-  }
-
   @override
   Map<String, Object?> toJson() {
     return {
-      ...?credentials?.toJson(),
       'refreshToken': refreshToken,
       'accessToken': accessToken,
-      'expiresAt': expiresAt?.toIso8601String(),
-      'error': error,
-      'message': message,
-      'fieldErrors': fieldErrors,
+      'expiresAt': expiresAt.toIso8601String(),
       'leftMfaItems': leftMfaItems,
     }..removeWhere((key, value) => value == null);
   }
 
   @override
   String toString() {
-    return 'AuthResponse${toJson()}';
+    return 'AuthResponseSuccess${toJson()}';
+  }
+}
+
+class AuthError implements SerializableToJson {
+  final Translation error;
+  final List<Translation>? otherErrors;
+  final String? message;
+  final Map<String, Translation>? fieldErrors;
+
+  ///
+  const AuthError(
+    this.error, {
+    this.otherErrors,
+    this.message,
+    this.fieldErrors,
+  });
+
+  List<Translation> get allErrors {
+    return [error, ...?otherErrors, ...?fieldErrors?.values];
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'error': error,
+      'otherErrors': otherErrors,
+      'message': message,
+      'fieldErrors': fieldErrors,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  factory AuthError.fromJson(Map<String, Object?> json) {
+    return AuthError(
+      Translation.fromJson(json['error']),
+      message: json['message'] as String?,
+      otherErrors: json['otherErrors'] == null
+          ? null
+          : (json['otherErrors']! as Iterable)
+              .map(Translation.fromJson)
+              .toList(),
+      fieldErrors: (json['fieldErrors'] as Map?)
+          ?.map((k, v) => MapEntry(k as String, Translation.fromJson(v))),
+    );
+  }
+
+  static const noState = AuthError(
+    Translation(key: Translations.noStateKey),
+    message: 'Bad request',
+  );
+  static const noPassword = AuthError(
+    Translation(key: Translations.noPasswordKey),
+    message: 'Password is required',
+  );
+  static const invalidState = AuthError(
+    Translation(key: Translations.invalidStateKey),
+    message: 'Bad request',
+  );
+  static const invalidPassword = AuthError(
+    Translation(key: Translations.invalidPasswordKey),
+    message: 'Invalid credentials',
+  );
+  static const invalidCode = AuthError(
+    Translation(key: Translations.invalidCodeKey),
+    message: 'Unauthorized, wrong code',
+  );
+  static const invalidIdentifier = AuthError(
+    Translation(key: Translations.invalidIdentifierKey),
+    message: 'Unauthorized, wrong identifier',
+  );
+
+  factory AuthError.fromGetUserError(GetUserError error) {
+    return AuthError(
+      const Translation(key: Translations.errorRetrievingUserInfoKey),
+      message: error.message,
+    );
+  }
+
+  factory AuthError.fromOAuthResponseError(OAuthErrorResponse err) {
+    return AuthError(
+      const Translation(key: Translations.errorPollingDeviceCodeKey),
+      message: OAuthErrorResponse.errorUserMessage(err),
+    );
+  }
+
+  factory AuthError.fromAuthResponseError(AuthResponseError authResponseError) {
+    return AuthError(
+      authResponseError.kind.error.error,
+      message: OAuthErrorResponse.errorUserMessage(
+        authResponseError.error ?? authResponseError.data,
+      ),
+    );
   }
 }
 

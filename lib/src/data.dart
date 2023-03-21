@@ -1,10 +1,10 @@
 import 'dart:convert' show jsonDecode;
 
 import 'package:meta/meta.dart';
-
-import '../flow.dart';
-import '../oauth.dart';
-import '../providers.dart';
+import 'package:oauth/flow.dart';
+import 'package:oauth/oauth.dart';
+import 'package:oauth/providers.dart';
+import 'package:oauth/src/backend_translation.dart';
 
 abstract class Persistence {
   /// Retrieves a saved [AuthStateModel] associated with [key],
@@ -423,6 +423,34 @@ enum MFAProviderKind {
   none,
 }
 
+enum MFAConfigError {
+  optionalCountNegative,
+  optionalCountZeroWithItems,
+  optionalCountMoreThanItems,
+  duplicateRequiredAndOptional;
+
+  Translation get translation {
+    switch (this) {
+      case optionalCountNegative:
+        return const Translation(
+          key: Translations.mfaEditOptionalCountNegativeKey,
+        );
+      case optionalCountZeroWithItems:
+        return const Translation(
+          key: Translations.mfaEditOptionalCountZeroWithItemsKey,
+        );
+      case optionalCountMoreThanItems:
+        return const Translation(
+          key: Translations.mfaEditOptionalCountMoreThanItemsKey,
+        );
+      case duplicateRequiredAndOptional:
+        return const Translation(
+          key: Translations.mfaEditDuplicateRequiredAndOptionalKey,
+        );
+    }
+  }
+}
+
 class MFAConfig implements SerializableToJson {
   final Set<ProviderUserId> requiredItems;
   final int optionalCount;
@@ -440,12 +468,24 @@ class MFAConfig implements SerializableToJson {
 
   bool get isEmpty =>
       requiredItems.isEmpty && optionalItems.isEmpty && optionalCount == 0;
-  bool get isValid =>
-      optionalCount >= 0 &&
-      optionalCount <= optionalItems.length &&
-      (requiredItems.length != 1 || optionalCount > 0) &&
-      optionalItems.union(requiredItems).length ==
-          requiredItems.length + optionalItems.length;
+  bool get isValid => validationErrors.isEmpty;
+
+  List<MFAConfigError> get validationErrors {
+    return [
+      // if (!(optionalCount == 0 && optionalItems.isEmpty ||
+      //     optionalCount > 0 && optionalCount < optionalItems.length))
+      //   MFAConfigError.optionalCountMoreThanItems,
+      if (optionalCount < 0) MFAConfigError.optionalCountNegative,
+      if (optionalCount == 0 && optionalItems.isNotEmpty)
+        MFAConfigError.optionalCountZeroWithItems,
+      if (optionalCount > 0 && optionalCount >= optionalItems.length)
+        MFAConfigError.optionalCountMoreThanItems,
+      // TODO: allow this? what about single optional? Should we delete the What happen
+      // (requiredItems.length != 1 || optionalCount > 0) &&
+      if (optionalItems.intersection(requiredItems).isNotEmpty)
+        MFAConfigError.duplicateRequiredAndOptional,
+    ];
+  }
 
   factory MFAConfig.fromJson(Map<String, Object?> json) {
     return MFAConfig(
@@ -600,8 +640,11 @@ class UserInfoMe implements SerializableToJson {
       final p = allProviders[e.providerId];
       return AuthUserData(
         authUser: e,
-        providerName:
-            p?.providerName ?? Translation(key: '${e.providerId}ProviderName'),
+        providerName: p?.providerName ??
+            Translation(
+              key: '${e.providerId}ProviderName',
+              msg: e.providerId,
+            ),
         updateParams: p is CredentialsProvider
             ? p.updateCredentialsParams(e.providerUser)
             : null,
@@ -801,6 +844,16 @@ class GetUserError implements Exception {
     this.sourceError,
     StackTrace? stackTrace,
   }) : stackTrace = stackTrace ?? StackTrace.current;
+
+  @override
+  String toString() {
+    return 'GetUserError${{
+      "response": response,
+      "message": message,
+      "sourceError": sourceError,
+      "stackTrace": stackTrace,
+    }}';
+  }
 }
 
 /// Tries to execute [tryFunction] and returns an [Ok] with its returned value.
