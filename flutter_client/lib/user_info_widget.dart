@@ -150,6 +150,7 @@ class MFAProvidersWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final state = GlobalState.of(context).authState;
     final t = getTranslations(context);
     final mfaItems = editedMFA.value ?? userMfaItems;
@@ -263,11 +264,26 @@ class MFAProvidersWidget extends StatelessWidget {
                         // TODO: validate fields
                       }
                       if (isLoadingEditingMFA.value) return;
+                      final scaffold = ScaffoldMessenger.of(context);
                       isLoadingEditingMFA.value = true;
-                      await state.setUserMFA(MFAPostData(editedMFA.value!));
-                      // TODO: errors
-                      editedMFA.value = null;
+                      final response = await state.setUserMFA(
+                        MFAPostData(editedMFA.value!),
+                      );
                       isLoadingEditingMFA.value = false;
+                      final error = response?.response?.error;
+                      if (error != null) {
+                        final message = error.allErrors
+                            .map(state.globalState.translate)
+                            .join('\n');
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            backgroundColor: theme.colorScheme.error,
+                            content: Text(message),
+                          ),
+                        );
+                      } else {
+                        editedMFA.value = null;
+                      }
                     },
                     icon: const Icon(Icons.check),
                     label: Text(t.submitMFAUpdate),
@@ -325,16 +341,18 @@ class AuthProviderWidget extends HookMobxWidget {
     Future<void> deleteAuthProvider() async {
       isDeleting.value = true;
       Navigator.of(context).pop();
+      final scaffold = ScaffoldMessenger.of(context);
       final result = await state.deleteAuthProvider(providerUserId);
       if (!mounted()) return;
       isDeleting.value = false;
-      final error = result?.response?.message ?? result?.response?.error;
+      final error = result?.response?.error;
       if (error != null) {
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffold.showSnackBar(
           SnackBar(
             backgroundColor: colorScheme.error,
-            content: Text(error),
+            content: Text(
+              error.allErrors.map(state.globalState.translate).join('\n'),
+            ),
           ),
         );
       }

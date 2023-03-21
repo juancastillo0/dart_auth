@@ -217,7 +217,7 @@ class ResponseData<P, O> implements Exception {
           'reasonPhrase': response!.reasonPhrase,
           'contentLength': response!.contentLength,
           'contentType': response!.headers['content-type'],
-        }..removeWhere((key, value) => value == true)}',
+        }..removeWhere((key, value) => value == null)}',
       'error': error,
       'stackTrace': stackTrace,
       'endpoint': endpoint,

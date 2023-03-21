@@ -32,6 +32,7 @@ class GlobalState {
   late final AuthState authState;
   final List<FrontEndTranslations> supportedTranslations;
   final List<Translations> supportedBackendTranslations;
+  Translations? backendTranslations;
   late final ValueNotifier<FrontEndTranslations> translations;
   final ValueNotifier<bool?> darkTheme = ValueNotifier(null);
 
@@ -46,6 +47,18 @@ class GlobalState {
   }) {
     this.translations =
         ValueNotifier(translations ?? supportedTranslations.first);
+    _computeBackendTranslations();
+    this.translations.addListener(_computeBackendTranslations);
+  }
+
+  void _computeBackendTranslations() {
+    if (supportedBackendTranslations.isEmpty) return;
+    for (final t in supportedBackendTranslations) {
+      if (t.languageCode == translations.value.languageCode) {
+        backendTranslations = t;
+      }
+    }
+    backendTranslations = supportedBackendTranslations.first;
   }
 
   static Future<GlobalState> load({FrontEndTranslations? translations}) async {
@@ -63,11 +76,7 @@ class GlobalState {
   }
 
   String translate(Translation value) {
-    for (final backendTranslation in supportedBackendTranslations) {
-      if (backendTranslation.languageCode == translations.value.languageCode) {
-        return value.getMessage(backendTranslation);
-      }
-    }
+    if (backendTranslations != null) value.getMessage(backendTranslations!);
     return value.msg ?? value.key;
   }
 }

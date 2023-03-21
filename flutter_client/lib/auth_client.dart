@@ -95,8 +95,8 @@ class AuthState {
   Stream<ResponseData<Object?, Object?>> get errorStream =>
       _errorController.stream;
 
-  final _authErrorController = StreamController<AuthResponse>.broadcast();
-  Stream<AuthResponse> get authErrorStream => _authErrorController.stream;
+  final _authErrorController = StreamController<AuthError>.broadcast();
+  Stream<AuthError> get authErrorStream => _authErrorController.stream;
 
   StreamSubscription<Object?>? _oauthSubscription;
 
@@ -188,9 +188,9 @@ class AuthState {
   }
 
   Future<void> _processAuthResponse(AuthResponse response) async {
-    final refreshToken = response.refreshToken;
+    final responseSuccess = response.success;
     // TODO: AuthResponse response.when/switch case/match
-    if (refreshToken != null) {
+    if (responseSuccess?.refreshToken != null) {
       // TODO: save on refresh
       await persistence.write(persistenceTokenKey, jsonEncode(response));
 
@@ -205,14 +205,14 @@ class AuthState {
           final data = response.data!;
 
           return RefreshTokenResponse(
-            accessToken: data.accessToken!,
-            expiresAt: data.expiresAt!,
+            accessToken: data.accessToken,
+            expiresAt: data.expiresAt,
             refreshToken: data.refreshToken,
           );
         },
-        accessToken: response.accessToken!,
-        accessTokenExpiration: response.expiresAt,
-        refreshToken: refreshToken,
+        accessToken: responseSuccess!.accessToken,
+        accessTokenExpiration: responseSuccess.expiresAt,
+        refreshToken: responseSuccess.refreshToken,
         innerClient: client.client,
       );
       authenticatedClient.value = authClient;
@@ -224,16 +224,16 @@ class AuthState {
         await persistence.delete(persistenceTokenKey);
       }
       cancelCurrentFlow();
-    } else if (response.leftMfaItems != null) {
+    } else if (responseSuccess?.leftMfaItems != null) {
       if (isAddingMFAProvider.value) {
         // Successfully added a MFA. Go back to user info
         isAddingMFAProvider.value = false;
       } else {
-        leftMfaItems.value = response.leftMfaItems;
+        leftMfaItems.value = responseSuccess!.leftMfaItems;
         // TODO: revert authenticated client on change of access token
         final authClient = OAuthClient(
-          accessToken: response.accessToken!,
-          accessTokenExpiration: response.expiresAt,
+          accessToken: responseSuccess.accessToken,
+          accessTokenExpiration: responseSuccess.expiresAt,
           refreshAccessToken: null,
           refreshToken: null,
           innerClient: client.client,
@@ -241,7 +241,7 @@ class AuthState {
         authenticatedClient.value = authClient;
       }
     } else if (response.error != null) {
-      _authErrorController.add(response);
+      _authErrorController.add(response.error!);
       if (leftMfaItems.value == null && !isAddingMFAProvider.value) {
         // Only cancel if its a single error in flow.
         // The user can go back for MFA flows
@@ -298,11 +298,13 @@ class AuthState {
     }
   }
 
-  Future<UserInfoMe?> setUserMFA(MFAPostData data) async {
+  Future<UserMeOrResponse?> setUserMFA(MFAPostData data) async {
     if (authenticatedClient.value == null) return null;
     final response = await postUserMFAEndpoint.request(client, data);
     if (_isError(response)) return null;
-    userInfo.value = response.data;
+    if (response.data?.user != null) {
+      userInfo.value = response.data!.user;
+    }
     return response.data;
   }
 
@@ -360,10 +362,10 @@ class AuthState {
     serialize: (params) => ReqParams([params.providerId], params.toJson()),
   );
 
-  static final refreshTokenEndpoint = Endpoint<void, AuthResponse>(
+  static final refreshTokenEndpoint = Endpoint<void, AuthResponseSuccess>(
     path: 'jwt/refresh',
     method: 'POST',
-    deserialize: AuthResponse.fromJson,
+    deserialize: AuthResponseSuccess.fromJson,
     serialize: (_) => ReqParams.empty,
   );
 
@@ -381,10 +383,10 @@ class AuthState {
     serialize: (_) => ReqParams.empty,
   );
 
-  static final postUserMFAEndpoint = Endpoint<MFAPostData, UserInfoMe>(
+  static final postUserMFAEndpoint = Endpoint<MFAPostData, UserMeOrResponse>(
     path: 'user/mfa',
     method: 'POST',
-    deserialize: UserInfoMe.fromJson,
+    deserialize: UserMeOrResponse.fromJson,
     serialize: (p) => ReqParams([], p.toJson()),
   );
 }

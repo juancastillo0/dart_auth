@@ -73,7 +73,7 @@ class CredentialsProviderForm extends HookWidget {
     final paramDescriptions = cred?.paramDescriptions ?? data.paramDescriptions;
     final formKey = useMemoized(GlobalKey<FormState>.new);
     final isLoading = useState(false);
-
+    final isMounted = useIsMounted();
     Future<void> onSubmit() async {
       if (!formKey.currentState!.validate()) return;
       if (isLoading.value) return;
@@ -113,16 +113,20 @@ class CredentialsProviderForm extends HookWidget {
         } else {
           response = await authState.signUpWithCredentials(reqParams);
         }
-        if (response == null) return;
-        if (response.error != null) {
-          final message = response.message == null || response.message!.isEmpty
-              ? response.error
-              : '${response.error}: ${response.message}';
-          errorMessage.value = message;
-        }
-        if (response.fieldErrors != null) {
-          fieldErrorMessage.value = response.fieldErrors!
-              .map((key, value) => MapEntry(key, globalState.translate(value)));
+        if (response == null || !isMounted()) return;
+        final error = response.error;
+        if (error != null) {
+          final message = [error.error, ...?error.otherErrors]
+              .map(state.globalState.translate)
+              .where((text) => text.isNotEmpty)
+              .join('\n');
+          errorMessage.value = message.isEmpty ? null : message;
+
+          if (error.fieldErrors != null) {
+            fieldErrorMessage.value = error.fieldErrors!.map(
+              (key, value) => MapEntry(key, globalState.translate(value)),
+            );
+          }
         }
         if (response.credentials != null) {
           credentials.value = response.credentials;
