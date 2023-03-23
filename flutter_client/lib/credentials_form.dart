@@ -1,12 +1,10 @@
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_client/base_widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:oauth/endpoint_models.dart';
+import 'package:oauth/front_end_client.dart';
 import 'package:oauth/oauth.dart';
-
-import 'auth_client.dart';
-import 'base_widgets.dart';
-import 'main.dart';
 
 class UpdateCredentialsParams {
   final AuthUserData data;
@@ -35,10 +33,10 @@ class CredentialsProviderForm extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getTranslations(context);
-    final globalState = GlobalState.of(context);
+    final globalState = globalStateOf(context);
     final state = globalState.authState;
     // TODO: extract state into a separate class
-    final leftMfaItems = useValueListenable(state.leftMfaItems);
+    final leftMfaItems = useValue(state.leftMfaItems);
     final providerUserIdState = useState<String?>(null);
     final mfa = useMemoized(
       () =>
@@ -60,6 +58,7 @@ class CredentialsProviderForm extends HookWidget {
       [mfa, providerUserIdState.value],
     );
     final params = useState(<String, String>{});
+    final visibility = useMemoized(() => <String>{});
     final errorMessage = useState<String?>(null);
     final fieldErrorMessage = useState<Map<String, String>?>(null);
     final credentials = useState<ResponseContinueFlow?>(null);
@@ -82,7 +81,6 @@ class CredentialsProviderForm extends HookWidget {
         // TODO: handle required
         errorMessage.value = null;
         fieldErrorMessage.value = null;
-        final authState = GlobalState.of(context).authState;
         final AuthResponse? response;
         final reqParams = CredentialsParams(data.providerId, {
           if (cred != null) 'state': cred.state,
@@ -99,7 +97,7 @@ class CredentialsProviderForm extends HookWidget {
           ...params.value,
         });
         if (updateParams != null) {
-          final user = await authState.updateCredentials(reqParams);
+          final user = await state.updateCredentials(reqParams);
           if (user == null) {
             // TODO: manage errors
             return;
@@ -108,16 +106,17 @@ class CredentialsProviderForm extends HookWidget {
           } else {
             return updateParams!.onUpdate();
           }
-        } else if (mfa.isNotEmpty) {
-          response = await authState.signInWithCredentials(reqParams);
+          // TODO: properly handle isAddingMFAProvider vs singIn/signUp/duplicate user/same credentials
+        } else if (mfa.isNotEmpty && !state.isAddingMFAProvider.value) {
+          response = await state.signInWithCredentials(reqParams);
         } else {
-          response = await authState.signUpWithCredentials(reqParams);
+          response = await state.signUpWithCredentials(reqParams);
         }
         if (response == null || !isMounted()) return;
         final error = response.error;
         if (error != null) {
           final message = [error.error, ...?error.otherErrors]
-              .map(state.globalState.translate)
+              .map(globalState.translate)
               .where((text) => text.isNotEmpty)
               .join('\n');
           errorMessage.value = message.isEmpty ? null : message;
@@ -172,36 +171,56 @@ class CredentialsProviderForm extends HookWidget {
                 final value = e.value;
                 final regExp = value.regExp;
 
-                yield TextFormField(
-                  key: Key(e.key),
-                  decoration: InputDecoration(
-                    labelText: globalState.translate(value.name),
-                    helperText: value.description == null
-                        ? null
-                        : globalState.translate(value.description!),
-                    hintText: value.hint,
-                    errorText: fieldErrorMessage.value?[e.key],
-                    errorMaxLines: 100,
-                    helperMaxLines: 100,
-                  ),
-                  keyboardType: getKeyboardType(value),
-                  readOnly: value.readOnly,
-                  initialValue: value.initialValue,
-                  textCapitalization: TextCapitalization.values
-                      .byName(value.textCapitalization.name),
-                  obscureText: value.obscureText,
-                  // TODO: validate on
-                  validator: regExp == null
-                      ? null
-                      : (str) => regExp.hasMatch(str ?? '')
+                yield StatefulBuilder(
+                  key: Key('${e.key}StatefulBuilder'),
+                  builder: (context, setState) => TextFormField(
+                    key: Key(e.key),
+                    decoration: InputDecoration(
+                      labelText: globalState.translate(value.name),
+                      helperText: value.description == null
                           ? null
-                          : globalState.translate(
-                              value.description ?? Translation.empty,
-                            ),
-                  onChanged: (value) {
-                    params.value[e.key] = value;
-                    fieldErrorMessage.value = null;
-                  },
+                          : globalState.translate(value.description!),
+                      hintText: value.hint,
+                      errorText: fieldErrorMessage.value?[e.key],
+                      errorMaxLines: 100,
+                      helperMaxLines: 100,
+                      suffixIcon: value.obscureText
+                          ? IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  if (visibility.contains(e.key)) {
+                                    visibility.remove(e.key);
+                                  } else {
+                                    visibility.add(e.key);
+                                  }
+                                });
+                              },
+                              icon: visibility.contains(e.key)
+                                  ? const Icon(Icons.visibility_off)
+                                  : const Icon(Icons.visibility),
+                            )
+                          : null,
+                    ),
+                    keyboardType: getKeyboardType(value),
+                    readOnly: value.readOnly,
+                    initialValue: value.initialValue,
+                    textCapitalization: TextCapitalization.values
+                        .byName(value.textCapitalization.name),
+                    obscureText:
+                        !visibility.contains(e.key) && value.obscureText,
+                    // TODO: validate on
+                    validator: regExp == null
+                        ? null
+                        : (str) => regExp.hasMatch(str ?? '')
+                            ? null
+                            : globalState.translate(
+                                value.description ?? Translation.empty,
+                              ),
+                    onChanged: (value) {
+                      params.value[e.key] = value;
+                      fieldErrorMessage.value = null;
+                    },
+                  ),
                 );
                 yield const SizedBox(height: 10);
               }),
@@ -211,10 +230,11 @@ class CredentialsProviderForm extends HookWidget {
         if (cred != null)
           Column(
             children: [
-              if (cred.userMessage != null)
+              if (cred.userMessage.key.isNotEmpty ||
+                  cred.userMessage.msg != null)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(globalState.translate(cred.userMessage!)),
+                  child: Text(globalState.translate(cred.userMessage)),
                 ),
               if (cred.qrUrl != null)
                 BarcodeWidget(

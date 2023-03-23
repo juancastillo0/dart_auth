@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import 'base_widgets.dart';
 import 'credentials_form.dart';
-import 'main.dart';
 
 class OAuthProviderSignInButton extends StatelessWidget {
   final OAuthProviderData data;
@@ -61,7 +60,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
           ElevatedButton(
             style: buttonStyle,
             onPressed: () async {
-              final authState = GlobalState.of(context).authState;
+              final authState = globalStateOf(context).authState;
               await authState.getProviderDeviceCode(data.providerId);
             },
             child: Row(
@@ -74,7 +73,7 @@ class OAuthProviderSignInButton extends StatelessWidget {
         ElevatedButton(
           style: buttonStyle,
           onPressed: () async {
-            final authState = GlobalState.of(context).authState;
+            final authState = globalStateOf(context).authState;
             final url = await authState.getProviderUrl(data.providerId);
             if (url != null) {
               // TODO:
@@ -101,7 +100,7 @@ class OAuthFlowWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentFlow = this.currentFlow;
-    final state = GlobalState.of(context).authState;
+    final state = globalStateOf(context).authState;
     final t = getTranslations(context);
     if (currentFlow is OAuthProviderUrl) {
       return Card(
@@ -187,10 +186,10 @@ class AuthProvidersList extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = GlobalState.of(context).authState;
-    final data = useValueListenable(state.providersList);
-    final leftMfaItems = useValueListenable(state.leftMfaItems);
-    final isAddingMFAProvider = useValueListenable(state.isAddingMFAProvider);
+    final state = globalStateOf(context).authState;
+    final data = useValue(state.providersList);
+    final leftMfaItems = useValue(state.leftMfaItems);
+    final isAddingMFAProvider = useValue(state.isAddingMFAProvider);
     final t = getTranslations(context);
     if (data == null) return const CircularProgressIndicator();
 

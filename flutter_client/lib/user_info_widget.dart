@@ -1,14 +1,12 @@
 import 'dart:convert' show jsonEncode;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_client/base_widgets.dart';
+import 'package:flutter_client/credentials_form.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:oauth/endpoint_models.dart';
+import 'package:oauth/front_end_client.dart';
 import 'package:oauth/oauth.dart';
-
-import 'auth_client.dart';
-import 'base_widgets.dart';
-import 'credentials_form.dart';
-import 'main.dart';
 
 class UserInfoWidget extends HookWidget {
   const UserInfoWidget({
@@ -23,7 +21,7 @@ class UserInfoWidget extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getTranslations(context);
-    final state = GlobalState.of(context).authState;
+    final state = globalStateOf(context).authState;
     final editedMFA = useState<MFAConfig?>(null);
     final isLoadingEditingMFA = useState(false);
     final optionalCountController = useTextEditingController(
@@ -151,7 +149,7 @@ class MFAProvidersWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final state = GlobalState.of(context).authState;
+    final state = globalStateOf(context).authState;
     final t = getTranslations(context);
     final mfaItems = editedMFA.value ?? userMfaItems;
     return Card(
@@ -319,8 +317,8 @@ class AuthProviderWidget extends HookMobxWidget {
   @override
   Widget build(BuildContext context) {
     final t = getTranslations(context);
-    final state = GlobalState.of(context).authState;
-    final userInfo = useValueListenable(state.userInfo);
+    final state = globalStateOf(context).authState;
+    final userInfo = useValue(state.userInfo);
     final isDeleting = useState(false);
     final e = data.authUser;
     final memoryPicture = useMemoized(

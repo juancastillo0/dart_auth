@@ -1,21 +1,14 @@
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+import 'package:oauth/src/frontend/endpoint.dart';
+import 'package:oauth/src/frontend/frontend_translations.dart';
+import 'package:oauth/src/frontend/global_client_state.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'endpoint.dart';
-import 'main.dart';
-
-abstract class ClientPersistence {
-  FutureOr<String?> read(String key);
-  FutureOr<void> write(String key, String value);
-  FutureOr<void> delete(String key);
-}
 
 class AuthState {
   ///
@@ -24,15 +17,15 @@ class AuthState {
     required this.persistence,
     required this.globalState,
   }) {
-    _setUpClient();
-    authenticatedClient.addListener(_setUpClient);
-    globalState.translations.addListener(_refetchOnLanguageChange);
+    _setUpClient(authenticatedClient.value);
+    authenticatedClient.listen(_setUpClient);
+    globalState.translations.listen(_refetchOnLanguageChange);
   }
 
   static Future<AuthState> load({
     required ClientPersistence persistence,
     required GlobalState globalState,
-    String baseUrl = 'http://localhost:3000',
+    required String baseUrl,
   }) async {
     final token = await persistence.read(persistenceTokenKey);
     final state = AuthState._(
@@ -67,8 +60,8 @@ class AuthState {
     return request;
   }
 
-  void _setUpClient() {
-    if (authenticatedClient.value == null) {
+  void _setUpClient(OAuthClient? value) {
+    if (value == null) {
       client = ClientWithConfig(
         baseUrl: baseUrl,
         mapRequest: _mapRequest,
@@ -77,13 +70,13 @@ class AuthState {
       // TODO: revert authenticated client on change of access token
       client = ClientWithConfig(
         baseUrl: baseUrl,
-        client: authenticatedClient.value,
+        client: value,
         mapRequest: _mapRequest,
       );
     }
   }
 
-  void _refetchOnLanguageChange() {
+  void _refetchOnLanguageChange(FrontEndTranslations _) {
     getProviders();
     if (userInfo.value != null) {
       getUserInfoMe();
@@ -100,13 +93,13 @@ class AuthState {
 
   StreamSubscription<Object?>? _oauthSubscription;
 
-  final isLoadingFlow = ValueNotifier<bool>(false);
-  final currentFlow = ValueNotifier<OAuthProviderFlowData?>(null);
-  final providersList = ValueNotifier<AuthProvidersData?>(null);
-  final authenticatedClient = ValueNotifier<OAuthClient?>(null);
-  final userInfo = ValueNotifier<UserInfoMe?>(null);
-  final leftMfaItems = ValueNotifier<List<MFAItemWithFlow>?>(null);
-  final isAddingMFAProvider = ValueNotifier<bool>(false);
+  final isLoadingFlow = ValueNotifierStream<bool>(false);
+  final currentFlow = ValueNotifierStream<OAuthProviderFlowData?>(null);
+  final providersList = ValueNotifierStream<AuthProvidersData?>(null);
+  final authenticatedClient = ValueNotifierStream<OAuthClient?>(null);
+  final userInfo = ValueNotifierStream<UserInfoMe?>(null);
+  final leftMfaItems = ValueNotifierStream<List<MFAItemWithFlow>?>(null);
+  final isAddingMFAProvider = ValueNotifierStream<bool>(false);
 
   bool get isInFlow => isLoadingFlow.value || currentFlow.value != null;
 
@@ -298,6 +291,7 @@ class AuthState {
     }
   }
 
+  // TODO: standardize set/update/edit naming
   Future<UserMeOrResponse?> setUserMFA(MFAPostData data) async {
     if (authenticatedClient.value == null) return null;
     final response = await postUserMFAEndpoint.request(client, data);
@@ -308,6 +302,7 @@ class AuthState {
     return response.data;
   }
 
+  // TODO: standardize endpointSuffix naming
   static final providers = Endpoint<void, AuthProvidersData>(
     path: 'oauth/providers',
     method: 'GET',
@@ -394,7 +389,7 @@ class AuthState {
 class MFAPostData implements SerializableToJson {
   final MFAConfig mfa;
 
-  MFAPostData(this.mfa);
+  const MFAPostData(this.mfa);
 
   @override
   Map<String, Object?> toJson() {

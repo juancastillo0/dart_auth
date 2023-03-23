@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:oauth/endpoint_models.dart' show Translation;
-
-import 'frontend_translations.dart';
-import 'main.dart';
+import 'package:oauth/front_end_client.dart';
 
 export 'hooks_mobx.dart' show HookMobxWidget;
 
@@ -10,8 +9,16 @@ FrontEndTranslations getTranslations(BuildContext context) {
   return InheritedGeneric.depend(context);
 }
 
+GlobalState globalStateOf(BuildContext context) {
+  return InheritedGeneric.get(context);
+}
+
 String translate(BuildContext context, Translation value) {
-  return GlobalState.of(context).translate(value);
+  return globalStateOf(context).translate(value);
+}
+
+T useValue<T>(ValueNotifierStream<T> stream) {
+  return useStream(stream, initialData: stream.value).data as T;
 }
 
 class InheritedGeneric<T> extends InheritedWidget {

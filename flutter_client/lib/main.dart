@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_client/auth_widgets.dart';
+import 'package:flutter_client/base_widgets.dart';
+import 'package:flutter_client/secure_storage.dart';
+import 'package:flutter_client/user_info_widget.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:oauth/endpoint_models.dart';
-
-import 'auth_client.dart';
-import 'auth_widgets.dart';
-import 'base_widgets.dart';
-import 'frontend_translations.dart';
-import 'secure_storage.dart';
-import 'user_info_widget.dart';
+import 'package:oauth/front_end_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final state = await GlobalState.load();
+  final state = await GlobalState.load(
+    persistence: SecureStorageClientPersistence(),
+  );
 
   runApp(
     InheritedGeneric(
       state: state,
-      child: ValueListenableBuilder(
-        valueListenable: state.translations,
-        builder: (context, translations, _) => InheritedGeneric(
-          state: translations,
+      child: StreamBuilder(
+        stream: state.translations,
+        builder: (context, _) => InheritedGeneric(
+          state: state.translations.value,
           child: const MainApp(),
         ),
       ),
@@ -28,95 +27,36 @@ void main() async {
   );
 }
 
-class GlobalState {
-  late final AuthState authState;
-  final List<FrontEndTranslations> supportedTranslations;
-  final List<Translations> supportedBackendTranslations;
-  Translations? backendTranslations;
-  late final ValueNotifier<FrontEndTranslations> translations;
-  final ValueNotifier<bool?> darkTheme = ValueNotifier(null);
-
-  ///
-  GlobalState({
-    FrontEndTranslations? translations,
-    this.supportedTranslations = const [
-      FrontEndTranslations.defaultEnglish,
-      FrontEndTranslations.defaultSpanish,
-    ],
-    this.supportedBackendTranslations = const [],
-  }) {
-    this.translations =
-        ValueNotifier(translations ?? supportedTranslations.first);
-    _computeBackendTranslations();
-    this.translations.addListener(_computeBackendTranslations);
-  }
-
-  void _computeBackendTranslations() {
-    if (supportedBackendTranslations.isEmpty) return;
-    for (final t in supportedBackendTranslations) {
-      if (t.languageCode == translations.value.languageCode) {
-        backendTranslations = t;
-      }
-    }
-    backendTranslations = supportedBackendTranslations.first;
-  }
-
-  static Future<GlobalState> load({FrontEndTranslations? translations}) async {
-    final globalState = GlobalState(translations: translations);
-    final authState = await AuthState.load(
-      globalState: globalState,
-      persistence: SecureStorageClientPersistence(),
-    );
-    globalState.authState = authState;
-    return globalState;
-  }
-
-  static GlobalState of(BuildContext context) {
-    return InheritedGeneric.get(context);
-  }
-
-  String translate(Translation value) {
-    if (backendTranslations != null) value.getMessage(backendTranslations!);
-    return value.msg ?? value.key;
-  }
-}
-
-class MainApp extends StatelessWidget {
+class MainApp extends HookMobxWidget {
   const MainApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final globalState = GlobalState.of(context);
-    return AnimatedBuilder(
-      animation: Listenable.merge([
-        globalState.darkTheme,
-        globalState.translations,
-      ]),
-      builder: (context, _) {
-        final translations = globalState.translations.value;
-        return MaterialApp(
-          title: 'Flutter Dart Auth Demo',
-          theme: globalTheme(brightness: Brightness.light),
-          darkTheme: globalTheme(brightness: Brightness.dark),
-          locale: Locale(translations.languageCode, translations.countryCode),
-          supportedLocales: [
-            ...globalState.supportedTranslations
-                .map((e) => Locale(e.languageCode, e.countryCode))
-          ],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          debugShowCheckedModeBanner: false,
-          themeMode: globalState.darkTheme.value == null
-              ? ThemeMode.system
-              : globalState.darkTheme.value!
-                  ? ThemeMode.dark
-                  : ThemeMode.light,
-          home: const MainHomePage(title: 'Flutter Dart Auth Demo'),
-        );
-      },
+    final globalState = globalStateOf(context);
+    final darkTheme = useValue(globalState.darkTheme);
+    final translations = useValue(globalState.translations);
+
+    return MaterialApp(
+      title: 'Flutter Dart Auth Demo',
+      theme: globalTheme(brightness: Brightness.light),
+      darkTheme: globalTheme(brightness: Brightness.dark),
+      locale: Locale(translations.languageCode, translations.countryCode),
+      supportedLocales: [
+        ...globalState.supportedTranslations
+            .map((e) => Locale(e.languageCode, e.countryCode))
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      debugShowCheckedModeBanner: false,
+      themeMode: darkTheme == null
+          ? ThemeMode.system
+          : darkTheme
+              ? ThemeMode.dark
+              : ThemeMode.light,
+      home: const MainHomePage(title: 'Flutter Dart Auth Demo'),
     );
   }
 }
@@ -128,7 +68,7 @@ class MainHomePage extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final globalState = GlobalState.of(context);
+    final globalState = globalStateOf(context);
     final t = getTranslations(context);
     final state = globalState.authState;
     useEffect(
@@ -147,9 +87,9 @@ class MainHomePage extends HookWidget {
       },
       const [],
     );
-    final currentFlow = useValueListenable(state.currentFlow);
-    final userInfo = useValueListenable(state.userInfo);
-    final isAddingMFAProvider = useValueListenable(state.isAddingMFAProvider);
+    final currentFlow = useValue(state.currentFlow);
+    final userInfo = useValue(state.userInfo);
+    final isAddingMFAProvider = useValue(state.isAddingMFAProvider);
 
     void showSettingsDialog() {
       showDialog<void>(
@@ -169,11 +109,11 @@ class MainHomePage extends HookWidget {
                         child: Text(t.themeBrightnessSetting),
                       ),
                       Expanded(
-                        child: ValueListenableBuilder(
-                          valueListenable: globalState.darkTheme,
-                          builder: (context, darkTheme, _) =>
+                        child: StreamBuilder(
+                          stream: globalState.darkTheme,
+                          builder: (context, _) =>
                               DropdownButtonFormField<bool?>(
-                            value: darkTheme,
+                            value: globalState.darkTheme.value,
                             items: [
                               DropdownMenuItem(
                                 value: null,
@@ -199,11 +139,11 @@ class MainHomePage extends HookWidget {
                     children: [
                       SizedBox(width: 200, child: Text(t.languageSetting)),
                       Expanded(
-                        child: ValueListenableBuilder(
-                          valueListenable: globalState.translations,
-                          builder: (context, translations, _) =>
+                        child: StreamBuilder(
+                          stream: globalState.translations,
+                          builder: (context, _) =>
                               DropdownButtonFormField<FrontEndTranslations>(
-                            value: translations,
+                            value: globalState.translations.value,
                             items: [
                               ...globalState.supportedTranslations.map(
                                 (e) => DropdownMenuItem(
@@ -302,16 +242,3 @@ ButtonStyle actionStyle(BuildContext context) => TextButton.styleFrom(
       enabledMouseCursor: SystemMouseCursors.click,
       padding: const EdgeInsets.symmetric(horizontal: 17),
     );
-
-  ///
-  const InheritedGlobalState({
-    super.key,
-    required this.state,
-    required super.child,
-  });
-
-  @override
-  bool updateShouldNotify(covariant InheritedWidget oldWidget) {
-    return false;
-  }
-}

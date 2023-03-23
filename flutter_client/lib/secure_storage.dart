@@ -1,6 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-import 'auth_client.dart';
+import 'package:oauth/front_end_client.dart';
 
 class SecureStorageClientPersistence extends ClientPersistence {
   ///
