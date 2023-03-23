@@ -278,6 +278,10 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     GeneratedMagicCode? magicCode;
     if (ml != null) {
       if (credentials.magicCode == null) {
+        if (credentials.state != null) {
+          // TODO: imorove? should we send it?
+          return const Err(AuthError.invalidCode);
+        }
         // No magic code sent by the user, start the flow
         // TODO: should we ask for password after verification? make it configurable?
         if (passwordHash == null && !onlyMagicCodeNoPassword) {
@@ -450,7 +454,7 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
     return ResponseContinueFlow(
       state: null,
       userMessage: magicCodeConfig != null
-          ? const Translation(key: Translations.magiCodeHelperTextKey)
+          ? const Translation(key: Translations.magicCodeHelperTextKey)
           : const Translation(key: Translations.passwordHelperTextKey),
       paramDescriptions: {
         identifierName: identifierDescription,

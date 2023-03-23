@@ -94,6 +94,10 @@ class TimeOneTimePasswordProvider
         ),
       );
     } else {
+      if (credentials.state != null) {
+        // TODO: improve? shold we send it?
+        return const Err(AuthError.invalidCode);
+      }
       final base32Secret = OTP.randomSecret();
       final providerUserId = generateStateToken(size: 21);
       final saved = await _saveState(

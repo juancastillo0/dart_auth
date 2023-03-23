@@ -63,7 +63,7 @@ class Translations {
   String requiredArgument({required String name}) =>
       '$name is required.'; // TODO: proper "a" vs "an"
   /// Translation for 'A magic code will be sent to the device
-  String get magiCodeHelperText => 'A magic code will be sent to the device';
+  String get magicCodeHelperText => 'A magic code will be sent to the device';
 
   /// Translation for 'Input the credentials'
   String get passwordHelperText => 'Input the credentials';
@@ -287,7 +287,7 @@ class Translations {
   static const phoneDescriptionKey = 'phoneDescription';
   static const requiredStringArgumentKey = 'requiredStringArgument';
   static const requiredArgumentKey = 'requiredArgument';
-  static const magiCodeHelperTextKey = 'magiCodeHelperText';
+  static const magicCodeHelperTextKey = 'magicCodeHelperText';
   static const passwordHelperTextKey = 'passwordHelperText';
   static const nameNameKey = 'nameName';
   static const validationErrorKey = 'validationError';
@@ -362,7 +362,7 @@ class Translations {
     phoneDescriptionKey,
     requiredStringArgumentKey,
     requiredArgumentKey,
-    magiCodeHelperTextKey,
+    magicCodeHelperTextKey,
     passwordHelperTextKey,
     nameNameKey,
     validationErrorKey,
@@ -446,8 +446,8 @@ class Translations {
         return t.requiredStringArgument;
       case requiredArgumentKey:
         return t.requiredArgument;
-      case magiCodeHelperTextKey:
-        return t.magiCodeHelperText;
+      case magicCodeHelperTextKey:
+        return t.magicCodeHelperText;
       case passwordHelperTextKey:
         return t.passwordHelperText;
       case nameNameKey:
@@ -645,7 +645,7 @@ class Translation implements TranslationSerializableToJson {
 
   @override
   String toString() {
-    return 'TranslationValue${toJson()}';
+    return 'Translation${toJson()}';
   }
 }
 
@@ -708,7 +708,7 @@ class SpanishTranslations implements Translations {
   @override
   String get invalidState => 'Flujo incorrecto.';
   @override
-  String get magiCodeHelperText =>
+  String get magicCodeHelperText =>
       'El código de autenticación se enviará a tu dispositivo.';
   @override
   String get magicCodeDescription => 'El código que se envío a tu dispositivo.';

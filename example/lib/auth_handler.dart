@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show jsonDecode, jsonEncode;
+import 'dart:convert' show jsonDecode;
 
 import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
@@ -96,53 +96,56 @@ shelf.Handler makeHandler(Config config) {
     final path = request.url.path;
 
     Response<SerializableToJson, SerializableToJson>? response;
-
-    if (path == '') {
-      if (request.method != 'GET') return shelf.Response.notFound(null);
-      return shelf.Response.ok('<html><body></body></html>');
-      // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
-    } else if (path == 'oauth/providers') {
-      if (request.method != 'GET') return shelf.Response.notFound(null);
-      response = Response.ok(
-        AuthProvidersData(
-          config.allOAuthProviders.values
-              .map(OAuthProviderData.fromProvider)
-              .toList(),
-          config.allCredentialsProviders.values
-              .map(CredentialsProviderData.fromProvider)
-              .toList(),
-          // TODO: .toJson(basePath: config.baseRedirectUri) maybe leave it to the front end?
-        ),
-      );
-    } else if (RegExp('oauth/url$pIdRegExp').hasMatch(path)) {
-      response = await handler.getOAuthUrl(request);
-    } else if (RegExp('oauth/device$pIdRegExp').hasMatch(path)) {
-      response = await handler.getOAuthDeviceCode(request);
-    } else if (RegExp('oauth/callback$pIdRegExp').hasMatch(path)) {
-      response = await handler.handleOAuthCallback(request);
-    } else if (RegExp('oauth/state').hasMatch(path)) {
-      response = await handler.getOAuthState(request);
-    } else if (RegExp('oauth/subscribe').hasMatch(path)) {
-      final shelfResponse =
-          await handler.handlerWebSocketOAuthStateSubscribe(request);
-      return shelfResponse;
-      // TODO: maybe use /token instead?
-    } else if (path == 'jwt/refresh') {
-      response = await handler.refreshAuthToken(request);
-    } else if (path == 'jwt/revoke') {
-      response = await handler.revokeAuthToken(request);
-    } else if (path == 'user/me') {
-      response = await handler.getUserMeInfo(request);
-    } else if (path == 'user/mfa') {
-      response = await handler.userMFA(request);
-    } else if (RegExp('providers/delete$pIdRegExp').hasMatch(path)) {
-      response = await handler.authenticationProviderDelete(request);
-    } else if (RegExp('credentials/update$pIdRegExp').hasMatch(path)) {
-      response = await handler.credentialsUpdate(request);
-    } else if (RegExp('credentials/signin$pIdRegExp').hasMatch(path)) {
-      response = await handler.credentialsSignIn(request, signUp: false);
-    } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
-      response = await handler.credentialsSignIn(request, signUp: true);
+    try {
+      if (path == '') {
+        if (request.method != 'GET') return shelf.Response.notFound(null);
+        return shelf.Response.ok('<html><body></body></html>');
+        // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
+      } else if (path == 'oauth/providers') {
+        if (request.method != 'GET') return shelf.Response.notFound(null);
+        response = Response.ok(
+          AuthProvidersData(
+            config.allOAuthProviders.values
+                .map(OAuthProviderData.fromProvider)
+                .toList(),
+            config.allCredentialsProviders.values
+                .map(CredentialsProviderData.fromProvider)
+                .toList(),
+            // TODO: .toJson(basePath: config.baseRedirectUri) maybe leave it to the front end?
+          ),
+        );
+      } else if (RegExp('oauth/url$pIdRegExp').hasMatch(path)) {
+        response = await handler.getOAuthUrl(request);
+      } else if (RegExp('oauth/device$pIdRegExp').hasMatch(path)) {
+        response = await handler.getOAuthDeviceCode(request);
+      } else if (RegExp('oauth/callback$pIdRegExp').hasMatch(path)) {
+        response = await handler.handleOAuthCallback(request);
+      } else if (RegExp('oauth/state').hasMatch(path)) {
+        response = await handler.getOAuthState(request);
+      } else if (RegExp('oauth/subscribe').hasMatch(path)) {
+        final shelfResponse =
+            await handler.handlerWebSocketOAuthStateSubscribe(request);
+        return shelfResponse;
+        // TODO: maybe use /token instead?
+      } else if (path == 'jwt/refresh') {
+        response = await handler.refreshAuthToken(request);
+      } else if (path == 'jwt/revoke') {
+        response = await handler.revokeAuthToken(request);
+      } else if (path == 'user/me') {
+        response = await handler.getUserMeInfo(request);
+      } else if (path == 'user/mfa') {
+        response = await handler.userMFA(request);
+      } else if (RegExp('providers/delete$pIdRegExp').hasMatch(path)) {
+        response = await handler.authenticationProviderDelete(request);
+      } else if (RegExp('credentials/update$pIdRegExp').hasMatch(path)) {
+        response = await handler.credentialsUpdate(request);
+      } else if (RegExp('credentials/signin$pIdRegExp').hasMatch(path)) {
+        response = await handler.credentialsSignIn(request, signUp: false);
+      } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
+        response = await handler.credentialsSignIn(request, signUp: true);
+      }
+    } on Response catch (e) {
+      response = e;
     }
     if (response != null) {
       final translations = config.getTranslationForLanguage(

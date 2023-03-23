@@ -193,6 +193,11 @@ class AuthError implements SerializableToJson {
       ),
     );
   }
+
+  @override
+  String toString() {
+    return 'AuthError${toJson()}';
+  }
 }
 
 class MFAItemWithFlow implements SerializableToJson {
