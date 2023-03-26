@@ -224,3 +224,52 @@ class ResponseData<P, O> implements Exception {
     }..removeWhere((key, value) => value == null)}';
   }
 }
+
+/// A debouncer that can be used to debounce a [callback]
+/// for [duration] by executing [get].
+class Debouncer<P, T> {
+  Completer<T>? _completer;
+  Timer? _timer;
+
+  /// The callback to be called when the debouncer [_timer] is done.
+  final FutureOr<T> Function(P query) callback;
+
+  /// The duration to wait before calling the [callback].
+  final Duration duration;
+
+  /// The query to be passed to the [callback].
+  P? query;
+
+  /// Creates a new [Debouncer] with the given [duration] and [callback].
+  Debouncer(
+    this.duration,
+    this.callback,
+  );
+
+  /// Cancels the current [_timer] preventing the [callback] from executing.
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+    _completer = null;
+  }
+
+  /// Returns a [Future] that will complete after debouncing the
+  /// execution of [callback].
+  ///
+  /// If the [get] method is called again
+  /// before the [_timer] is done, the [query] for [callback] will be updated.
+  Future<T> get(P query) {
+    this.query = query;
+    if (_completer != null) return _completer!.future;
+
+    final comp = Completer<T>();
+    _completer = comp;
+    _timer = Timer(duration, () {
+      _timer = null;
+      _completer = null;
+      comp.complete(callback(this.query as P));
+    });
+
+    return comp.future;
+  }
+}
