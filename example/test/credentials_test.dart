@@ -31,6 +31,10 @@ class InMemoryClientPersistence extends ClientPersistence {
   void delete(String key) => map.remove(makeKey(key));
 }
 
+Object? jsonEncDec(Object? obj) {
+  return jsonDecode(jsonEncode(obj));
+}
+
 void main() {
   final persistence = InMemoryPersistance();
   final jwtMaker = JsonWebTokenMaker(
@@ -113,28 +117,25 @@ void main() {
         expect(response.statusCode, 200);
         expect(
           jsonDecode(response.body),
-          {
+          jsonEncDec({
             'providers': <dynamic>[],
             'credentialsProviders': credentialsProviders.values
                 .map(CredentialsProviderData.fromProvider)
-                .map(SerializableToJson.staticToJson)
                 .toList()
-          },
+          }),
         );
       });
 
       test('GET oauth/providers globalState', () async {
         final response = await authState.getProviders();
         expect(
-          jsonDecode(jsonEncode(response)),
+          jsonEncDec(response),
           {
             'providers': <dynamic>[],
-            'credentialsProviders': jsonDecode(
-              jsonEncode(
-                credentialsProviders.values
-                    .map(CredentialsProviderData.fromProvider)
-                    .toList(),
-              ),
+            'credentialsProviders': jsonEncDec(
+              credentialsProviders.values
+                  .map(CredentialsProviderData.fromProvider)
+                  .toList(),
             )
           },
         );
@@ -159,7 +160,7 @@ void main() {
       // TODO: rename isInOAuthFlow
       expect(authState.isInFlow, false);
       final info = authState.userInfo.value!;
-      expect(jsonDecode(jsonEncode(info)), userInfo);
+      expect(jsonEncDec(info), userInfo);
       // TODO: test sessions
     }
 
@@ -602,39 +603,37 @@ void main() {
         );
         final mfaSuccess = mfa1!.success!;
         expect(
-          jsonDecode(jsonEncode(mfaSuccess.leftMfaItems)),
+          jsonEncDec(mfaSuccess.leftMfaItems),
           [
-            jsonDecode(
-              jsonEncode({
-                'mfa': {
-                  'providerId': phoneProviderId,
-                  'providerUserId': userPhone,
+            jsonEncDec({
+              'mfa': {
+                'providerId': phoneProviderId,
+                'providerUserId': userPhone,
+              },
+              'credentialsInfo': {
+                'userMessage': {
+                  'key': Translations.magicCodeHelperTextKey,
+                  'msg': 'A magic code will be sent to the device'
                 },
-                'credentialsInfo': {
-                  'userMessage': {
-                    'key': Translations.magicCodeHelperTextKey,
-                    'msg': 'A magic code will be sent to the device'
-                  },
-                  'paramDescriptions': {
-                    'phone': {
-                      'name': {'key': 'phoneName', 'msg': 'Phone'},
-                      'description': {
-                        'key': 'phoneDescription',
-                        'msg':
-                            'The phone number. This will be your identifier to sign in.'
-                      },
-                      'regExp': r'^[0-9]{7,}$',
-                      'required': false,
-                      'readOnly': false,
-                      'obscureText': false,
-                      'keyboardType': 'phone',
-                      'textCapitalization': 'none'
-                    }
+                'paramDescriptions': {
+                  'phone': {
+                    'name': {'key': 'phoneName', 'msg': 'Phone'},
+                    'description': {
+                      'key': 'phoneDescription',
+                      'msg':
+                          'The phone number. This will be your identifier to sign in.'
+                    },
+                    'regExp': r'^[0-9]{7,}$',
+                    'required': false,
+                    'readOnly': false,
+                    'obscureText': false,
+                    'keyboardType': 'phone',
+                    'textCapitalization': 'none'
                   }
                 }
-                // phoneFlow,
-              }),
-            )
+              }
+              // phoneFlow,
+            }),
           ],
         );
 
@@ -697,7 +696,7 @@ void main() {
           ...userInfoWithPhone,
           'user': {
             ...userInfoWithPhone['user']! as Map,
-            'multiFactorAuth': jsonDecode(jsonEncode(mfaData.mfa)),
+            'multiFactorAuth': jsonEncDec(mfaData.mfa),
           },
         });
         // TODO: delete provider
@@ -706,10 +705,6 @@ void main() {
     });
 
     // TODO: log in with phone, add TOTP and delete phone. Only TOTP left. Configure so it is only login
-
-    Object? jsonEncDec(Object? obj) {
-      return jsonDecode(jsonEncode(obj));
-    }
 
     group('TOTP', () {
       test('sign up username and TOTP', () async {
