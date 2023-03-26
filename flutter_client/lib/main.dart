@@ -221,6 +221,8 @@ ThemeData globalTheme({required Brightness brightness}) {
           color: Colors.black12,
         ),
       ),
+      helperMaxLines: 100,
+      errorMaxLines: 100,
     ),
     cardTheme: const CardTheme(
       elevation: 2,
