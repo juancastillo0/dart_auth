@@ -53,11 +53,33 @@ abstract class Persistence {
 }
 
 @immutable
-class UserId {
+class UserId implements SerializableToJson {
   final String id;
   final UserIdKind kind;
 
   const UserId(this.id, this.kind);
+
+  factory UserId.fromJson(Map<String, Object?> json) {
+    return UserId(
+      json['id']! as String,
+      UserIdKind.values.byName(json['kind']! as String),
+    );
+  }
+
+  factory UserId.fromString(String e) {
+    if (e.contains('@')) {
+      return UserId(e.toLowerCase(), UserIdKind.verifiedEmail);
+    } else if (e.contains(':')) {
+      return UserId(e, UserIdKind.providerId);
+    } else if (RegExp(r'^\+?[0-9 -()]{7,}$').hasMatch(e)) {
+      return UserId(
+        e.replaceAll(RegExp('[^0-9]'), ''),
+        UserIdKind.verifiedPhone,
+      );
+    } else {
+      return UserId(e, UserIdKind.innerId);
+    }
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -66,6 +88,14 @@ class UserId {
 
   @override
   int get hashCode => Object.hash(id, kind);
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'kind': kind.name,
+    };
+  }
 }
 
 enum UserIdKind {
@@ -729,10 +759,60 @@ class AppUserComplete implements SerializableToJson {
   }
 }
 
+class UsersInfoQuery {
+  final List<UserId> ids;
+  final List<String> queries;
+
+  UsersInfoQuery(this.ids, this.queries);
+
+  factory UsersInfoQuery.fromJson(Map<String, Object?> json) {
+    return UsersInfoQuery(
+      (json['ids']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(UserId.fromJson)
+          .toList(),
+      (json['queries']! as Iterable).cast<String>().toList(),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'ids': ids,
+      'queries': queries,
+    };
+  }
+}
+
+class UsersInfo implements SerializableToJson {
+  final List<UserInfoMe> users;
+
+  UsersInfo(this.users);
+
+  factory UsersInfo.fromJson(Map<String, Object?> json) {
+    return UsersInfo(
+      (json['users']! as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(UserInfoMe.fromJson)
+          .toList(),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'users': users,
+    };
+  }
+}
+
 class UserInfoMe implements SerializableToJson {
   final AppUser user;
   final List<AuthUserData> authUsers;
   final List<UserSessionBase>? sessions;
+
+  Iterable<UserId> get userIds => [UserId(user.userId, UserIdKind.innerId)]
+      .followedBy(authUsers.expand((e) => e.authUser.userIds()));
 
   ///
   UserInfoMe({
