@@ -7,7 +7,7 @@ Map<String, String> get jsonHeader => {Headers.contentType: Headers.appJson};
 
 const _jwtMakerKey = 'package:dart_auth.jwtMaker';
 
-RequestCtx ctx(Request request) => request.context[_jwtMakerKey] as RequestCtx;
+RequestCtx ctx(Request request) => request.context[_jwtMakerKey]! as RequestCtx;
 
 Handler ctxMiddleware(Handler next) {
   return (request) {
@@ -24,10 +24,12 @@ Handler ctxMiddleware(Handler next) {
         headers: responseHeaders.isEmpty
             ? null
             : (responseHeaders
-              ..addEntries(value.headersAll.entries.map((e) {
-                final l = responseHeaders[e.key];
-                return l == null ? e : MapEntry(e.key, [...e.value, ...l]);
-              }).toList())),
+              ..addEntries(
+                value.headersAll.entries.map((e) {
+                  final l = responseHeaders[e.key];
+                  return l == null ? e : MapEntry(e.key, [...e.value, ...l]);
+                }).toList(),
+              )),
       );
     }
 

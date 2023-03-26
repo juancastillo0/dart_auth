@@ -1,3 +1,4 @@
+export 'src/frontend/admin_client_state.dart';
 export 'src/frontend/auth_client.dart';
 export 'src/frontend/endpoint.dart';
 export 'src/frontend/frontend_translations.dart';

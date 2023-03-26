@@ -143,6 +143,8 @@ shelf.Handler makeHandler(Config config) {
         response = await handler.credentialsSignIn(request, signUp: false);
       } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
         response = await handler.credentialsSignIn(request, signUp: true);
+      } else if (RegExp('admin/users').hasMatch(path)) {
+        response = await handler.getUsersInfoForAdmin(request);
       }
     } on Response catch (e) {
       response = e;
@@ -233,6 +235,20 @@ class AuthHandler {
     final session = await config.persistence.getValidSession(claims.sessionId);
     if (session == null) return Response.unauthorized(null);
 
+    final newSession = session.copyWith(
+      lastRefreshAt: DateTime.now(),
+      clientData: SessionClientData(),
+    );
+    if (session.requiresVerification(
+      newSession,
+      // TODO: make configurable
+      minLastRefreshAtDiff: const Duration(days: 8),
+    )) {
+      // TODO: verify session data
+    }
+
+    // TODO: maybe pass expiresAt to createJwt
+    final expiresAt = DateTime.now().add(accessTokenDuration);
     final jwt = config.jwtMaker.createJwt(
       userId: claims.userId,
       sessionId: claims.sessionId,
@@ -240,10 +256,11 @@ class AuthHandler {
       isRefreshToken: false,
       meta: claims.meta,
     );
+    await config.persistence.saveSession(newSession);
     return Response.ok(
       AuthResponseSuccess(
         accessToken: jwt,
-        expiresAt: DateTime.now().add(accessTokenDuration),
+        expiresAt: expiresAt,
         refreshToken: null,
       ),
     );
@@ -457,6 +474,7 @@ class AuthHandler {
       userId: userId,
       createdAt: mfaSession?.createdAt ?? DateTime.now(),
       mfa: doneMfa.toList(),
+      lastRefreshAt: DateTime.now(),
     );
     // TODO: should we save the session for MFA? Maybe just use access token claims? OAuth relies on sessions
     if (!hasLeftMFA) {
@@ -969,6 +987,64 @@ class AuthHandler {
         user,
         config.allProviders,
         sessions: sessions?.map(UserSessionBase.fromSession).toList(),
+      ),
+    );
+  }
+
+  Future<Result<T, Response>> _parseBody<T extends Object>(
+    Request request,
+    T Function(Map<String, Object?>) fromBody,
+  ) async {
+    final data = await parseBodyOrUrlData(request);
+    if (data is! Map<String, Object?>) return Err(_badRequestExpectedObject());
+    final T query;
+    try {
+      query = fromBody(data);
+    } catch (_) {
+      return Err(_badRequestExpectedObject());
+    }
+
+    return Ok(query);
+  }
+
+  Future<Response<UsersInfo, SerializableToJson>> getUsersInfoForAdmin(
+    Request request,
+  ) async {
+    if (request.method != 'GET') return Response.notFound(null);
+    // TODO: check is admin
+    final claims = await authenticatedUserOrThrow(request);
+    final query =
+        (await _parseBody(request, UsersInfoQuery.fromJson)).throwErr();
+
+    // final fields = request.url.queryParametersAll['fields'] ?? [];
+
+    final allIds =
+        query.ids.followedBy(query.queries.map(UserId.fromString)).toList();
+    final List<AppUserComplete?> users =
+        await config.persistence.getUsersById(allIds);
+
+    final values = Map.fromEntries(
+      users.whereType<AppUserComplete>().map((e) => MapEntry(e.userId, e)),
+    ).values.toList();
+
+    // TODO: add sessions to getUsersById && fields.contains('sessions') &&
+    List<UserSession>? sessions;
+    if (values.length == 1) {
+      sessions = await config.persistence
+          .getUserSessions(values.first.userId, onlyValid: false);
+    }
+
+    return Response.ok(
+      UsersInfo(
+        values.map(
+          (e) {
+            return UserInfoMe.fromComplete(
+              e,
+              config.allProviders,
+              sessions: sessions?.map(UserSessionBase.fromSession).toList(),
+            );
+          },
+        ).toList(),
       ),
     );
   }

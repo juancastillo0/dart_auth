@@ -86,13 +86,21 @@ class UserSessionBase implements SerializableToJson {
   final String sessionId;
   final String userId;
   final DateTime createdAt;
+  final DateTime lastRefreshAt;
   final DateTime? endedAt;
+  final String? deviceId;
+  final SessionClientData? clientData;
+  final List<ProviderUserId> mfa;
 
   /// A user session, persisted when the user is signed in.
   const UserSessionBase({
     required this.sessionId,
     required this.userId,
     required this.createdAt,
+    required this.lastRefreshAt,
+    required this.deviceId,
+    required this.clientData,
+    required this.mfa,
     this.endedAt,
   });
 
@@ -106,6 +114,17 @@ class UserSessionBase implements SerializableToJson {
       endedAt: json['endedAt'] == null
           ? null
           : DateTime.parse(json['endedAt'] as String),
+      lastRefreshAt: DateTime.parse(json['lastRefreshAt'] as String),
+      deviceId: json['deviceId'] as String,
+      clientData: json['clientData'] == null
+          ? null
+          : SessionClientData.fromJson(
+              json['clientData']! as Map<String, Object?>,
+            ),
+      mfa: (json['mfa'] as Iterable)
+          .cast<Map<String, Object?>>()
+          .map(ProviderUserId.fromJson)
+          .toList(),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -116,6 +135,10 @@ class UserSessionBase implements SerializableToJson {
       userId: session.userId,
       endedAt: session.endedAt,
       createdAt: session.createdAt,
+      lastRefreshAt: session.lastRefreshAt,
+      deviceId: session.deviceId,
+      clientData: session.clientData,
+      mfa: session.mfa,
     );
   }
 
@@ -126,6 +149,10 @@ class UserSessionBase implements SerializableToJson {
       'userId': userId,
       'endedAt': endedAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'lastRefreshAt': lastRefreshAt.toIso8601String(),
+      'deviceId': deviceId,
+      'clientData': clientData,
+      'mfa': mfa,
     };
   }
 }
@@ -138,6 +165,56 @@ class UserSessionOrPartial {
   UserSessionOrPartial(this.session, {required this.leftMfa});
 }
 
+class SessionClientData implements SerializableToJson {
+  final String? deviceId;
+  final String? platform;
+  final String? userAgent;
+  final String? country;
+  final String? ipAddress;
+  final String? apiVersion;
+
+  ///
+  SessionClientData({
+    this.deviceId,
+    this.platform,
+    this.userAgent,
+    this.country,
+    this.ipAddress,
+    this.apiVersion,
+  });
+
+  factory SessionClientData.fromJson(Map<String, Object?> json) {
+    return SessionClientData(
+      deviceId: json['deviceId'] as String?,
+      platform: json['platform'] as String?,
+      userAgent: json['userAgent'] as String?,
+      country: json['country'] as String?,
+      ipAddress: json['ipAddress'] as String?,
+      apiVersion: json['apiVersion'] as String?,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'deviceId': deviceId,
+      'platform': platform,
+      'userAgent': userAgent,
+      'country': country,
+      'ipAddress': ipAddress,
+      'apiVersion': apiVersion,
+    }..removeWhere((key, value) => value == null);
+  }
+
+  bool requiresVerification(SessionClientData other) {
+    return deviceId != other.deviceId ||
+        platform != other.platform ||
+        userAgent != other.userAgent ||
+        country != other.country ||
+        ipAddress != other.ipAddress;
+  }
+}
+
 /// A user session, persisted when the user is signed in.
 class UserSession implements SerializableToJson {
   final String sessionId;
@@ -147,6 +224,8 @@ class UserSession implements SerializableToJson {
   final String? deviceId;
   final Map<String, Object?>? meta;
   final DateTime? endedAt;
+  final DateTime lastRefreshAt;
+  final SessionClientData? clientData;
   final List<ProviderUserId> mfa;
 
   /// A user session, persisted when the user is signed in.
@@ -155,9 +234,11 @@ class UserSession implements SerializableToJson {
     required this.refreshToken,
     required this.userId,
     required this.createdAt,
+    required this.lastRefreshAt,
     required this.mfa,
     this.deviceId,
     this.meta,
+    this.clientData,
     this.endedAt,
   });
 
@@ -166,6 +247,18 @@ class UserSession implements SerializableToJson {
 
   /// Whether the session is in multi-factor authentication
   bool get isInMFA => isValid && refreshToken == null && mfa.isNotEmpty;
+
+  bool requiresVerification(
+    UserSession other, {
+    required Duration minLastRefreshAtDiff,
+  }) {
+    return deviceId != other.deviceId ||
+        other.lastRefreshAt.difference(lastRefreshAt) > minLastRefreshAtDiff ||
+        clientData != other.clientData &&
+            (other.clientData == null ||
+                clientData == null ||
+                clientData!.requiresVerification(other.clientData!));
+  }
 
 // generated-dart-fixer-start{"md5Hash":"UR44W1AtB7vHXyyYToVCGQ=="}
 
@@ -179,6 +272,9 @@ class UserSession implements SerializableToJson {
     DateTime? endedAt,
     bool endedAtToNull = false,
     List<ProviderUserId>? mfa,
+    DateTime? lastRefreshAt,
+    SessionClientData? clientData,
+    bool clientDataToNull = false,
   }) {
     return UserSession(
       refreshToken:
@@ -188,8 +284,10 @@ class UserSession implements SerializableToJson {
       createdAt: createdAt,
       deviceId: deviceId ?? (deviceIdToNull ? null : this.deviceId),
       endedAt: endedAt ?? (endedAtToNull ? null : this.endedAt),
+      lastRefreshAt: lastRefreshAt ?? this.lastRefreshAt,
       meta: meta ?? (metaToNull ? null : this.meta),
       mfa: mfa ?? this.mfa,
+      clientData: clientData ?? (clientDataToNull ? null : this.clientData),
     );
   }
 
@@ -208,12 +306,20 @@ class UserSession implements SerializableToJson {
       endedAt: json['endedAt'] == null
           ? null
           : DateTime.parse(json['endedAt'] as String),
+      lastRefreshAt: DateTime.parse(json['lastRefreshAt'] as String),
       mfa: ((json['mfa'] is String
               ? jsonDecode(json['mfa'] as String)
               : json['mfa']) as Iterable)
           .cast<Map<String, Object?>>()
           .map(ProviderUserId.fromJson)
           .toList(),
+      clientData: json['clientData'] == null
+          ? null
+          : SessionClientData.fromJson(
+              (json['clientData'] is String
+                  ? jsonDecode(json['clientData'] as String)
+                  : json['clientData']) as Map<String, Object?>,
+            ),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -228,6 +334,8 @@ class UserSession implements SerializableToJson {
       'meta': meta,
       'mfa': mfa,
       'endedAt': endedAt?.toIso8601String(),
+      'lastRefreshAt': lastRefreshAt.toIso8601String(),
+      'clientData': clientData,
       'createdAt': createdAt.toIso8601String(),
     }..removeWhere((key, value) => value == null);
   }
@@ -242,6 +350,8 @@ class UserSession implements SerializableToJson {
       "meta": meta,
       "mfa": mfa,
       "endedAt": endedAt,
+      "lastRefreshAt": lastRefreshAt,
+      "clientData": clientData,
       "createdAt": createdAt,
     }}";
   }
