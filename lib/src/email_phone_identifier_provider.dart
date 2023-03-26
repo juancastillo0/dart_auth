@@ -503,7 +503,7 @@ class UserIdentifierData {
   /// The provider id
   final String providerId;
 
-  /// The identifier.
+  /// The user identifier.
   /// For example, the email if using [IdentifierPasswordProvider.email] or
   /// phone if using [IdentifierPasswordProvider.phone].
   final String identifier;

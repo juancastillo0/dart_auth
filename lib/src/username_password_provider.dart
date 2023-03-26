@@ -435,16 +435,31 @@ class ParamDescription implements SerializableToJson {
     required this.name,
     required this.description,
     required this.regExp,
-    this.required = false,
+    this.required = requiredDefault,
     this.initialValue,
-    this.readOnly = false,
-    this.obscureText = false,
+    this.readOnly = readOnlyDefault,
+    this.obscureText = obscureTextDefault,
     this.hint,
-    this.keyboardType = ParamKeyboardType.text,
+    this.keyboardType = keyboardTypeDefault,
     this.numberKeyboardType,
-    this.textCapitalization = ParamTextCapitalization.none,
+    this.textCapitalization = textCapitalizationDefault,
     this.paramsDescriptions,
   });
+
+  /// Default for [required] is `false`
+  static const requiredDefault = false;
+
+  /// Default for [readOnly] is `false`
+  static const readOnlyDefault = false;
+
+  /// Default for [obscureText] is `false`
+  static const obscureTextDefault = false;
+
+  /// Default for [keyboardType] is [ParamKeyboardType.text]
+  static const keyboardTypeDefault = ParamKeyboardType.text;
+
+  /// Default for [textCapitalization] is [ParamTextCapitalization.none]
+  static const textCapitalizationDefault = ParamTextCapitalization.none;
 
   factory ParamDescription.fromJson(Map<String, Object?> json) {
     return ParamDescription(
@@ -461,13 +476,13 @@ class ParamDescription implements SerializableToJson {
                 ParamDescription.fromJson((value as Map).cast()),
               ),
             ),
-      required: json['required'] as bool? ?? false,
+      required: json['required'] as bool? ?? requiredDefault,
       initialValue: json['initialValue'] as String?,
-      readOnly: json['readOnly'] as bool? ?? false,
-      obscureText: json['obscureText'] as bool? ?? false,
+      readOnly: json['readOnly'] as bool? ?? readOnlyDefault,
+      obscureText: json['obscureText'] as bool? ?? obscureTextDefault,
       hint: json['hint'] as String?,
       keyboardType: json['keyboardType'] == null
-          ? ParamKeyboardType.text
+          ? keyboardTypeDefault
           : ParamKeyboardType.values.byName(json['keyboardType']! as String),
       numberKeyboardType: json['numberKeyboardType'] == null
           ? null
@@ -475,7 +490,7 @@ class ParamDescription implements SerializableToJson {
               json['numberKeyboardType']! as Map<String, Object?>,
             ),
       textCapitalization: json['textCapitalization'] == null
-          ? ParamTextCapitalization.none
+          ? textCapitalizationDefault
           : ParamTextCapitalization.values
               .byName(json['textCapitalization']! as String),
     );
