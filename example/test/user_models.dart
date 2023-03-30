@@ -1,6 +1,6 @@
 // ignore_for_file: prefer_single_quotes
 
-import 'dart:convert' show jsonDecode, jsonEncode;
+import 'dart:convert' show base64Encode, jsonDecode, jsonEncode;
 
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
@@ -168,6 +168,7 @@ AuthUser<U> mockUser<U>(
       'cloud_instance_host_name': '',
       'cloud_graph_host_name': '',
       'msgraph_host': '',
+      'picture': 'data:image/png;base64,${base64Encode([0, 1, 2, 3])}',
     }),
     reddit: (p) => p.parseUser(
       RedditUser(

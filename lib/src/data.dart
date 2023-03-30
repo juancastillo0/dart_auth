@@ -1,4 +1,4 @@
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:meta/meta.dart';
 import 'package:oauth/flow.dart';
@@ -118,8 +118,7 @@ class UserSessionBase implements SerializableToJson {
   final DateTime createdAt;
   final DateTime lastRefreshAt;
   final DateTime? endedAt;
-  final String? deviceId;
-  final SessionClientData? clientData;
+  final SessionClientData clientData;
   final List<ProviderUserId> mfa;
 
   /// A user session, persisted when the user is signed in.
@@ -128,7 +127,6 @@ class UserSessionBase implements SerializableToJson {
     required this.userId,
     required this.createdAt,
     required this.lastRefreshAt,
-    required this.deviceId,
     required this.clientData,
     required this.mfa,
     this.endedAt,
@@ -145,12 +143,9 @@ class UserSessionBase implements SerializableToJson {
           ? null
           : DateTime.parse(json['endedAt'] as String),
       lastRefreshAt: DateTime.parse(json['lastRefreshAt'] as String),
-      deviceId: json['deviceId'] as String,
-      clientData: json['clientData'] == null
-          ? null
-          : SessionClientData.fromJson(
-              json['clientData']! as Map<String, Object?>,
-            ),
+      clientData: SessionClientData.fromJson(
+        json['clientData']! as Map<String, Object?>,
+      ),
       mfa: (json['mfa'] as Iterable)
           .cast<Map<String, Object?>>()
           .map(ProviderUserId.fromJson)
@@ -166,7 +161,6 @@ class UserSessionBase implements SerializableToJson {
       endedAt: session.endedAt,
       createdAt: session.createdAt,
       lastRefreshAt: session.lastRefreshAt,
-      deviceId: session.deviceId,
       clientData: session.clientData,
       mfa: session.mfa,
     );
@@ -180,7 +174,6 @@ class UserSessionBase implements SerializableToJson {
       'endedAt': endedAt?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'lastRefreshAt': lastRefreshAt.toIso8601String(),
-      'deviceId': deviceId,
       'clientData': clientData,
       'mfa': mfa,
     };
@@ -201,7 +194,11 @@ class SessionClientData implements SerializableToJson {
   final String? userAgent;
   final String? country;
   final String? ipAddress;
+  final String? host;
   final String? apiVersion;
+  final List<String>? languages;
+  final String? timezone;
+  final Map<String, Object?>? custom;
 
   ///
   SessionClientData({
@@ -210,8 +207,53 @@ class SessionClientData implements SerializableToJson {
     this.userAgent,
     this.country,
     this.ipAddress,
+    this.host,
     this.apiVersion,
+    this.languages,
+    this.timezone,
+    this.custom,
   });
+
+  SessionClientData copyWith({
+    String? deviceId,
+    String? platform,
+    String? userAgent,
+    String? country,
+    String? ipAddress,
+    String? host,
+    String? apiVersion,
+    List<String>? languages,
+    String? timezone,
+    Map<String, Object?>? custom,
+  }) {
+    return SessionClientData(
+      deviceId: deviceId ?? this.deviceId,
+      platform: platform ?? this.platform,
+      userAgent: userAgent ?? this.userAgent,
+      country: country ?? this.country,
+      ipAddress: ipAddress ?? this.ipAddress,
+      host: host ?? this.host,
+      apiVersion: apiVersion ?? this.apiVersion,
+      languages: languages ?? this.languages,
+      timezone: timezone ?? this.timezone,
+      custom: custom ?? this.custom,
+    );
+  }
+
+  SessionClientData merge(SessionClientData other) {
+    return SessionClientData(
+      deviceId: deviceId ?? other.deviceId,
+      platform: platform ?? other.platform,
+      userAgent: userAgent ?? other.userAgent,
+      country: country ?? other.country,
+      ipAddress: ipAddress ?? other.ipAddress,
+      host: host ?? other.host,
+      apiVersion: apiVersion ?? other.apiVersion,
+      languages: languages ?? other.languages,
+      timezone: timezone ?? other.timezone,
+      custom: custom ?? other.custom,
+    );
+  }
 
   factory SessionClientData.fromJson(Map<String, Object?> json) {
     return SessionClientData(
@@ -220,7 +262,11 @@ class SessionClientData implements SerializableToJson {
       userAgent: json['userAgent'] as String?,
       country: json['country'] as String?,
       ipAddress: json['ipAddress'] as String?,
+      host: json['host'] as String?,
       apiVersion: json['apiVersion'] as String?,
+      languages: (json['languages']! as Iterable?)?.cast<String>().toList(),
+      timezone: json['timezone'] as String?,
+      custom: json['custom'] as Map<String, Object?>?,
     );
   }
 
@@ -232,7 +278,11 @@ class SessionClientData implements SerializableToJson {
       'userAgent': userAgent,
       'country': country,
       'ipAddress': ipAddress,
+      'host': host,
       'apiVersion': apiVersion,
+      'languages': languages,
+      'timezone': timezone,
+      'custom': custom,
     }..removeWhere((key, value) => value == null);
   }
 
@@ -241,7 +291,9 @@ class SessionClientData implements SerializableToJson {
         platform != other.platform ||
         userAgent != other.userAgent ||
         country != other.country ||
-        ipAddress != other.ipAddress;
+        ipAddress != other.ipAddress ||
+        // TODO: should we check timezone? make it configurable
+        timezone != timezone;
   }
 }
 
@@ -251,11 +303,9 @@ class UserSession implements SerializableToJson {
   final String? refreshToken;
   final String userId;
   final DateTime createdAt;
-  final String? deviceId;
-  final Map<String, Object?>? meta;
   final DateTime? endedAt;
   final DateTime lastRefreshAt;
-  final SessionClientData? clientData;
+  final SessionClientData clientData;
   final List<ProviderUserId> mfa;
 
   /// A user session, persisted when the user is signed in.
@@ -266,9 +316,7 @@ class UserSession implements SerializableToJson {
     required this.createdAt,
     required this.lastRefreshAt,
     required this.mfa,
-    this.deviceId,
-    this.meta,
-    this.clientData,
+    required this.clientData,
     this.endedAt,
   });
 
@@ -282,12 +330,9 @@ class UserSession implements SerializableToJson {
     UserSession other, {
     required Duration minLastRefreshAtDiff,
   }) {
-    return deviceId != other.deviceId ||
-        other.lastRefreshAt.difference(lastRefreshAt) > minLastRefreshAtDiff ||
-        clientData != other.clientData &&
-            (other.clientData == null ||
-                clientData == null ||
-                clientData!.requiresVerification(other.clientData!));
+    return other.lastRefreshAt.difference(lastRefreshAt) >
+            minLastRefreshAtDiff ||
+        clientData.requiresVerification(other.clientData);
   }
 
 // generated-dart-fixer-start{"md5Hash":"UR44W1AtB7vHXyyYToVCGQ=="}
@@ -295,16 +340,11 @@ class UserSession implements SerializableToJson {
   UserSession copyWith({
     String? refreshToken,
     bool refreshTokenToNull = false,
-    String? deviceId,
-    bool deviceIdToNull = false,
-    Map<String, Object?>? meta,
-    bool metaToNull = false,
     DateTime? endedAt,
     bool endedAtToNull = false,
     List<ProviderUserId>? mfa,
     DateTime? lastRefreshAt,
     SessionClientData? clientData,
-    bool clientDataToNull = false,
   }) {
     return UserSession(
       refreshToken:
@@ -312,27 +352,18 @@ class UserSession implements SerializableToJson {
       sessionId: sessionId,
       userId: userId,
       createdAt: createdAt,
-      deviceId: deviceId ?? (deviceIdToNull ? null : this.deviceId),
       endedAt: endedAt ?? (endedAtToNull ? null : this.endedAt),
       lastRefreshAt: lastRefreshAt ?? this.lastRefreshAt,
-      meta: meta ?? (metaToNull ? null : this.meta),
       mfa: mfa ?? this.mfa,
-      clientData: clientData ?? (clientDataToNull ? null : this.clientData),
+      clientData: clientData ?? this.clientData,
     );
   }
 
   factory UserSession.fromJson(Map json) {
     return UserSession(
-      deviceId: json['deviceId'] as String?,
       sessionId: json['sessionId'] as String,
       refreshToken: json['refreshToken'] as String?,
       userId: json['userId'] as String,
-      meta: json['meta'] == null
-          ? null
-          : ((json['meta'] is String
-                  ? jsonDecode(json['meta'] as String)
-                  : json['meta']) as Map)
-              .map((k, v) => MapEntry(k as String, v)),
       endedAt: json['endedAt'] == null
           ? null
           : DateTime.parse(json['endedAt'] as String),
@@ -343,13 +374,11 @@ class UserSession implements SerializableToJson {
           .cast<Map<String, Object?>>()
           .map(ProviderUserId.fromJson)
           .toList(),
-      clientData: json['clientData'] == null
-          ? null
-          : SessionClientData.fromJson(
-              (json['clientData'] is String
-                  ? jsonDecode(json['clientData'] as String)
-                  : json['clientData']) as Map<String, Object?>,
-            ),
+      clientData: SessionClientData.fromJson(
+        (json['clientData'] is String
+            ? jsonDecode(json['clientData'] as String)
+            : json['clientData']) as Map<String, Object?>,
+      ),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -357,11 +386,9 @@ class UserSession implements SerializableToJson {
   @override
   Map<String, Object?> toJson() {
     return {
-      'deviceId': deviceId,
       'sessionId': sessionId,
       'refreshToken': refreshToken,
       'userId': userId,
-      'meta': meta,
       'mfa': mfa,
       'endedAt': endedAt?.toIso8601String(),
       'lastRefreshAt': lastRefreshAt.toIso8601String(),
@@ -373,11 +400,9 @@ class UserSession implements SerializableToJson {
   @override
   String toString() {
     return "UserSession${{
-      "deviceId": deviceId,
       "sessionId": sessionId,
       "refreshToken": refreshToken,
       "userId": userId,
-      "meta": meta,
       "mfa": mfa,
       "endedAt": endedAt,
       "lastRefreshAt": lastRefreshAt,
@@ -766,19 +791,20 @@ class UsersInfoQuery {
   UsersInfoQuery(this.ids, this.queries);
 
   factory UsersInfoQuery.fromJson(Map<String, Object?> json) {
+    // TODO: improve this. We use id to parse query params
+    var ids =
+        (json['ids']! is String) ? [json['ids']] : (json['ids']! as Iterable);
+    ids = ids.firstOrNull is String ? ids.cast<String>().map(jsonDecode) : ids;
     return UsersInfoQuery(
-      (json['ids']! as Iterable)
-          .cast<Map<String, Object?>>()
-          .map(UserId.fromJson)
-          .toList(),
-      (json['queries']! as Iterable).cast<String>().toList(),
+      ids.cast<Map<String, Object?>>().map(UserId.fromJson).toList(),
+      (json['queries'] as Iterable?)?.cast<String>().toList() ?? const [],
     );
   }
 
   @override
-  Map<String, Object?> toJson() {
+  Map<String, Object?> toJson({bool queryParam = true}) {
     return {
-      'ids': ids,
+      'ids': queryParam ? ids.map(jsonEncode).toList() : ids,
       'queries': queries,
     };
   }

@@ -70,6 +70,7 @@ Future<HttpServer> init() async {
       Translations.defaultEnglish,
       Translations.defaultSpanish,
     ],
+    sessionClientDataFromRequest: shelfSessionClientData,
     jwtMaker: JsonWebTokenMaker(
       issuer: Uri.parse('oauth_example'),
       // TODO:
@@ -104,6 +105,8 @@ class Config {
   final Persistence persistence;
   final String baseRedirectUri;
   final JsonWebTokenMaker jwtMaker;
+  final FutureOr<SessionClientData> Function(RequestCtx)
+      sessionClientDataFromRequest;
 
   final int port;
   final String host;
@@ -120,6 +123,7 @@ class Config {
     required this.port,
     required this.host,
     this.translations = const [Translations.defaultEnglish],
+    this.sessionClientDataFromRequest = defaultSessionClientData,
     HttpClient? client,
   }) : client = client ?? HttpClient() {
     _validate();
@@ -150,6 +154,31 @@ class Config {
         ' You could use Translations.defaultEnglish as a default.',
       );
     }
+  }
+
+  static SessionClientData defaultSessionClientData(RequestCtx ctx) {
+    final headers = ctx.headersAll;
+
+    return SessionClientData(
+      // TODO: maybe pass the list
+      ipAddress: headers['x-forwarded-for']?.firstOrNull ??
+          headers['x-real-ip']?.firstOrNull ??
+          headers['x-client-ip']?.firstOrNull ??
+          headers['x-cluster-client-ip']?.firstOrNull ??
+          headers['x-forwarded']?.firstOrNull,
+      host: headers['x-forwarded-host']?.firstOrNull ??
+          headers['x-forwarded-server']?.firstOrNull ??
+          headers['host']?.firstOrNull,
+      country: headers['country']?.firstOrNull,
+      // Standard headers
+      userAgent: headers['user-agent']?.firstOrNull,
+      languages: headers[Headers.acceptLanguage],
+      // Own headers
+      apiVersion: headers['auth-api-v']?.firstOrNull,
+      deviceId: headers['device-id']?.firstOrNull,
+      platform: headers['platform']?.firstOrNull,
+      timezone: headers['timezone']?.firstOrNull,
+    );
   }
 
   /// Retrieves the [Translations] from [translations] given the [languages]

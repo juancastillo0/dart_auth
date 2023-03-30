@@ -1,4 +1,5 @@
-import 'dart:convert' show base64UrlEncode, jsonDecode, jsonEncode, utf8;
+import 'dart:convert'
+    show base64Encode, base64UrlEncode, jsonDecode, jsonEncode, utf8;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -14,6 +15,7 @@ import 'package:pointycastle/export.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'credentials_test.dart';
 import 'mock_auth_server.dart';
 import 'user_models.dart';
 
@@ -66,6 +68,7 @@ void main() async {
     late Config config;
     final client = HttpClient();
     late Uri url;
+    late HttpServer server;
 
     setUpAll(() async {
       config = Config(
@@ -85,7 +88,7 @@ void main() async {
           allProvidersMocks: allProvidersMocks,
         ),
       );
-      final server = await startServer(config);
+      server = await startServer(config);
       url = Uri.parse('http://${server.address.host}:${server.port}');
     });
 
@@ -98,12 +101,14 @@ void main() async {
         expect(response.statusCode, 200);
         expect(
           jsonDecode(response.body),
-          {
+          jsonEncDec({
             'providers': allProviders.values
                 .map(OAuthProviderData.fromProvider)
-                .map(SerializableToJson.staticToJson)
+                .toList(),
+            'credentialsProviders': [UsernamePasswordProvider()]
+                .map(CredentialsProviderData.fromProvider)
                 .toList()
-          },
+          }),
         );
       });
 
@@ -393,7 +398,11 @@ class TestState {
     /// Refresh token
     final responseRefresh = await client.post(
       url.replace(path: 'jwt/refresh'),
-      headers: {Headers.authorization: refreshToken},
+      headers: {
+        Headers.authorization: refreshToken,
+        Headers.acceptLanguage: 'en',
+        'timezone': 'Europe/Berlin',
+      },
     );
     expect(responseRefresh.statusCode, 200);
     final responseRefreshData = jsonDecode(responseRefresh.body) as Map;
@@ -415,52 +424,97 @@ class TestState {
 
     const noPicture = [
       ImplementedProviders.discord,
-      ImplementedProviders.microsoft,
       ImplementedProviders.apple,
     ];
     const noName = [ImplementedProviders.discord];
     final grantType =
         isDeviceCodeFlow ? GrantType.deviceCode : GrantType.authorizationCode;
-    expect(jsonDecode(responseMe.body), {
-      'userId': session2.userId,
-      'name': provider.providerId == ImplementedProviders.twitch
-          ? 'preferred_username'
-          : noName.contains(provider.providerId)
-              ? 'username'
-              : 'name',
-      'picture': noPicture.contains(provider.providerId)
-          ? null
-          : 'https://i.scdn.co/image/ab67616d00001e02ff9ca10b55ce82ae553c8228',
-      'email': provider.providerId == ImplementedProviders.reddit
-          ? null
-          : 'email-${provider.providerId}-${grantType.name}@example.com',
-      'emailIsVerified': provider.providerId != ImplementedProviders.reddit,
-      'phone': null,
-      'phoneIsVerified': false,
-      'sessions': [session2.toJson()],
-      'authUsers': [
-        jsonDecode(
-          jsonEncode(
-            mockUser(
-              provider,
-              nonce: authorizeUrl?.queryParameters['nonce'] ?? 'NONE',
-              grantType: isDeviceCodeFlow
-                  ? GrantType.deviceCode
-                  : GrantType.authorizationCode,
+
+    final isoDateMatcher =
+        predicate((p) => DateTime.tryParse(p! as String) != null);
+    expect(
+      jsonDecode(responseMe.body),
+      {
+        'user': {
+          'userId': session2.userId,
+          'name': providerId == ImplementedProviders.twitch
+              ? 'preferred_username'
+              : noName.contains(providerId)
+                  ? 'username'
+                  : 'name',
+          if (!noPicture.contains(providerId))
+            'picture': providerId == ImplementedProviders.microsoft
+                ? 'data:image/png;base64,${base64Encode([0, 1, 2, 3])}'
+                : 'https://i.scdn.co/image/ab67616d00001e02ff9ca10b55ce82ae553c8228',
+          if (providerId != ImplementedProviders.reddit)
+            'email': 'email-${providerId}-${grantType.name}@example.com',
+          'emailIsVerified': providerId != ImplementedProviders.reddit,
+          // 'phone': null,
+          'phoneIsVerified': false,
+          'multiFactorAuth': {
+            'requiredItems': <dynamic>[],
+            'optionalCount': 0,
+            'optionalItems': <dynamic>[]
+          },
+          'createdAt': isoDateMatcher,
+        },
+        'sessions': [
+          {
+            'sessionId': session2.sessionId,
+            'userId': session2.userId,
+            'endedAt': null,
+            'createdAt': isoDateMatcher,
+            'lastRefreshAt': isoDateMatcher,
+            'clientData': {
+              'userAgent': matches(RegExp(r'^Dart/\d\.\d\d \(dart:io\)$')),
+              'host': 'localhost:${url.port}',
+              'languages': ['en'],
+              'timezone': 'Europe/Berlin',
+            },
+            'mfa': [
+              {
+                'providerId': providerId,
+                'providerUserId': ImplementedProviders.github == providerId
+                    ? '${grantType.hashCode}'
+                    : 'id-${grantType.name}'
+              }
+            ]
+          },
+        ],
+        'authUsers': [
+          jsonDecode(
+            jsonEncode(
+              {
+                'authUser': mockUser(
+                  provider,
+                  nonce: authorizeUrl?.queryParameters['nonce'] ?? 'NONE',
+                  grantType: isDeviceCodeFlow
+                      ? GrantType.deviceCode
+                      : GrantType.authorizationCode,
+                ),
+                'providerName': {
+                  'key': '${providerId}ProviderName',
+                  'msg': '${providerId.substring(0, 1).toUpperCase()}'
+                      '${providerId.substring(1)}',
+                }
+              },
             ),
-          ),
-        )
-      ],
-    });
+          )
+        ],
+      },
+    );
 
     /// Verify subscription
     if (wsChannel.closeCode == null) {
       await wsSubscription.asFuture<dynamic>();
     }
-    expect(events.length, 1);
+    expect(events, hasLength(1));
     final lastEvent = events.last;
-    expect(lastEvent.length, 1);
-    expect(lastEvent['refreshToken'], refreshToken);
+    expect(lastEvent, {
+      'refreshToken': refreshToken,
+      'accessToken': isA<String>(),
+      'expiresAt': isoDateMatcher,
+    });
 
     // TODO: logout
 
@@ -524,7 +578,9 @@ class TestState {
       expect(responseCallback.headers, jsonHeaderMatcher);
       expect(
         jsonDecode(responseCallback.body),
-        {'kind': AuthResponseErrorKind.noState.name},
+        {
+          'error': {'key': Translations.oauthNoStateKey, 'msg': 'No state'}
+        },
       );
     }
     {
@@ -539,23 +595,34 @@ class TestState {
       expect(responseCallback.headers, jsonHeaderMatcher);
       expect(
         jsonDecode(responseCallback.body),
-        {'kind': AuthResponseErrorKind.notFoundState.name},
+        {
+          'error': {
+            'key': Translations.oauthNotFoundStateKey,
+            'msg': 'State not found'
+          },
+        },
       );
     }
-    {
-      final responseCallback = await client.post(
-        url.replace(path: 'oauth/callback/${providerId}'),
-        body: AuthRedirectResponse(
-          state: state,
-          code: code,
-        ).toJson(),
-      );
-      expect(responseCallback.statusCode, HttpStatus.internalServerError);
-      expect(responseCallback.headers, jsonHeaderMatcher);
-      expect(
-        jsonDecode(responseCallback.body),
-        {'kind': AuthResponseErrorKind.tokenResponseError.name},
-      );
-    }
+    // TODO: test this outside of successful flow
+    // {
+    //   final responseCallback = await client.post(
+    //     url.replace(path: 'oauth/callback/${providerId}'),
+    //     body: AuthRedirectResponse(
+    //       state: state,
+    //       code: code,
+    //     ).toJson(),
+    //   );
+    //   expect(responseCallback.statusCode, HttpStatus.internalServerError);
+    //   expect(responseCallback.headers, jsonHeaderMatcher);
+    //   expect(
+    //     jsonDecode(responseCallback.body),
+    //     {
+    //       'error': {
+    //         'key': Translations.oauthTokenResponseErrorKey,
+    //         'msg': 'Token endpoint error'
+    //       },
+    //     },
+    //   );
+    // }
   }
 }

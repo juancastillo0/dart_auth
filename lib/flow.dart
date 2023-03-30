@@ -342,17 +342,17 @@ class OAuthCodeStateMeta implements SerializableToJson {
 
   factory OAuthCodeStateMeta.fromJson(Map<String, Object?> json) {
     return OAuthCodeStateMeta(
-      claims: json['claims'] == null
-          ? null
+      claims: json['claims'] is UserClaims?
+          ? json['claims'] as UserClaims?
           : UserClaims.fromJson((json['claims']! as Map).cast()),
-      token: json['token'] == null
-          ? null
+      token: json['token'] is TokenResponse?
+          ? json['token'] as TokenResponse?
           : TokenResponse.fromJson((json['token']! as Map).cast()),
-      error: json['error'] == null
-          ? null
+      error: json['error'] is AuthResponseError?
+          ? json['error'] as AuthResponseError?
           : AuthResponseError.fromJson((json['error']! as Map).cast()),
-      getUserError: json['getUserError'] == null
-          ? null
+      getUserError: json['getUserError'] is AuthError?
+          ? json['getUserError'] as AuthError?
           : AuthError.fromJson(json['getUserError']! as Map<String, Object?>),
     );
   }

@@ -65,10 +65,10 @@ CREATE TABLE IF NOT EXISTS ${tables.account} (
     database.execute('''
 CREATE TABLE IF NOT EXISTS ${tables.session} (
   sessionId TEXT NOT NULL,
-  deviceId TEXT NULL,
   refreshToken TEXT NULL,
   userId TEXT NOT NULL,
-  meta $jsonType NULL,
+  lastRefreshAt DATE NOT NULL,
+  clientData $jsonType NOT NULL,
   mfa $jsonType NOT NULL,
   endedAt DATE NULL,
   createdAt DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,

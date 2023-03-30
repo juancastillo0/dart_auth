@@ -119,10 +119,11 @@ class MicrosoftProvider extends OpenIdConnectProvider<OpenIdClaims> {
     return result.map(
       (claims) {
         final json = claims.toJson();
-        if (picture != null) {
-          json['picture'] = json['picture'] ?? picture;
-        }
-        return parseUser(json);
+        return parseUser(
+          picture == null
+              ? json
+              : {'picture': json['picture'] ?? picture, ...json},
+        );
       },
     );
   }

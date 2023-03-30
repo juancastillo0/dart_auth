@@ -8,7 +8,6 @@ import 'package:http/testing.dart';
 import 'package:jose/jose.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth_example/shelf_helpers.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'package:test/test.dart';
 
@@ -47,6 +46,8 @@ class DeviceCodeResponseTest {
     required this.redirectUri,
   });
 }
+
+Map<String, String> get jsonHeader => {Headers.contentType: Headers.appJson};
 
 const _testJsonWebKey = {
   'kty': 'RSA',
@@ -109,6 +110,9 @@ MockClient createMockClient({
   required Map<String, ProviderClientMock> allProvidersMocks,
 }) {
   final userEndpoints = {
+    ImplementedProviders.microsoft: [
+      r'https://graph.microsoft.com/v1.0/me/photos/96x96/$value',
+    ],
     ImplementedProviders.discord: ['https://discord.com/api/oauth2/@me'],
     ImplementedProviders.facebook: ['https://graph.facebook.com/v16.0/me'],
     ImplementedProviders.github: [
@@ -443,6 +447,10 @@ Response _handleGetUserEndpoint(
   OAuthProvider<dynamic> provider,
   ProviderClientMock providerMock,
 ) {
+  final isMicrosoftPicture = provider is MicrosoftProvider &&
+      request.url.toString().startsWith(
+            r'https://graph.microsoft.com/v1.0/me/photos/96x96/$value',
+          );
   final isGithubUser = provider is GithubProvider &&
       !request.url.toString().startsWith('https://api.github.com/user/emails');
   if (provider is GithubProvider) {
@@ -451,7 +459,7 @@ Response _handleGetUserEndpoint(
       request.headers[Headers.accept],
       'application/vnd.github+json',
     );
-  } else {
+  } else if (!isMicrosoftPicture) {
     expect(request.headers[Headers.accept], Headers.appJson);
   }
 
@@ -512,6 +520,12 @@ Response _handleGetUserEndpoint(
     } else {
       jsonData = githubUser.providerUser.toJson();
     }
+  } else if (isMicrosoftPicture) {
+    return Response.bytes(
+      [0, 1, 2, 3],
+      200,
+      headers: {'content-type': 'image/png'},
+    );
   } else {
     jsonData = user.toJson();
   }
