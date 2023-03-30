@@ -1,39 +1,80 @@
-import 'dart:convert';
-
 import 'package:jose/jose.dart';
 import 'package:oauth/oauth.dart';
-import 'package:oauth/src/password.dart';
 
 String? _getAuthToken(RequestCtx ctx) {
-  return ctx.requestHeaders['authorization']?.split(' ').last;
+  return ctx.headersAll[Headers.authorization]?.firstOrNull?.split(' ').last;
 }
 
 abstract class RequestCtx {
-  Map<String, String> get requestHeaders;
+  /// The HTTP method of the request.
+  String get method;
 
+  /// The headers of the request.
+  Map<String, List<String>> get headersAll;
+
+  /// Adds a header to the response.
   void appendResponseHeader(String name, String value);
 
+  /// Reads the body of the request as a String.
+  Future<String> readAsString();
+
+  /// The scope of the request.
+  /// Contains Objects that can be used to scope data to the request.
   Map<Object, Object?> get scope;
 
+  /// The uri of the request.
+  Uri get url;
+
+  /// The inner request object.
+  Object get innerRequest;
+
+  /// The mime type of the request
+  /// // TODO: handle application/whatever+json
+  String? get mimeType =>
+      headersAll[Headers.contentType]?.firstOrNull?.split(';').first;
+
   ///
-  factory RequestCtx(
-    Map<String, String> requestHeaders,
-    void Function(String name, String value) appendResponseHeader,
-  ) = _CtxValue;
+  factory RequestCtx({
+    required Object innerRequest,
+    required String method,
+    required Map<String, List<String>> headersAll,
+    required void Function(String name, String value) appendResponseHeader,
+    required Future<String> Function() readAsString,
+    required Uri url,
+  }) = _CtxValue;
 }
 
-class _CtxValue implements RequestCtx {
+class _CtxValue with RequestCtx {
   @override
-  final Map<String, String> requestHeaders;
-  final void Function(String name, String value) _appendResponseHeader;
+  final String method;
+  @override
+  final Map<String, List<String>> headersAll;
   @override
   final Map<Object, Object?> scope = {};
+  @override
+  final Uri url;
+  @override
+  final Object innerRequest;
 
-  _CtxValue(this.requestHeaders, this._appendResponseHeader);
+  final void Function(String name, String value) _appendResponseHeader;
+  final Future<String> Function() _readAsString;
+
+  _CtxValue({
+    required this.innerRequest,
+    required this.method,
+    required this.url,
+    required this.headersAll,
+    required void Function(String name, String value) appendResponseHeader,
+    required Future<String> Function() readAsString,
+  })  : _appendResponseHeader = appendResponseHeader,
+        _readAsString = readAsString;
 
   @override
   void appendResponseHeader(String name, String value) =>
       _appendResponseHeader(name, value);
+
+  @override
+  Future<String> readAsString() => _readAsString();
 }
 
 class UserClaims implements SerializableToJson {
@@ -203,7 +244,8 @@ class JsonWebTokenMaker<U> {
   }) {
     final int issuedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final int expiresAt = issuedAt + duration.inSeconds;
-    final jwtId = base64Encode(getRandomBytes(24));
+
+    final jwtId = generateStateToken(size: 24);
     return _createJwt({
       'sub': userId,
       'exp': expiresAt,

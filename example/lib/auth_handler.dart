@@ -5,13 +5,9 @@ import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:shelf/shelf.dart' as shelf;
-import 'package:shelf/shelf.dart' show Request;
-import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'main.dart';
-import 'shelf_helpers.dart';
 
 extension ThrowErr<O extends Object, E extends Object> on Result<O, E> {
   /// throws [E] if this is an [Err], else it returns [O] if it is [Ok].
@@ -24,86 +20,97 @@ extension ThrowErr<O extends Object, E extends Object> on Result<O, E> {
   }
 }
 
-class Response<O extends SerializableToJson, E extends SerializableToJson> {
+/// A function that handles a web socket request.
+///
+/// The resulting function should return a [FutureOr] of the response object
+/// of the web framework. It will be set to [Resp.innerResponse].
+typedef WebSocketHandler = FutureOr<Object> Function(RequestCtx) Function(
+  void Function(WebSocketChannel channel, String? subprotocol) callback,
+);
+
+/// The data used to populate an HTTP response with an optional json body.
+class Resp<O extends SerializableToJson, E extends SerializableToJson> {
+  /// The status code of the response.
   final int statusCode;
+
+  /// The body of the response when the response is [ok].
   final O? ok;
+
+  /// The body of the response when the response is not [ok].
   final E? err;
 
-  ///
-  const Response(
+  /// The response object of the web framework.
+  /// Used for web sockets in [WebSocketHandler].
+  final Object? innerResponse;
+
+  /// The data used to populate an HTTP response with an optional json body.
+  const Resp(
     this.statusCode, {
     required this.ok,
     required this.err,
+    this.innerResponse,
   });
 
   /// ok: 200
-  factory Response.ok(O? body) => Response(
+  factory Resp.ok(O? body) => Resp(
         200,
         ok: body,
         err: null,
       );
 
   /// badRequest: 400
-  factory Response.badRequest({required E? body}) => Response(
+  factory Resp.badRequest({required E? body}) => Resp(
         400,
         err: body,
         ok: null,
       );
 
   /// unauthorized: 401
-  factory Response.unauthorized(E? err) => Response(
+  factory Resp.unauthorized(E? err) => Resp(
         401,
         err: err,
         ok: null,
       );
 
   /// forbidden: 403
-  factory Response.forbidden(E? err) => Response(
+  factory Resp.forbidden(E? err) => Resp(
         403,
         err: err,
         ok: null,
       );
 
   /// notFound: 404
-  factory Response.notFound(E? err) => Response(
+  factory Resp.notFound(E? err) => Resp(
         404,
         err: err,
         ok: null,
       );
 
   /// internalServerError: 500
-  factory Response.internalServerError({E? body}) => Response(
+  factory Resp.internalServerError({E? body}) => Resp(
         500,
         err: body,
         ok: null,
       );
-
-  shelf.Response toShelf(Translations translations) {
-    final body = ok ?? err;
-    return shelf.Response(
-      statusCode,
-      body: body == null ? null : jsonEncodeWithTranslate(body, translations),
-      headers: body == null ? null : jsonHeader,
-    );
-  }
 }
 
-shelf.Handler makeHandler(Config config) {
+Future<Resp?> Function(RequestCtx) makeHandler(
+  Config config, {
+  required WebSocketHandler? webSocketHandler,
+}) {
   final handler = AuthHandler(config);
   const pIdRegExp = '/?([a-zA-Z_-]+)?';
 
-  Future<shelf.Response> handleRequest(Request request) async {
-    final path = request.url.path;
+  Future<Resp?> handleRequest(RequestCtx request) async {
+    String path = request.url.path;
+    if (path.startsWith('/')) path = path.substring(1);
 
-    Response<SerializableToJson, SerializableToJson>? response;
+    Resp<SerializableToJson, SerializableToJson>? response;
     try {
-      if (path == '') {
-        if (request.method != 'GET') return shelf.Response.notFound(null);
-        return shelf.Response.ok('<html><body></body></html>');
-        // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
-      } else if (path == 'oauth/providers') {
-        if (request.method != 'GET') return shelf.Response.notFound(null);
-        response = Response.ok(
+      // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
+      if (path == 'oauth/providers') {
+        if (request.method != 'GET') return Resp.notFound(null);
+        response = Resp.ok(
           AuthProvidersData(
             config.allOAuthProviders.values
                 .map(OAuthProviderData.fromProvider)
@@ -122,10 +129,14 @@ shelf.Handler makeHandler(Config config) {
         response = await handler.handleOAuthCallback(request);
       } else if (RegExp('oauth/state').hasMatch(path)) {
         response = await handler.getOAuthState(request);
-      } else if (RegExp('oauth/subscribe').hasMatch(path)) {
-        final shelfResponse =
-            await handler.handlerWebSocketOAuthStateSubscribe(request);
-        return shelfResponse;
+      } else if (webSocketHandler != null &&
+          RegExp('oauth/subscribe').hasMatch(path)) {
+        // TODO: return unsupported for webSocketHandler == null
+        final innerResponse = await handler.handlerWebSocketOAuthStateSubscribe(
+          request,
+          webSocketHandler,
+        );
+        response = Resp(-1, ok: null, err: null, innerResponse: innerResponse);
         // TODO: maybe use /token instead?
       } else if (path == 'jwt/refresh') {
         response = await handler.refreshAuthToken(request);
@@ -146,18 +157,10 @@ shelf.Handler makeHandler(Config config) {
       } else if (RegExp('admin/users').hasMatch(path)) {
         response = await handler.getUsersInfoForAdmin(request);
       }
-    } on Response catch (e) {
+    } on Resp catch (e) {
       response = e;
     }
-    if (response != null) {
-      final translations = config.getTranslationForLanguage(
-        request.headersAll[Headers.acceptLanguage],
-      );
-      return response.toShelf(translations);
-    }
-    return shelf.Response.notFound(
-      '${request.method} Request for "${request.url}"',
-    );
+    return response;
   }
 
   return handleRequest;
@@ -178,10 +181,9 @@ class AuthHandler {
   final Duration accessTokenDuration;
   final Duration refreshTokenDuration;
 
-  Response<O, AuthError>
-      _wrongProviderResponse<O extends SerializableToJson>() {
+  Resp<O, AuthError> _wrongProviderResponse<O extends SerializableToJson>() {
     final providers = config.allProviders.keys.join('", "');
-    return Response.badRequest(
+    return Resp.badRequest(
       body: AuthError(
         const Translation(key: Translations.providerNotFoundKey),
         // TODO: should we send the options as args to Translation?
@@ -190,18 +192,18 @@ class AuthHandler {
     );
   }
 
-  static Response<O, E> _badRequestExpectedObject<O extends SerializableToJson,
+  static Resp<O, E> _badRequestExpectedObject<O extends SerializableToJson,
           E extends SerializableToJson>() =>
-      Response.badRequest(body: null);
+      Resp.badRequest(body: null);
 
-  String? _getProviderId(Request request) {
+  String? _getProviderId(RequestCtx request) {
     return request.url.queryParameters['providerId'] ??
         (request.url.pathSegments.isNotEmpty
             ? request.url.pathSegments.last
             : null);
   }
 
-  Result<OAuthProvider, Response> getOAuthProvider(Request request) {
+  Result<OAuthProvider, Resp> getOAuthProvider(RequestCtx request) {
     final providerId = _getProviderId(request);
     final providerInstance = config.allOAuthProviders[providerId];
     if (providerInstance == null) {
@@ -210,8 +212,8 @@ class AuthHandler {
     return Ok(providerInstance);
   }
 
-  Result<CredentialsProvider, Response> getCredentialsProvider(
-    Request request,
+  Result<CredentialsProvider, Resp> getCredentialsProvider(
+    RequestCtx request,
   ) {
     final providerId = _getProviderId(request);
     final providerInstance = config.allCredentialsProviders[providerId];
@@ -221,23 +223,23 @@ class AuthHandler {
     return Ok(providerInstance);
   }
 
-  Future<Response<AuthResponseSuccess, SerializableToJson>> refreshAuthToken(
-    Request request,
+  Future<Resp<AuthResponseSuccess, SerializableToJson>> refreshAuthToken(
+    RequestCtx request,
   ) async {
-    if (request.method != 'POST') return Response.notFound(null);
+    if (request.method != 'POST') return Resp.notFound(null);
 
     final claims = await config.jwtMaker.getUserClaims(
-      ctx(request),
+      request,
       isRefreshToken: true,
     );
-    if (claims == null) return Response.unauthorized(null);
+    if (claims == null) return Resp.unauthorized(null);
 
     final session = await config.persistence.getValidSession(claims.sessionId);
-    if (session == null) return Response.unauthorized(null);
+    if (session == null) return Resp.unauthorized(null);
 
     final newSession = session.copyWith(
       lastRefreshAt: DateTime.now(),
-      clientData: SessionClientData(),
+      clientData: await config.sessionClientDataFromRequest(request),
     );
     if (session.requiresVerification(
       newSession,
@@ -257,7 +259,7 @@ class AuthHandler {
       meta: claims.meta,
     );
     await config.persistence.saveSession(newSession);
-    return Response.ok(
+    return Resp.ok(
       AuthResponseSuccess(
         accessToken: jwt,
         expiresAt: expiresAt,
@@ -266,9 +268,9 @@ class AuthHandler {
     );
   }
 
-  Future<Response> handleOAuthCallback(Request request) async {
+  Future<Resp> handleOAuthCallback(RequestCtx request) async {
     if (request.method != 'GET' && request.method != 'POST') {
-      return Response.notFound(null);
+      return Resp.notFound(null);
     }
     final providerInstance = getOAuthProvider(request).throwErr();
 
@@ -295,14 +297,14 @@ class AuthHandler {
         }
         switch (err.kind) {
           case AuthResponseErrorKind.endpointError:
-            return Response.ok(null);
+            return Resp.ok(null);
           case AuthResponseErrorKind.noState:
           case AuthResponseErrorKind.noCode:
           case AuthResponseErrorKind.notFoundState:
           case AuthResponseErrorKind.invalidState:
-            return Response.badRequest(body: err.kind.error);
+            return Resp.badRequest(body: err.kind.error);
           case AuthResponseErrorKind.tokenResponseError:
-            return Response.internalServerError(body: err.kind.error);
+            return Resp.internalServerError(body: err.kind.error);
         }
       },
       ok: (token) async {
@@ -311,7 +313,7 @@ class AuthHandler {
           token.stateModel!,
           OAuthCodeStateMeta(token: token),
         );
-        return Response.ok(null);
+        return Resp.ok(null);
         // final stateModel = token.stateModel!;
         // final claims = stateModel.meta?['claims'];
         // TODO: should we save the session and user right away?
@@ -341,6 +343,7 @@ class AuthHandler {
   Future<Result<UserSessionOrPartial, AuthError>> processOAuthToken<U>(
     TokenResponse token,
     OAuthProvider<U> providerInstance, {
+    required RequestCtx request,
     required String sessionId,
     required UserClaims? claims,
   }) async {
@@ -369,6 +372,7 @@ class AuthHandler {
     return result.mapErr(AuthError.fromGetUserError).andThenAsync(
           (user) => onUserAuthenticated(
             user,
+            request: request,
             sessionId: sessionId,
             mfaSession: session,
             claims: claims,
@@ -378,6 +382,7 @@ class AuthHandler {
 
   Future<Result<UserSessionOrPartial, AuthError>> onUserAuthenticated(
     AuthUser<Object?> user, {
+    required RequestCtx request,
     required String sessionId,
     required UserSession? mfaSession,
     required UserClaims? claims,
@@ -461,6 +466,7 @@ class AuthHandler {
     }
 
     final hasLeftMFA = leftMfa != null && leftMfa.isNotEmpty;
+    final clientData = await config.sessionClientDataFromRequest(request);
     final userSession = UserSession(
       refreshToken: hasLeftMFA
           ? null
@@ -475,6 +481,7 @@ class AuthHandler {
       createdAt: mfaSession?.createdAt ?? DateTime.now(),
       mfa: doneMfa.toList(),
       lastRefreshAt: DateTime.now(),
+      clientData: clientData,
     );
     // TODO: should we save the session for MFA? Maybe just use access token claims? OAuth relies on sessions
     if (!hasLeftMFA) {
@@ -484,22 +491,22 @@ class AuthHandler {
     return Ok(UserSessionOrPartial(userSession, leftMfa: leftMfa));
   }
 
-  Future<Response<OAuthProviderUrl, AuthError>> getOAuthUrl(
-    Request request,
+  Future<Resp<OAuthProviderUrl, AuthError>> getOAuthUrl(
+    RequestCtx request,
   ) async {
-    if (request.method != 'GET') return Response.notFound(null);
+    if (request.method != 'GET') return Resp.notFound(null);
     final providerInstance = getOAuthProvider(request).throwErr();
     final isImplicit = request.url.queryParameters['flowType'] == 'implicit';
     if (isImplicit &&
         !providerInstance.supportedFlows.contains(GrantType.tokenImplicit)) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.providerDoesNotSupportImplicitFlowKey),
         ),
       );
     }
 
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claims = await config.jwtMaker.getUserClaims(request);
     final claimsMeta =
         claims == null ? null : UserMetaClaims.fromJson(claims.meta!);
     final flow =
@@ -507,6 +514,13 @@ class AuthHandler {
     final state = generateStateToken();
     // TODO: use same session from claims? should we save the loggedin status in the state instead of session
     final sessionId = generateStateToken();
+    final userId = claims?.userId ?? generateStateToken();
+
+    final meta = UserMetaClaims.authorizationCode(
+      providerId: providerInstance.providerId,
+      state: state,
+      mfaItems: claimsMeta?.mfaItems,
+    );
     final url = await flow.getAuthorizeUri(
       redirectUri:
           '${config.baseRedirectUri}/oauth/callback/${providerInstance.providerId}',
@@ -516,27 +530,30 @@ class AuthHandler {
       sessionId: sessionId,
       responseType:
           isImplicit ? OAuthResponseType.token : OAuthResponseType.code,
-      meta: claims == null ? null : OAuthCodeStateMeta(claims: claims).toJson(),
+      meta: OAuthCodeStateMeta(
+        claims: claims ??
+            UserClaims(
+              userId: userId,
+              sessionId: sessionId,
+              meta: meta.toJson(),
+            ),
+      ).toJson(),
     );
     final jwt = config.jwtMaker.createJwt(
       // TODO: maybe anonymous users?
-      userId: claims?.userId ?? generateStateToken(),
+      userId: userId,
       sessionId: sessionId,
       duration: authSessionDuration,
       isRefreshToken: false,
-      meta: UserMetaClaims.authorizationCode(
-        providerId: providerInstance.providerId,
-        state: state,
-        mfaItems: claimsMeta?.mfaItems,
-      ).toJson(),
+      meta: meta.toJson(),
     );
-    return Response.ok(OAuthProviderUrl(url: url.toString(), accessToken: jwt));
+    return Resp.ok(OAuthProviderUrl(url: url.toString(), accessToken: jwt));
   }
 
-  Future<Response<OAuthProviderDevice, AuthError>> getOAuthDeviceCode(
-    Request request,
+  Future<Resp<OAuthProviderDevice, AuthError>> getOAuthDeviceCode(
+    RequestCtx request,
   ) async {
-    if (request.method != 'GET') return Response.notFound(null);
+    if (request.method != 'GET') return Resp.notFound(null);
     final providerInstance = getOAuthProvider(request).throwErr();
 
     final deviceCode = await providerInstance.getDeviceCode(
@@ -546,13 +563,13 @@ class AuthHandler {
     );
     if (deviceCode == null) {
       // The provider does not support it
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.providerDoesNotSupportDeviceFlowKey),
         ),
       );
     }
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claims = await config.jwtMaker.getUserClaims(request);
     final meta = claims == null ? null : UserMetaClaims.fromJson(claims.meta!);
 
     final jwt = config.jwtMaker.createJwt(
@@ -568,7 +585,7 @@ class AuthHandler {
         mfaItems: meta?.mfaItems,
       ).toJson(),
     );
-    return Response.ok(
+    return Resp.ok(
       OAuthProviderDevice(device: deviceCode, accessToken: jwt),
     );
   }
@@ -592,6 +609,7 @@ class AuthHandler {
 
   Future<Result<Option<UserSessionOrPartial>, AuthError>> verifyOAuthCodeState({
     required UserClaims claims,
+    required RequestCtx request,
   }) async {
     final claimsMeta = UserMetaClaims.fromJson(claims.meta!);
     final state = claimsMeta.state;
@@ -617,6 +635,7 @@ class AuthHandler {
       final result = await processOAuthToken(
         meta.token!,
         providerInstance,
+        request: request,
         sessionId: claims.sessionId,
         claims: claims,
       );
@@ -634,19 +653,19 @@ class AuthHandler {
     }
   }
 
-  Future<Response<AuthResponseSuccess, AuthError>> getOAuthState(
-    Request request,
+  Future<Resp<AuthResponseSuccess, AuthError>> getOAuthState(
+    RequestCtx request,
   ) async {
-    if (request.method != 'GET') return Response.notFound(null);
+    if (request.method != 'GET') return Resp.notFound(null);
 
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claims = await config.jwtMaker.getUserClaims(request);
     if (claims?.meta == null) {
-      return Response.forbidden(null);
+      return Resp.forbidden(null);
     }
     final meta = UserMetaClaims.fromJson(claims!.meta!);
     final providerInstance = config.allOAuthProviders[meta.providerId];
     if (providerInstance == null) {
-      return Response.internalServerError(
+      return Resp.internalServerError(
         body: const AuthError(
           Translation(key: Translations.providerNotFoundKey),
         ),
@@ -660,16 +679,18 @@ class AuthHandler {
     if (refreshToken == null || refreshToken.isEmpty) {
       // has not been logged in
       if (meta.isAuthorizationCodeFlow) {
-        final result = await verifyOAuthCodeState(claims: claims);
+        final result = await verifyOAuthCodeState(
+          claims: claims,
+          request: request,
+        );
         if (result.isErr()) {
           // Error in flow
-          return Response.unauthorized(result.unwrapErr());
+          return Resp.unauthorized(result.unwrapErr());
         } else if (result.unwrap().isNone()) {
           // no user created at the moment
-          return Response.unauthorized(null);
+          return Resp.unauthorized(null);
         }
         partialSession = result.unwrap().unwrap();
-        return Response.unauthorized(null);
       } else if (meta.isDeviceCodeFlow) {
         // poll
         final result = await providerInstance.pollDeviceCodeToken(
@@ -677,7 +698,7 @@ class AuthHandler {
           deviceCode: meta.deviceCode!,
         );
         if (result.isErr()) {
-          return Response.unauthorized(
+          return Resp.unauthorized(
             AuthError.fromOAuthResponseError(result.unwrapErr()),
           );
         }
@@ -685,15 +706,16 @@ class AuthHandler {
         final sessionResult = await processOAuthToken(
           token,
           providerInstance,
+          request: request,
           sessionId: claims.sessionId,
           claims: claims,
         );
         if (sessionResult.isErr()) {
-          return Response.internalServerError(body: sessionResult.unwrapErr());
+          return Resp.internalServerError(body: sessionResult.unwrapErr());
         }
         partialSession = sessionResult.unwrap();
       } else {
-        return Response.badRequest(
+        return Resp.badRequest(
           body: const AuthError(
             Translation(key: Translations.wrongAccessTokenKey),
           ),
@@ -702,7 +724,7 @@ class AuthHandler {
     }
     final responseData =
         await successResponse(partialSession!, providerInstance.providerId);
-    return Response.ok(responseData);
+    return Resp.ok(responseData);
   }
 
   Future<AuthResponseSuccess> successResponse(
@@ -778,8 +800,9 @@ class AuthHandler {
     return jwt;
   }
 
-  FutureOr<shelf.Response> handlerWebSocketOAuthStateSubscribe(
-    Request request,
+  FutureOr<Object> handlerWebSocketOAuthStateSubscribe(
+    RequestCtx request,
+    WebSocketHandler webSocketHandler,
   ) {
     final translations = config.getTranslationForLanguage(
       request.headersAll[Headers.acceptLanguage],
@@ -815,7 +838,7 @@ class AuthHandler {
           return _closeUnauthorized();
         }
         final conn = await config.jwtMaker.initWebSocketConnection(
-          ctx(request),
+          request,
           WebSocketServer(
             close: channel.sink.close,
             done: channel.sink.done,
@@ -868,6 +891,7 @@ class AuthHandler {
                   final sessionResult = await processOAuthToken(
                     token,
                     provider,
+                    request: request,
                     sessionId: claims.sessionId,
                     claims: claims,
                   );
@@ -918,7 +942,10 @@ class AuthHandler {
                 ),
               );
             } else {
-              final result = await verifyOAuthCodeState(claims: claims);
+              final result = await verifyOAuthCodeState(
+                claims: claims,
+                request: request,
+              );
               if (result.isErr()) {
                 return sendAndClose(AuthResponse.fromError(result.unwrapErr()));
               } else if (result.unwrap().isSome()) {
@@ -942,39 +969,39 @@ class AuthHandler {
     return handler(request);
   }
 
-  Future<UserClaims> authenticatedUserOrThrow(Request request) async {
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+  Future<UserClaims> authenticatedUserOrThrow(RequestCtx request) async {
+    final claims = await config.jwtMaker.getUserClaims(request);
     if (claims == null ||
         claims.meta == null ||
         !UserMetaClaims.fromJson(claims.meta!).isLoggedIn) {
-      throw Response<SerializableToJson, SerializableToJson>.unauthorized(null);
+      throw Resp<SerializableToJson, SerializableToJson>.unauthorized(null);
     }
     return claims;
   }
 
-  Future<Response> revokeAuthToken(Request request) async {
-    if (request.method != 'POST') return Response.notFound(null);
+  Future<Resp> revokeAuthToken(RequestCtx request) async {
+    if (request.method != 'POST') return Resp.notFound(null);
     final claims = await authenticatedUserOrThrow(request);
 
     final session = await config.persistence.getValidSession(claims.sessionId);
-    if (session == null) return Response.ok(null);
+    if (session == null) return Resp.ok(null);
     await config.persistence.saveSession(
       session.copyWith(endedAt: DateTime.now()),
     );
     // TODO: revoke provider token
-    return Response.ok(null);
+    return Resp.ok(null);
   }
 
-  Future<Response<UserInfoMe, SerializableToJson>> getUserMeInfo(
-    Request request,
+  Future<Resp<UserInfoMe, SerializableToJson>> getUserMeInfo(
+    RequestCtx request,
   ) async {
-    if (request.method != 'GET') return Response.notFound(null);
+    if (request.method != 'GET') return Resp.notFound(null);
     final claims = await authenticatedUserOrThrow(request);
     final fields = request.url.queryParametersAll['fields'] ?? [];
 
     final user = await config.persistence
         .getUserById(UserId(claims.userId, UserIdKind.innerId));
-    if (user == null) return Response.notFound(null);
+    if (user == null) return Resp.notFound(null);
 
     List<UserSession>? sessions;
     if (fields.contains('sessions')) {
@@ -982,7 +1009,7 @@ class AuthHandler {
           .getUserSessions(user.userId, onlyValid: false);
     }
 
-    return Response.ok(
+    return Resp.ok(
       UserInfoMe.fromComplete(
         user,
         config.allProviders,
@@ -991,8 +1018,8 @@ class AuthHandler {
     );
   }
 
-  Future<Result<T, Response>> _parseBody<T extends Object>(
-    Request request,
+  Future<Result<T, Resp>> _parseBody<T extends Object>(
+    RequestCtx request,
     T Function(Map<String, Object?>) fromBody,
   ) async {
     final data = await parseBodyOrUrlData(request);
@@ -1007,10 +1034,10 @@ class AuthHandler {
     return Ok(query);
   }
 
-  Future<Response<UsersInfo, SerializableToJson>> getUsersInfoForAdmin(
-    Request request,
+  Future<Resp<UsersInfo, SerializableToJson>> getUsersInfoForAdmin(
+    RequestCtx request,
   ) async {
-    if (request.method != 'GET') return Response.notFound(null);
+    if (request.method != 'GET') return Resp.notFound(null);
     // TODO: check is admin
     final claims = await authenticatedUserOrThrow(request);
     final query =
@@ -1034,7 +1061,7 @@ class AuthHandler {
           .getUserSessions(values.first.userId, onlyValid: false);
     }
 
-    return Response.ok(
+    return Resp.ok(
       UsersInfo(
         values.map(
           (e) {
@@ -1049,13 +1076,13 @@ class AuthHandler {
     );
   }
 
-  Future<Response<UserInfoMe, AuthError>> userMFA(Request request) async {
-    if (request.method != 'POST') return Response.notFound(null);
+  Future<Resp<UserInfoMe, AuthError>> userMFA(RequestCtx request) async {
+    if (request.method != 'POST') return Resp.notFound(null);
     final claims = await authenticatedUserOrThrow(request);
     // TODO: limit claims authentication time
     final user = await config.persistence
         .getUserById(UserId(claims.userId, UserIdKind.innerId));
-    if (user == null) return Response.notFound(null);
+    if (user == null) return Resp.notFound(null);
 
     final data = await parseBodyOrUrlData(request);
     if (data is! Map<String, Object?>) return _badRequestExpectedObject();
@@ -1067,7 +1094,7 @@ class AuthHandler {
         .toList();
 
     if (notFoundMethods.isNotEmpty) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: AuthError(
           Translation(
             key: Translations.notFoundMethodsKey,
@@ -1080,7 +1107,7 @@ class AuthHandler {
     }
     final validationErrors = mfa.validationErrors;
     if (validationErrors.isNotEmpty) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: AuthError(
           validationErrors.first.translation,
           otherErrors: validationErrors.length == 1
@@ -1102,7 +1129,7 @@ class AuthHandler {
           .getUserSessions(user.userId, onlyValid: false);
     }
 
-    return Response.ok(
+    return Resp.ok(
       UserInfoMe.fromComplete(
         AppUserComplete(user: newUser, authUsers: user.authUsers),
         config.allProviders,
@@ -1111,10 +1138,10 @@ class AuthHandler {
     );
   }
 
-  Future<Response<UserInfoMe, AuthError>> authenticationProviderDelete(
-    Request request,
+  Future<Resp<UserInfoMe, AuthError>> authenticationProviderDelete(
+    RequestCtx request,
   ) async {
-    if (request.method != 'DELETE') return Response.notFound(null);
+    if (request.method != 'DELETE') return Resp.notFound(null);
     final providerInstance = config.allProviders[_getProviderId(request)];
     if (providerInstance == null) return _wrongProviderResponse();
 
@@ -1125,7 +1152,7 @@ class AuthHandler {
 
     final providerUserId = data['providerUserId'];
     if (providerUserId is! String) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.providerUserIdIsRequiredKey),
         ),
@@ -1144,17 +1171,17 @@ class AuthHandler {
           e.providerId == providerInstance.providerId,
     );
     if (user == null) {
-      return Response.internalServerError();
+      return Resp.internalServerError();
     } else if (authUserIndex == -1) {
       // No account found
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.authProviderNotFoundToDeleteKey),
         ),
       );
     } else if (user.authUsers.length == 1) {
       // Can't delete the only provider
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.canNotDeleteOnlyProviderKey),
         ),
@@ -1162,7 +1189,7 @@ class AuthHandler {
     } else if (user.user.multiFactorAuth.kind(mfaItem) !=
         MFAProviderKind.none) {
       // Can't delete a provider in MFA
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.canNotDeleteMFAProviderKey),
         ),
@@ -1175,7 +1202,7 @@ class AuthHandler {
       authUser,
     );
 
-    return Response.ok(
+    return Resp.ok(
       UserInfoMe.fromComplete(
         AppUserComplete(
           user: user.user,
@@ -1186,33 +1213,33 @@ class AuthHandler {
     );
   }
 
-  Future<Response<UserMeOrResponse, AuthError>> credentialsUpdate(
-    Request request,
+  Future<Resp<UserMeOrResponse, AuthError>> credentialsUpdate(
+    RequestCtx request,
   ) async {
-    if (request.method != 'PUT') return Response.notFound(null);
+    if (request.method != 'PUT') return Resp.notFound(null);
     final providerInstance = getCredentialsProvider(request).throwErr();
     return _credentialsUpdate(request, providerInstance);
   }
 
   // TODO: proper type SerializableToJson UserMeOrResponse
-  Future<Response<UserMeOrResponse, AuthError>>
+  Future<Resp<UserMeOrResponse, AuthError>>
       _credentialsUpdate<C extends CredentialsData, U>(
-    Request request,
+    RequestCtx request,
     CredentialsProvider<C, U> providerInstance,
   ) async {
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claims = await config.jwtMaker.getUserClaims(request);
     final claimsMeta =
         claims?.meta == null ? null : UserMetaClaims.fromJson(claims!.meta!);
     if (claims == null || claimsMeta == null || !claimsMeta.isLoggedIn) {
       // TODO: limit claims authentication time
-      return Response.unauthorized(null);
+      return Resp.unauthorized(null);
     }
     final data = await parseBodyOrUrlData(request);
     if (data is! Map<String, Object?>) return _badRequestExpectedObject();
 
     final providerUserId = data['providerUserId'];
     if (providerUserId is! String) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.providerUserIdIsRequiredKey),
         ),
@@ -1220,7 +1247,7 @@ class AuthHandler {
     }
     final credentialsResult = providerInstance.parseCredentials(data);
     if (credentialsResult.isErr()) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: AuthError(
           const Translation(key: Translations.fieldErrorsKey),
           fieldErrors: credentialsResult.unwrapErr(),
@@ -1238,7 +1265,7 @@ class AuthHandler {
         ),
       );
       if (newUser != null) {
-        return Response.badRequest(
+        return Resp.badRequest(
           body: const AuthError(
             Translation(key: Translations.duplicateUserKey),
           ),
@@ -1251,11 +1278,11 @@ class AuthHandler {
     );
     final foundUser = await config.persistence.getUserById(userId);
     if (foundUser == null) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(Translation(key: Translations.userNotFoundKey)),
       );
     } else if (foundUser.userId != claims.userId) {
-      return Response.unauthorized(
+      return Resp.unauthorized(
         const AuthError(Translation(key: Translations.userNotFoundKey)),
       );
     }
@@ -1267,11 +1294,11 @@ class AuthHandler {
     );
 
     if (validation.isErr()) {
-      return Response.unauthorized(validation.unwrapErr());
+      return Resp.unauthorized(validation.unwrapErr());
     }
     final response = validation.unwrap();
     if (response.flow != null) {
-      return Response.ok(
+      return Resp.ok(
         UserMeOrResponse.response(
           AuthResponse(
             error: null,
@@ -1299,7 +1326,7 @@ class AuthHandler {
       response.user!,
     );
 
-    return Response.ok(
+    return Resp.ok(
       UserMeOrResponse.user(
         UserInfoMe.fromComplete(
           userComplete,
@@ -1309,19 +1336,19 @@ class AuthHandler {
     );
   }
 
-  Future<Response<SerializableToJson, AuthError>> credentialsSignIn(
-    Request request, {
+  Future<Resp<SerializableToJson, AuthError>> credentialsSignIn(
+    RequestCtx request, {
     required bool signUp,
   }) async {
-    if (request.method != 'POST') return Response.notFound(null);
+    if (request.method != 'POST') return Resp.notFound(null);
     final providerInstance = getCredentialsProvider(request).throwErr();
     return _credentialsSignIn(request, providerInstance, signUp: signUp);
   }
 
   // TODO: change SerializableToJson
-  Future<Response<SerializableToJson, AuthError>>
+  Future<Resp<SerializableToJson, AuthError>>
       _credentialsSignIn<C extends CredentialsData, U>(
-    Request request,
+    RequestCtx request,
     CredentialsProvider<C, U> providerInstance, {
     required bool signUp,
   }) async {
@@ -1330,7 +1357,7 @@ class AuthHandler {
 
     final credentialsResult = providerInstance.parseCredentials(data);
     if (credentialsResult.isErr()) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: AuthError(
           const Translation(key: Translations.fieldErrorsKey),
           fieldErrors: credentialsResult.unwrapErr(),
@@ -1338,12 +1365,12 @@ class AuthHandler {
       );
     }
 
-    final claims = await config.jwtMaker.getUserClaims(ctx(request));
+    final claims = await config.jwtMaker.getUserClaims(request);
     UserSession? mfaSession;
     if (claims != null) {
       mfaSession = await config.persistence.getAnySession(claims.sessionId);
       if (mfaSession != null && !mfaSession.isValid) {
-        return Response.unauthorized(
+        return Resp.unauthorized(
           const AuthError(Translation(key: Translations.sessionExpiredKey)),
         );
       }
@@ -1356,7 +1383,7 @@ class AuthHandler {
       final metaClaims = UserMetaClaims.fromJson(claims.meta!);
       if (metaClaims.isInMFAFlow &&
           (data['providerUserId'] is! String || signUp)) {
-        return Response.badRequest(
+        return Resp.badRequest(
           body: AuthError(
             signUp
                 ? const Translation(key: Translations.canNotSignUpInMFAFlowKey)
@@ -1385,16 +1412,16 @@ class AuthHandler {
       );
 
       if (validation.isErr()) {
-        return Response.unauthorized(validation.unwrapErr());
+        return Resp.unauthorized(validation.unwrapErr());
       }
       final response = validation.unwrap();
       if (response.isSome()) {
         final otherUser = response.unwrap().user;
         if (otherUser == null) {
-          return Response.ok(response.unwrap().flow!);
+          return Resp.ok(response.unwrap().flow!);
         }
         if (otherUser.key != user.key) {
-          return Response.internalServerError(
+          return Resp.internalServerError(
             body: const AuthError(
               Translation(key: Translations.errorMergingUsersKey),
             ),
@@ -1404,6 +1431,7 @@ class AuthHandler {
       // TODO: maybe merge with the current session?
       final sessionResponse = await onUserAuthenticatedResponse(
         user,
+        request: request,
         // TODO: check sessionId
         sessionId: mfaSession?.sessionId ?? generateStateToken(),
         mfaSession: mfaSession,
@@ -1411,7 +1439,7 @@ class AuthHandler {
       );
       return sessionResponse;
     } else if (!signUp) {
-      return Response.badRequest(
+      return Resp.badRequest(
         body: const AuthError(
           Translation(key: Translations.credentialsNotFoundKey),
         ),
@@ -1420,17 +1448,18 @@ class AuthHandler {
 
     final userResult = await providerInstance.getUser(credentials);
     if (userResult.isErr()) {
-      return Response.badRequest(body: userResult.unwrapErr());
+      return Resp.badRequest(body: userResult.unwrapErr());
     }
 
     final userOrMessage = userResult.unwrap();
     if (userOrMessage.user == null) {
       // The flow keeps going
-      return Response.ok(userOrMessage.flow!);
+      return Resp.ok(userOrMessage.flow!);
     } else {
       // TODO: maybe merge with the current session?
       final sessionResponse = await onUserAuthenticatedResponse(
         userOrMessage.user!,
+        request: request,
         // TODO: check sessionId
         sessionId: mfaSession?.sessionId ?? generateStateToken(),
         mfaSession: mfaSession,
@@ -1440,25 +1469,27 @@ class AuthHandler {
     }
   }
 
-  Future<Response<AuthResponseSuccess, AuthError>> onUserAuthenticatedResponse(
+  Future<Resp<AuthResponseSuccess, AuthError>> onUserAuthenticatedResponse(
     AuthUser<Object?> user, {
+    required RequestCtx request,
     required String sessionId,
     required UserSession? mfaSession,
     required UserClaims? claims,
   }) async {
     final sessionResult = await onUserAuthenticated(
       user,
+      request: request,
       sessionId: sessionId,
       mfaSession: mfaSession,
       claims: claims,
     );
 
     if (sessionResult.isErr()) {
-      return Response.internalServerError(body: sessionResult.unwrapErr());
+      return Resp.internalServerError(body: sessionResult.unwrapErr());
     }
     final responseData =
         await successResponse(sessionResult.unwrap(), user.providerId);
-    return Response.ok(responseData);
+    return Resp.ok(responseData);
   }
 }
 
@@ -1559,5 +1590,30 @@ class UserMetaClaims implements SerializableToJson {
       'userId': userId,
       'mfaItems': mfaItems,
     }..removeWhere((key, value) => value == null);
+  }
+}
+
+Future<Object?> parseBodyOrUrlData(RequestCtx request) async {
+  if (request.method == 'HEAD' ||
+      request.method == 'GET' ||
+      request.method == 'OPTIONS') {
+    var params = request.url.queryParametersAll;
+    try {
+      if (params.isEmpty && request.url.fragment.isNotEmpty) {
+        params = Uri(query: request.url.fragment).queryParametersAll;
+      }
+    } catch (_) {}
+    return params.map(
+      (key, value) =>
+          value.length == 1 ? MapEntry(key, value.first) : MapEntry(key, value),
+    );
+  } else {
+    final data = await request.readAsString();
+    if (request.mimeType == Headers.appFormUrlEncoded) {
+      return Uri.splitQueryString(data);
+    }
+    if (data.isEmpty) return null;
+    // application/vnd.github+json
+    return jsonDecode(data);
   }
 }

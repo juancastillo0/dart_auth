@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
-import 'package:oauth_example/auth_handler.dart';
 import 'package:oauth_example/shelf_helpers.dart';
 import 'package:oauth_example/sql_database_persistence.dart';
 import 'package:shelf/shelf.dart';
@@ -85,8 +84,12 @@ Future<HttpServer> init() async {
 Future<HttpServer> startServer(Config config) async {
   final handler = const Pipeline()
       .addMiddleware(logRequests())
-      .addMiddleware(ctxMiddleware)
-      .addHandler(makeHandler(config));
+      .addMiddleware(authMiddleware(config))
+      .addHandler(
+        (request) => request.url.path == '' && request.method == 'GET'
+            ? Response.ok('<html><body></body></html>')
+            : Response.notFound(null),
+      );
   final server = await shelf_io.serve(handler, config.host, config.port);
 
   // Enable content compression
@@ -98,9 +101,10 @@ Future<HttpServer> startServer(Config config) async {
 
 /// The main configuration for the server
 class Config {
-  final Map<String, OAuthProvider> allOAuthProviders;
-  final Map<String, CredentialsProvider> allCredentialsProviders;
-  late final Map<String, AuthenticationProvider> allProviders;
+  final Map<String, OAuthProvider<Object?>> allOAuthProviders;
+  final Map<String, CredentialsProvider<CredentialsData, Object?>>
+      allCredentialsProviders;
+  late final Map<String, AuthenticationProvider<Object?>> allProviders;
   final List<Translations> translations;
   final Persistence persistence;
   final String baseRedirectUri;
