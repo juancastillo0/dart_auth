@@ -270,12 +270,14 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
   @override
   final Translation providerName;
   final Map<String, ParamDescription>? paramDescriptions;
+  final Map<String, ParamDescription>? paramDescriptionsSignIn;
 
   ///
   CredentialsProviderData({
     required this.providerId,
     required this.providerName,
     required this.paramDescriptions,
+    required this.paramDescriptionsSignIn,
   });
 
   factory CredentialsProviderData.fromJson(Map<String, Object?> json) {
@@ -285,6 +287,14 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
       paramDescriptions: json['paramDescriptions'] == null
           ? null
           : (json['paramDescriptions']! as Map).map(
+              (k, v) => MapEntry(
+                k! as String,
+                ParamDescription.fromJson((v as Map).cast()),
+              ),
+            ),
+      paramDescriptionsSignIn: json['paramDescriptionsSignIn'] == null
+          ? null
+          : (json['paramDescriptionsSignIn']! as Map).map(
               (k, v) => MapEntry(
                 k! as String,
                 ParamDescription.fromJson((v as Map).cast()),
@@ -300,6 +310,7 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
       providerId: e.providerId,
       providerName: e.providerName,
       paramDescriptions: e.paramDescriptions,
+      paramDescriptionsSignIn: e.paramDescriptionsSignIn,
     );
   }
 
@@ -309,6 +320,7 @@ class CredentialsProviderData implements SerializableToJson, AuthProviderData {
       'providerId': providerId,
       'providerName': providerName,
       'paramDescriptions': paramDescriptions,
+      'paramDescriptionsSignIn': paramDescriptionsSignIn,
     };
   }
 }

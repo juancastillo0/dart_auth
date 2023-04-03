@@ -189,6 +189,7 @@ class AuthProvidersList extends HookWidget {
     final state = globalStateOf(context).authState;
     final data = useValue(state.providersList);
     final leftMfaItems = useValue(state.leftMfaItems);
+    final isSignIn = useValue(state.isSignIn);
     final isAddingMFAProvider = useValue(state.isAddingMFAProvider);
     final t = getTranslations(context);
     if (data == null) return const CircularProgressIndicator();
@@ -247,6 +248,34 @@ class AuthProvidersList extends HookWidget {
                     '${isAddingMFAProvider ? '${t.add} ' : ''}${t.multiFactorAuthentication}',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: list,
+          ),
+        ],
+      );
+    } else {
+      list = Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ButtonBar(
+                  children: [
+                    ElevatedButton(
+                      onPressed: isSignIn ? null : state.toggleIsSignIn,
+                      child: Text(t.signIn),
+                    ),
+                    ElevatedButton(
+                      onPressed: isSignIn ? state.toggleIsSignIn : null,
+                      child: Text(t.signUp),
+                    ),
+                  ],
                 ),
               ],
             ),

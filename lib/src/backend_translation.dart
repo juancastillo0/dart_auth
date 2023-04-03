@@ -106,6 +106,13 @@ class Translations {
       'Input the TOTP code shown in your authenticator app'
       ' for the account "$providerUserId".';
 
+  /// Translation for 'Authentication Account'
+  String get totpAccountName => 'Authentication Account';
+
+  /// Translation for 'The account identifier shown in your authentication app.'
+  String get totpAccountDescription =>
+      'The account identifier shown in your authentication app.';
+
   // USERNAME
   //
 
@@ -259,6 +266,17 @@ class Translations {
   /// Translation for 'Session expired.'
   String get sessionExpired => 'Session expired.';
 
+  /// Translation for 'Session information has changed,
+  /// please authenticate again.'
+  String get sessionRequiresVerification =>
+      'Session information has changed, please authenticate again.';
+
+  /// Translation for 'This operation requires a recent session sign in,
+  /// please authenticate again.'
+  String get operationRequiresVerification =>
+      'This operation requires a recent session sign in,'
+      ' please authenticate again.';
+
   /// Translation for 'Can not sign up in a MFA flow'
   String get canNotSignUpInMFAFlow => 'Can not sign up in a MFA flow';
 
@@ -295,6 +313,8 @@ class Translations {
   static const totpDescriptionKey = 'totpDescription';
   static const totpCreateFlowKey = 'totpCreateFlow';
   static const totpAuthenticateFlowKey = 'totpAuthenticateFlow';
+  static const totpAccountNameKey = 'totpAccountName';
+  static const totpAccountDescriptionKey = 'totpAccountDescription';
   static const usernameNameKey = 'usernameName';
   static const usernameDescriptionKey = 'usernameDescription';
   static const passwordNameKey = 'passwordName';
@@ -343,6 +363,9 @@ class Translations {
   static const userNotFoundKey = 'userNotFound';
   static const fieldErrorsKey = 'fieldErrors';
   static const sessionExpiredKey = 'sessionExpired';
+  static const sessionRequiresVerificationKey = 'sessionRequiresVerification';
+  static const operationRequiresVerificationKey =
+      'operationRequiresVerification';
   static const canNotSignUpInMFAFlowKey = 'canNotSignUpInMFAFlow';
   static const wrongParametersForMFAKey = 'wrongParametersForMFA';
   static const errorMergingUsersKey = 'errorMergingUsers';
@@ -370,6 +393,8 @@ class Translations {
     totpDescriptionKey,
     totpCreateFlowKey,
     totpAuthenticateFlowKey,
+    totpAccountNameKey,
+    totpAccountDescriptionKey,
     usernameNameKey,
     usernameDescriptionKey,
     passwordNameKey,
@@ -412,6 +437,8 @@ class Translations {
     userNotFoundKey,
     fieldErrorsKey,
     sessionExpiredKey,
+    sessionRequiresVerificationKey,
+    operationRequiresVerificationKey,
     canNotSignUpInMFAFlowKey,
     wrongParametersForMFAKey,
     errorMergingUsersKey,
@@ -462,6 +489,10 @@ class Translations {
         return t.totpCreateFlow;
       case totpAuthenticateFlowKey:
         return t.totpAuthenticateFlow;
+      case totpAccountNameKey:
+        return t.totpAccountName;
+      case totpAccountDescriptionKey:
+        return t.totpAccountDescription;
       case usernameNameKey:
         return t.usernameName;
       case usernameDescriptionKey:
@@ -546,6 +577,10 @@ class Translations {
         return t.fieldErrors;
       case sessionExpiredKey:
         return t.sessionExpired;
+      case sessionRequiresVerificationKey:
+        return t.sessionRequiresVerification;
+      case operationRequiresVerificationKey:
+        return t.operationRequiresVerification;
       case canNotSignUpInMFAFlowKey:
         return t.canNotSignUpInMFAFlow;
       case wrongParametersForMFAKey:
@@ -785,6 +820,14 @@ class SpanishTranslations implements Translations {
       '$name debería ser una String.';
 
   @override
+  String get sessionRequiresVerification =>
+      'La información de la sesión ha cambiado, por favor autentícate nuevamente.';
+  @override
+  String get operationRequiresVerification =>
+      'Esta operación required de una sesión reciente,'
+      ' por favor autentícate nuevamente.';
+
+  @override
   String get sessionExpired => 'La sesión ha expirado.';
   @override
   String get sessionRevoked => 'La sesión ha sido revocada.';
@@ -806,6 +849,11 @@ class SpanishTranslations implements Translations {
       'El código presentado en la aplicación de autenticación.';
   @override
   String get totpName => 'Código de Autenticación (TOTP)';
+  @override
+  String get totpAccountName => 'Cuenta de autenticación';
+  @override
+  String get totpAccountDescription =>
+      'El identificador de la cuenta en tu aplicación de autenticación.';
   @override
   String get unauthorized => 'No autorizado';
   @override

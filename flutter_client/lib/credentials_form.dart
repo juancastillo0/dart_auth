@@ -37,6 +37,7 @@ class CredentialsProviderForm extends HookWidget {
     final state = globalState.authState;
     // TODO: extract state into a separate class
     final leftMfaItems = useValue(state.leftMfaItems);
+    final isSignIn = useValue(state.isSignIn);
     final providerUserIdState = useState<String?>(null);
     final mfa = useMemoized(
       () =>
@@ -69,7 +70,9 @@ class CredentialsProviderForm extends HookWidget {
           mfaItem?.credentialsInfo,
       [credentials.value, mfaItem?.credentialsInfo],
     );
-    final paramDescriptions = cred?.paramDescriptions ?? data.paramDescriptions;
+    final paramDescriptions = cred?.paramDescriptions ??
+        (isSignIn ? data.paramDescriptionsSignIn : null) ??
+        data.paramDescriptions;
     final formKey = useMemoized(GlobalKey<FormState>.new);
     final isLoading = useState(false);
     final isMounted = useIsMounted();
@@ -107,7 +110,8 @@ class CredentialsProviderForm extends HookWidget {
             return updateParams!.onUpdate();
           }
           // TODO: properly handle isAddingMFAProvider vs singIn/signUp/duplicate user/same credentials
-        } else if (mfa.isNotEmpty && !state.isAddingMFAProvider.value) {
+        } else if (isSignIn ||
+            (mfa.isNotEmpty && !state.isAddingMFAProvider.value)) {
           response = await state.signInWithCredentials(reqParams);
         } else {
           response = await state.signUpWithCredentials(reqParams);

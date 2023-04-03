@@ -59,6 +59,19 @@ class TimeOneTimePasswordProvider
   Map<String, ParamDescription>? get paramDescriptions => null;
 
   @override
+  Map<String, ParamDescription> get paramDescriptionsSignIn {
+    return {
+      'providerUserId': ParamDescription(
+        name: const Translation(key: Translations.totpAccountNameKey),
+        description:
+            const Translation(key: Translations.totpAccountDescriptionKey),
+        regExp: null,
+      ),
+      'totp': totpDescription
+    };
+  }
+
+  @override
   Future<Result<CredentialsResponse<TOTPUser>, AuthError>> getUser(
     TOTPCredentials credentials,
   ) async {

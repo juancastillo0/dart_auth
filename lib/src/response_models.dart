@@ -55,7 +55,10 @@ class OAuthErrorResponse implements Exception, SerializableToJson {
     if (e.error == null) return null;
     final desc = e.errorDescription == null ? '' : ': ${e.errorDescription}';
     final url = e.errorUri == null ? '' : ' (${e.errorUri})';
-    return '${e.error}$desc$url';
+    final response = e.response == null
+        ? ''
+        : ' (${e.response!.statusCode} ${e.response!.reasonPhrase})';
+    return '${e.error}$desc$url$response';
   }
 
   @override

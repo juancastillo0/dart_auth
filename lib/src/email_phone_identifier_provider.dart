@@ -232,6 +232,14 @@ class IdentifierPasswordProvider<U extends IdentifierPasswordUser<U>>
   }
 
   @override
+  Map<String, ParamDescription> get paramDescriptionsSignIn {
+    return {
+      identifierName: identifierDescription,
+      if (!onlyMagicCodeNoPassword) 'password': passwordDescription,
+    };
+  }
+
+  @override
   Future<Result<Option<CredentialsResponse<U>>, AuthError>> verifyCredentials(
     U user,
     IdentifierPassword credentials,

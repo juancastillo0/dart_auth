@@ -143,14 +143,12 @@ class AuthState {
   final authenticatedClient = ValueNotifierStream<OAuthClient?>(null);
   final userInfo = ValueNotifierStream<UserInfoMe?>(null);
   final leftMfaItems = ValueNotifierStream<List<MFAItemWithFlow>?>(null);
+  final isSignIn = ValueNotifierStream<bool>(false);
   final isAddingMFAProvider = ValueNotifierStream<bool>(false);
 
   bool get isInFlow => isLoadingFlow.value || currentFlow.value != null;
 
   bool _isError(ResponseData<Object?, Object?> response) {
-    if (!response.didParseBody) {
-      _errorController.add(response);
-    }
     return !response.didParseBody;
   }
 
@@ -217,11 +215,17 @@ class AuthState {
     currentFlow.value = null;
     leftMfaItems.value = null;
     isAddingMFAProvider.value = false;
+    isSignIn.value = false;
   }
 
   void addMFAProvider() {
     assert(userInfo.value != null, 'Should only add MFA when logged in.');
     isAddingMFAProvider.value = true;
+    isSignIn.value = false;
+  }
+
+  void toggleIsSignIn() {
+    isSignIn.value = !isSignIn.value;
   }
 
   Future<void> _processAuthResponse(AuthResponse response) async {

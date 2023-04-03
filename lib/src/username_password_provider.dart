@@ -104,6 +104,10 @@ class UsernamePasswordProvider
       {'username': usernameDescription, 'password': passwordDescription};
 
   @override
+  Map<String, ParamDescription> get paramDescriptionsSignIn =>
+      paramDescriptions;
+
+  @override
   Result<UsernamePassword, Map<String, Translation>> parseCredentials(
     Map<String, Object?> json,
   ) {
@@ -238,6 +242,9 @@ abstract class CredentialsProvider<C extends CredentialsData, U>
 
   /// The description of the params required for authentication
   Map<String, ParamDescription>? get paramDescriptions;
+
+  /// The description of the params for sign in
+  Map<String, ParamDescription>? get paramDescriptionsSignIn;
 
   /// Parses a [json] Map into the credentials [C] or returns a Map of
   /// [Translation]s for the fields that contain an error.
