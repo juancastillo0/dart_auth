@@ -25,6 +25,9 @@ class FrontEndTranslations {
   /// Translation for 'Settings'
   String get settings => 'Settings';
 
+  /// Translation for 'Admin Dashboard'
+  String get adminDashboard => 'Admin Dashboard';
+
   /// Translation for 'Language'
   String get languageSetting => 'Language';
 
@@ -70,6 +73,12 @@ class FrontEndTranslations {
   /// Translation for 'Add Multi-Factor Authentication'
   String get addMultiFactorAuthentication => 'Add Multi-Factor Authentication';
 
+  /// Translation for 'Sign Up'
+  String get signUp => 'Sign Up';
+
+  /// Translation for 'Sign In'
+  String get signIn => 'Sign In';
+
   // User Info Widget
 
   /// Translation for 'Sign Out'
@@ -110,6 +119,10 @@ class FrontEndTranslations {
   String get deleteAuthenticationProviderConfirmation =>
       'Are you sure you want to delete the authentication provider?';
 
+  /// Translation for 'Are you sure you want to sign out?'
+  String get signOutConfirmationConfirmation =>
+      'Are you sure you want to sign out?';
+
   /// Translation for 'Delete'
   String get delete => 'Delete';
 
@@ -132,6 +145,90 @@ class FrontEndTranslations {
 
   /// Translation for 'Phone'
   String get phone => 'Phone';
+
+  // Admin
+
+  /// Translation for 'Search Query'
+  String get adminSearchLabel => 'Search Query';
+
+  /// Translation for 'Search by identifier, email or phone.'
+  String get adminSearchHelperText => 'Search by identifier, email or phone.';
+
+  /// Translation for 'email@example.com +138920303 id provider:userId'
+  String get adminSearchHint =>
+      'email@example.com +138920303 id provider:userId';
+
+  /// Translation for 'Search by identifier, email or phone.'
+  String get adminSearchMainPrompt => 'Search by identifier, email or phone.';
+
+  /// Translation for 'No users found.'
+  String get adminNoUsersFound => 'No users found.';
+
+  /// Translation for 'View Sessions'
+  String get adminViewSessions => 'View Sessions';
+
+  /// Translation for 'SessionId'
+  String get adminSessionId => 'SessionId';
+
+  /// Translation for 'UserId'
+  String get adminUserId => 'UserId';
+
+  /// Translation for 'Dates'
+  String get adminDates => 'Dates';
+
+  /// Translation for 'CreatedAt'
+  String get adminCreatedAt => 'CreatedAt';
+
+  /// Translation for 'LastTokenRefresh'
+  String get adminLastTokenRefresh => 'LastTokenRefresh';
+
+  /// Translation for 'EndedAt'
+  String get adminEndedAt => 'EndedAt';
+
+  /// Translation for 'Client Network Data'
+  String get adminClientNetworkData => 'Client Network Data';
+
+  /// Translation for 'IpAddress'
+  String get adminIpAddress => 'IpAddress';
+
+  /// Translation for 'Host'
+  String get adminHost => 'Host';
+
+  /// Translation for 'Country'
+  String get adminCountry => 'Country';
+
+  /// Translation for 'Languages'
+  String get adminLanguages => 'Languages';
+
+  /// Translation for 'Timezone'
+  String get adminTimezone => 'Timezone';
+
+  /// Translation for 'Client Device'
+  String get adminClientDevice => 'Client Device';
+
+  /// Translation for 'DeviceId'
+  String get adminDeviceId => 'DeviceId';
+
+  /// Translation for 'Platform'
+  String get adminPlatform => 'Platform';
+
+  /// Translation for 'UserAgent'
+  String get adminUserAgent => 'UserAgent';
+
+  /// Translation for 'ApiVersion'
+  String get adminApiVersion => 'ApiVersion';
+
+  /// Translation for 'Authentication Providers'
+  String get adminAuthenticationProviders => 'Authentication Providers';
+
+  /// Translation for 'ProviderId'
+  String get adminProviderId => 'ProviderId';
+
+  /// Translation for 'ProviderUserId'
+  String get adminProviderUserId => 'ProviderUserId';
+
+  /// Translation for 'Sessions'
+  String get adminSessions => 'Sessions';
 }
 
 class SpanishFrontEndTranslations implements FrontEndTranslations {
@@ -149,6 +246,8 @@ class SpanishFrontEndTranslations implements FrontEndTranslations {
   String get close => 'Cerrar';
   @override
   String get settings => 'Configuración';
+  @override
+  String get adminDashboard => 'Administrar Usuarios';
   @override
   String get languageSetting => 'Lenguaje';
   @override
@@ -185,6 +284,10 @@ class SpanishFrontEndTranslations implements FrontEndTranslations {
   @override
   String get addMultiFactorAuthentication =>
       'Añadir Autenticación de Múltiples Pasos';
+  @override
+  String get signUp => 'Registrarme';
+  @override
+  String get signIn => 'Inicio de Sesión';
 
   /// User Info Widget
 
@@ -214,6 +317,9 @@ class SpanishFrontEndTranslations implements FrontEndTranslations {
   String get deleteAuthenticationProviderConfirmation =>
       '¿Estás seguro que deseas eliminar el proveedor de autenticación?';
   @override
+  String get signOutConfirmationConfirmation =>
+      '¿Estás seguro que deseas cerrar sesión?';
+  @override
   String get delete => 'Eliminar';
 
   ///
@@ -230,4 +336,64 @@ class SpanishFrontEndTranslations implements FrontEndTranslations {
   String get notVerified => 'no verificado';
   @override
   String get phone => 'Teléfono';
+
+  // Admin
+
+  @override
+  String get adminSearchLabel => 'Texto de búsqueda';
+  @override
+  String get adminSearchHelperText =>
+      'Busca por identificador, correo o teléfono.';
+  @override
+  String get adminSearchHint =>
+      'email@example.com +138920303 id provider:userId';
+  @override
+  String get adminSearchMainPrompt =>
+      'Busca por identificador, correo o teléfono.';
+  @override
+  String get adminNoUsersFound => 'No se encontraron usuarios.';
+  @override
+  String get adminViewSessions => 'Ver Sesiones';
+  @override
+  String get adminSessionId => 'Identificador de Sesión';
+  @override
+  String get adminUserId => 'Identificador de Usuario';
+  @override
+  String get adminDates => 'Fechas';
+  @override
+  String get adminCreatedAt => 'Creada En';
+  @override
+  String get adminLastTokenRefresh => 'Ultima actualización de Token';
+  @override
+  String get adminEndedAt => 'Finalizada En';
+  @override
+  String get adminClientNetworkData => 'Client Network Data';
+  @override
+  String get adminIpAddress => 'Dirección IP';
+  @override
+  String get adminHost => 'Servidor';
+  @override
+  String get adminCountry => 'País';
+  @override
+  String get adminLanguages => 'Lenguajes';
+  @override
+  String get adminTimezone => 'Zona Horaria';
+  @override
+  String get adminClientDevice => 'Dispositivo del Cliente';
+  @override
+  String get adminDeviceId => 'Identificador de dispositivo';
+  @override
+  String get adminPlatform => 'Plataforma';
+  @override
+  String get adminUserAgent => 'UserAgent';
+  @override
+  String get adminApiVersion => 'Versión de API';
+  @override
+  String get adminAuthenticationProviders => 'Proveedores de Autenticación';
+  @override
+  String get adminProviderId => 'Identificador de Proveedor';
+  @override
+  String get adminProviderUserId => 'Identificador de Usuario del Proveedor';
+  @override
+  String get adminSessions => 'Sesiones';
 }
