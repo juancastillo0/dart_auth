@@ -17,8 +17,11 @@ class AdminClient {
   late final debouncer = Debouncer(
     const Duration(milliseconds: 500),
     (String query) async {
-      final values =
-          query.trim().split(RegExp(r'\s+')).map(UserId.fromString).toList();
+      final values = query
+          .trim()
+          .split(RegExp(r'\s*[\s,]\s*'))
+          .map(UserId.fromString)
+          .toList();
       final response = await getUsersByQuery(
         UsersInfoQuery(values, const []),
         overrideUserList: true,

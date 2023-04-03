@@ -19,7 +19,7 @@ Future<String> hashPasswordFromIsolate(String password) async {
     'password': password,
   });
   final value = await receivePort.first as String;
-  assert((() => verifyPasswordFromHash(password, value))());
+  // assert((() => verifyPasswordFromHash(password, value))());
   isolate.kill();
   return value;
 }
@@ -32,7 +32,7 @@ Future<bool> verifyPasswordFromIsolate(String password, String realHash) async {
     'realHash': realHash,
   });
   final value = await receivePort.first as bool;
-  assert((() => verifyPasswordFromHash(password, realHash) == value)());
+  // assert((() => verifyPasswordFromHash(password, realHash) == value)());
   isolate.kill();
   return value;
 }

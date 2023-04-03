@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_client/main.dart';
 
 abstract class PageConfig<P, T> {
   List<String> get pathSegments;
@@ -21,7 +22,9 @@ abstract class PageConfig<P, T> {
     return MaterialPageRoute<T>(
       settings: settings,
       builder: (context) => Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          actions: const [ConfigurationAppBarAction()],
+        ),
         body: body,
       ),
     );

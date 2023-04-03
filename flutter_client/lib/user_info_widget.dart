@@ -1,6 +1,7 @@
 import 'dart:convert' show jsonEncode;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_client/admin_widgets.dart';
 import 'package:flutter_client/base_widgets.dart';
 import 'package:flutter_client/credentials_form.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -66,16 +67,35 @@ class UserInfoWidget extends HookWidget {
       constraints: const BoxConstraints(maxWidth: 500),
       child: ListView(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(38),
-            child: Text(jsonEncode(userInfo)),
-          ),
+          const SizedBox(height: 25),
           ElevatedButton.icon(
-            onPressed: state.signOut,
+            onPressed: () async {
+              await showConfirmationDialog(
+                context,
+                content: Text(t.signOutConfirmationConfirmation),
+                onAccept: () {
+                  Navigator.of(context).pop();
+                  state.signOut();
+                },
+                acceptText: t.signOut,
+              );
+            },
             icon: const Icon(Icons.close),
             label: Text(t.signOut),
           ),
           const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                UserSessionsList.page.route(
+                  UserSessionsList(
+                    userId: userInfo.user.userId,
+                  ),
+                ),
+              );
+            },
+            child: Text('View Sessions'),
+          ),
           Container(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
@@ -117,6 +137,10 @@ class UserInfoWidget extends HookWidget {
               editedMFA: editedMFA,
               optionalCountController: optionalCountController,
             ),
+          Padding(
+            padding: const EdgeInsets.all(38),
+            child: SelectableText(jsonEncode(userInfo)),
+          ),
           const SizedBox(height: 25),
         ],
       ),
@@ -295,6 +319,40 @@ class MFAProvidersWidget extends StatelessWidget {
   }
 }
 
+Future<void> showConfirmationDialog(
+  BuildContext context, {
+  required Widget content,
+  required String acceptText,
+  required void Function() onAccept,
+  String? cancelText,
+}) async {
+  final t = getTranslations(context);
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      final navigator = Navigator.of(context);
+      final colorScheme = Theme.of(context).colorScheme;
+      return AlertDialog(
+        content: content,
+        actions: [
+          TextButton(
+            onPressed: navigator.pop,
+            child: Text(cancelText ?? t.cancel),
+          ),
+          TextButton(
+            onPressed: onAccept,
+            style: TextButton.styleFrom(
+              backgroundColor: colorScheme.error,
+              foregroundColor: colorScheme.onError,
+            ),
+            child: Text(acceptText),
+          )
+        ],
+      );
+    },
+  );
+}
+
 class AuthProviderWidget extends HookMobxWidget {
   ///
   const AuthProviderWidget({
@@ -376,6 +434,7 @@ class AuthProviderWidget extends HookMobxWidget {
                               data.updateParams!.paramDescriptions,
                           providerName: data.providerName,
                           providerId: data.authUser.providerId,
+                          paramDescriptionsSignIn: null,
                         ),
                         updateParams: UpdateCredentialsParams(
                           data: data,
@@ -404,31 +463,12 @@ class AuthProviderWidget extends HookMobxWidget {
               onPressed: userInfo.user.multiFactorAuth.kind(providerUserId) ==
                       MFAProviderKind.none
                   ? () async {
-                      await showDialog<void>(
-                        context: context,
-                        builder: (context) {
-                          final navigator = Navigator.of(context);
-                          final colorScheme = Theme.of(context).colorScheme;
-                          return AlertDialog(
-                            content: Text(
-                              t.deleteAuthenticationProviderConfirmation,
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: navigator.pop,
-                                child: Text(t.cancel),
-                              ),
-                              TextButton(
-                                onPressed: deleteAuthProvider,
-                                style: TextButton.styleFrom(
-                                  backgroundColor: colorScheme.error,
-                                  foregroundColor: colorScheme.onError,
-                                ),
-                                child: Text(t.delete),
-                              )
-                            ],
-                          );
-                        },
+                      await showConfirmationDialog(
+                        context,
+                        content:
+                            Text(t.deleteAuthenticationProviderConfirmation),
+                        onAccept: deleteAuthProvider,
+                        acceptText: t.delete,
                       );
                     }
                   : null,

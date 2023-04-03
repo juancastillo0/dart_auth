@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:oauth/src/backend_translation.dart';
+import 'package:oauth/src/frontend/admin_client_state.dart';
 import 'package:oauth/src/frontend/auth_client.dart';
 import 'package:oauth/src/frontend/frontend_translations.dart';
 
@@ -12,6 +14,7 @@ abstract class ClientPersistence {
 
 class GlobalState {
   late final AuthState authState;
+  late final AdminClient adminState;
   final List<FrontEndTranslations> supportedTranslations;
   final List<Translations> supportedBackendTranslations;
   Translations? backendTranslations;
@@ -31,16 +34,15 @@ class GlobalState {
         ValueNotifierStream(translations ?? supportedTranslations.first);
     _computeBackendTranslations(this.translations.value);
     this.translations.listen(_computeBackendTranslations);
+    adminState = AdminClient(this);
   }
 
   void _computeBackendTranslations(FrontEndTranslations front) {
     if (supportedBackendTranslations.isEmpty) return;
-    for (final t in supportedBackendTranslations) {
-      if (t.languageCode == front.languageCode) {
-        backendTranslations = t;
-      }
-    }
-    backendTranslations = supportedBackendTranslations.first;
+    backendTranslations = supportedBackendTranslations.firstWhere(
+      (t) => t.languageCode == front.languageCode,
+      orElse: () => supportedBackendTranslations.first,
+    );
   }
 
   static Future<GlobalState> load({
@@ -61,6 +63,31 @@ class GlobalState {
   String translate(Translation value) {
     if (backendTranslations != null) value.getMessage(backendTranslations!);
     return value.msg ?? value.key;
+  }
+}
+
+enum AppPlatform {
+  web,
+  android,
+  ios,
+  linux,
+  macos,
+  windows,
+  fuchsia,
+  other;
+
+  /// The current platform executing the code.
+  static final AppPlatform current = _getCurrent();
+
+  static AppPlatform _getCurrent() {
+    if (identical(0, 0.0)) return AppPlatform.web;
+    if (Platform.isAndroid) return AppPlatform.android;
+    if (Platform.isIOS) return AppPlatform.ios;
+    if (Platform.isLinux) return AppPlatform.linux;
+    if (Platform.isMacOS) return AppPlatform.macos;
+    if (Platform.isWindows) return AppPlatform.windows;
+    if (Platform.isFuchsia) return AppPlatform.fuchsia;
+    return AppPlatform.other;
   }
 }
 
