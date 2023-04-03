@@ -286,7 +286,6 @@ class MFAProvidersWidget extends StatelessWidget {
                         // TODO: validate fields
                       }
                       if (isLoadingEditingMFA.value) return;
-                      final scaffold = ScaffoldMessenger.of(context);
                       isLoadingEditingMFA.value = true;
                       final response = await state.setUserMFA(
                         MFAPostData(editedMFA.value!),
@@ -294,15 +293,8 @@ class MFAProvidersWidget extends StatelessWidget {
                       isLoadingEditingMFA.value = false;
                       final error = response?.response?.error;
                       if (error != null) {
-                        final message = error.allErrors
-                            .map(state.globalState.translate)
-                            .join('\n');
-                        scaffold.showSnackBar(
-                          SnackBar(
-                            backgroundColor: theme.colorScheme.error,
-                            content: Text(message),
-                          ),
-                        );
+                        // ignore: use_build_context_synchronously
+                        showSnackBarAuthError(context, error);
                       } else {
                         editedMFA.value = null;
                       }
@@ -397,20 +389,13 @@ class AuthProviderWidget extends HookMobxWidget {
     Future<void> deleteAuthProvider() async {
       isDeleting.value = true;
       Navigator.of(context).pop();
-      final scaffold = ScaffoldMessenger.of(context);
       final result = await state.deleteAuthProvider(providerUserId);
       if (!mounted()) return;
       isDeleting.value = false;
       final error = result?.response?.error;
       if (error != null) {
-        scaffold.showSnackBar(
-          SnackBar(
-            backgroundColor: colorScheme.error,
-            content: Text(
-              error.allErrors.map(state.globalState.translate).join('\n'),
-            ),
-          ),
-        );
+        // ignore: use_build_context_synchronously
+        showSnackBarAuthError(context, error);
       }
     }
 

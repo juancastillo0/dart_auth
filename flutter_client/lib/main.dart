@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_client/admin_widgets.dart';
 import 'package:flutter_client/auth_widgets.dart';
 import 'package:flutter_client/base_widgets.dart';
 import 'package:flutter_client/secure_storage.dart';
@@ -71,13 +72,20 @@ class MainHomePage extends HookWidget {
     final globalState = globalStateOf(context);
     final t = getTranslations(context);
     final state = globalState.authState;
+    final scaffoldKey = useMemoized(GlobalKey<ScaffoldState>.new);
     useEffect(
       () {
         state.getProviders();
         final subs = state.authErrorStream.listen((event) {
+          showSnackBarAuthError(scaffoldKey.currentContext!, event);
           print(event);
         });
         final subs2 = state.errorStream.listen((event) {
+          showSnackBar(
+            scaffoldKey.currentContext!,
+            event.toString(),
+            isError: true,
+          );
           print(event);
         });
         return () {
@@ -91,101 +99,20 @@ class MainHomePage extends HookWidget {
     final userInfo = useValue(state.userInfo);
     final isAddingMFAProvider = useValue(state.isAddingMFAProvider);
 
-    void showSettingsDialog() {
-      showDialog<void>(
-        context: context,
-        builder: (context) {
-          final t = getTranslations(context);
-          return AlertDialog(
-            content: SizedBox(
-              width: 400,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 200,
-                        child: Text(t.themeBrightnessSetting),
-                      ),
-                      Expanded(
-                        child: StreamBuilder(
-                          stream: globalState.darkTheme,
-                          builder: (context, _) =>
-                              DropdownButtonFormField<bool?>(
-                            value: globalState.darkTheme.value,
-                            items: [
-                              DropdownMenuItem(
-                                value: null,
-                                child: Text(t.themeBrightnessSystem),
-                              ),
-                              DropdownMenuItem(
-                                value: false,
-                                child: Text(t.themeBrightnessLight),
-                              ),
-                              DropdownMenuItem(
-                                value: true,
-                                child: Text(t.themeBrightnessDark),
-                              ),
-                            ],
-                            onChanged: (v) => globalState.darkTheme.value = v,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      SizedBox(width: 200, child: Text(t.languageSetting)),
-                      Expanded(
-                        child: StreamBuilder(
-                          stream: globalState.translations,
-                          builder: (context, _) =>
-                              DropdownButtonFormField<FrontEndTranslations>(
-                            value: globalState.translations.value,
-                            items: [
-                              ...globalState.supportedTranslations.map(
-                                (e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text(e.localeName),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) {
-                              if (v != null) {
-                                globalState.translations.value = v;
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: Navigator.of(context).pop,
-                child: Text(t.close),
-              )
-            ],
-          );
-        },
-      );
-    }
-
     return Scaffold(
+      key: scaffoldKey,
       appBar: AppBar(
         title: Text(title),
         actions: [
-          TextButton.icon(
-            onPressed: showSettingsDialog,
+          TextButton(
+            onPressed: () {
+              Navigator.of(context)
+                  .push(AdminUserList.page.route(const AdminUserList()));
+            },
             style: actionStyle(context),
-            icon: const Icon(Icons.settings),
-            label: Text(t.settings),
+            child: Text(t.adminDashboard),
           ),
+          const ConfigurationAppBarAction(),
         ],
       ),
       body: Center(
@@ -201,6 +128,106 @@ class MainHomePage extends HookWidget {
       ),
     );
   }
+}
+
+class ConfigurationAppBarAction extends StatelessWidget {
+  const ConfigurationAppBarAction({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = getTranslations(context);
+    return TextButton.icon(
+      onPressed: () => showSettingsDialog(context),
+      style: actionStyle(context),
+      icon: const Icon(Icons.settings),
+      label: Text(t.settings),
+    );
+  }
+}
+
+void showSettingsDialog(BuildContext context) {
+  final globalState = globalStateOf(context);
+  showDialog<void>(
+    context: context,
+    builder: (context) {
+      final t = getTranslations(context);
+      return AlertDialog(
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 200,
+                    child: Text(t.themeBrightnessSetting),
+                  ),
+                  Expanded(
+                    child: StreamBuilder(
+                      stream: globalState.darkTheme,
+                      builder: (context, _) => DropdownButtonFormField<bool?>(
+                        value: globalState.darkTheme.value,
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(t.themeBrightnessSystem),
+                          ),
+                          DropdownMenuItem(
+                            value: false,
+                            child: Text(t.themeBrightnessLight),
+                          ),
+                          DropdownMenuItem(
+                            value: true,
+                            child: Text(t.themeBrightnessDark),
+                          ),
+                        ],
+                        onChanged: (v) => globalState.darkTheme.value = v,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  SizedBox(width: 200, child: Text(t.languageSetting)),
+                  Expanded(
+                    child: StreamBuilder(
+                      stream: globalState.translations,
+                      builder: (context, _) =>
+                          DropdownButtonFormField<FrontEndTranslations>(
+                        value: globalState.translations.value,
+                        items: [
+                          ...globalState.supportedTranslations.map(
+                            (e) => DropdownMenuItem(
+                              value: e,
+                              child: Text(e.localeName),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            globalState.translations.value = v;
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Navigator.of(context).pop,
+            child: Text(t.close),
+          )
+        ],
+      );
+    },
+  );
 }
 
 ThemeData globalTheme({required Brightness brightness}) {

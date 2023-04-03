@@ -16,6 +16,7 @@ class AuthState {
     required this.baseUrl,
     required this.persistence,
     required this.globalState,
+    required this.deviceId,
   }) {
     _setUpClient(authenticatedClient.value);
     authenticatedClient.listen(_setUpClient);
@@ -27,12 +28,18 @@ class AuthState {
     required GlobalState globalState,
     required String baseUrl,
   }) async {
-    final token = await persistence.read(persistenceTokenKey);
+    String? deviceId = await persistence.read(persistenceDeviceIdKey);
+    if (deviceId == null) {
+      deviceId = generateStateToken();
+      await persistence.write(persistenceDeviceIdKey, deviceId);
+    }
     final state = AuthState._(
       globalState: globalState,
       baseUrl: baseUrl,
       persistence: persistence,
+      deviceId: deviceId,
     );
+    final token = await persistence.read(persistenceTokenKey);
     if (token != null) {
       await state._processAuthResponse(
         AuthResponse.fromJson(
@@ -43,21 +50,56 @@ class AuthState {
     return state;
   }
 
-  static const persistenceTokenKey = 'authStateTokenKey';
+  static const persistenceTokenKey = 'authStateToken';
+  static const persistenceDeviceIdKey = 'authStateDeviceId';
 
   final GlobalState globalState;
   final ClientPersistence persistence;
   late ClientWithConfig client;
   final String baseUrl;
+  final String deviceId;
+
+  late final baseHeaders = <String, String>{
+    'auth-api-v': '0.0.1',
+    'device-id': deviceId,
+    'platform': AppPlatform.current.name,
+    // 'da-locale': Platform.localeName,
+    // 'da-os-v': Platform.operatingSystemVersion,
+    // 'da-os': Platform.operatingSystem,
+    // 'da-n-processors': Platform.numberOfProcessors.toString(),
+    // 'da-dart-v': Platform.version,
+  };
 
   http.Request _mapRequest(http.Request request) {
-    final t = globalState.translations.value;
+    baseHeaders.forEach((key, value) {
+      if (!request.headers.containsKey(key)) request.headers[key] = value;
+    });
     if (!request.headers.containsKey(Headers.acceptLanguage)) {
+      final t = globalState.translations.value;
       final countrySuffix = t.countryCode == null ? '' : '-${t.countryCode}';
       final headerValue = '${t.languageCode}${countrySuffix}';
       request.headers[Headers.acceptLanguage] = headerValue;
     }
+    if (!request.headers.containsKey('timezone')) {
+      request.headers['timezone'] = DateTime.now().timeZoneName;
+    }
+
     return request;
+  }
+
+  ResponseData<P, O> _mapResponse<P, O>(ResponseData<P, O> response) {
+    if (_isError(response)) {
+      _errorController.add(response);
+    }
+    final data = response.data;
+    if (data is AuthError) {
+      _authErrorController.add(data);
+    } else if (data is AuthResponse && data.error != null) {
+      _authErrorController.add(data.error!);
+    } else if (data is UserMeOrResponse && data.response?.error != null) {
+      _authErrorController.add(data.response!.error!);
+    }
+    return response;
   }
 
   void _setUpClient(OAuthClient? value) {
@@ -65,6 +107,7 @@ class AuthState {
       client = ClientWithConfig(
         baseUrl: baseUrl,
         mapRequest: _mapRequest,
+        mapResponse: _mapResponse,
       );
     } else {
       // TODO: revert authenticated client on change of access token
@@ -72,6 +115,7 @@ class AuthState {
         baseUrl: baseUrl,
         client: value,
         mapRequest: _mapRequest,
+        mapResponse: _mapResponse,
       );
     }
   }
