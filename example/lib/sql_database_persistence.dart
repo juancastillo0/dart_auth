@@ -10,6 +10,7 @@ class SQLTables {
   final String session;
   final String user;
   final String account;
+  final String userEvents;
 
   ///
   const SQLTables({
@@ -17,6 +18,7 @@ class SQLTables {
     this.session = 'session',
     this.user = 'user',
     this.account = 'account',
+    this.userEvents = 'userEvents',
   });
 }
 
@@ -77,6 +79,13 @@ CREATE TABLE IF NOT EXISTS ${tables.session} (
 );''');
     database.execute('''
 CREATE TABLE IF NOT EXISTS ${tables.authState} (
+  key TEXT NOT NULL,
+  value $jsonType NOT NULL,
+  createdAt DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (key)
+);''');
+    database.execute('''
+CREATE TABLE IF NOT EXISTS ${tables.userEvents} (
   key TEXT NOT NULL,
   value $jsonType NOT NULL,
   createdAt DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -321,18 +330,19 @@ VALUES (${Iterable.generate(fields.length, (_) => '?').join(',')});
     return _transactionFuture;
   }
 
+  @override
   Future<Result<T, ErrorWithStackTrace>> transaction<T extends Object>(
-    Future<T> Function() fn,
+    Future<T> Function() action,
   ) async {
     if (_transactionFuture != null) {
       if (!inTransaction) {
         // other external transaction
         await _transactionFuture!;
-        return transaction(fn);
+        return transaction(action);
       }
       // same transaction, but nested
       try {
-        final result = await fn();
+        final result = await action();
         return Ok(result);
       } catch (e, s) {
         return Err(ErrorWithStackTrace(e, s));
@@ -343,7 +353,7 @@ VALUES (${Iterable.generate(fields.length, (_) => '?').join(',')});
     try {
       database.execute('BEGIN TRANSACTION;');
       final result =
-          await runZoned(fn, zoneValues: {_inTransactionZoneKey: true});
+          await runZoned(action, zoneValues: {_inTransactionZoneKey: true});
       database.execute('COMMIT TRANSACTION;');
       return Ok(result);
     } catch (e, s) {

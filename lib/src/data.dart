@@ -50,6 +50,11 @@ abstract class Persistence {
 
   /// Deletes an user account
   Future<void> deleteAuthUser(String userId, AuthUser<Object?> authUser);
+
+  /// Executes [action] in a transaction.
+  Future<Result<T, ErrorWithStackTrace>> transaction<T extends Object>(
+    Future<T> Function() action,
+  );
 }
 
 @immutable
@@ -1033,6 +1038,79 @@ class AuthUser<T> implements SerializableToJson {
         'phoneIsVerified': phoneIsVerified,
         ...rawUserData,
       }..removeWhere((key, value) => value == null);
+}
+
+enum UserEventKind {
+  /// MFA Updated
+  mfaUpdated,
+
+  /// Authentication Provider Created
+  authenticationProviderCreated,
+
+  /// Authentication Provider Updated
+  authenticationProviderUpdated,
+
+  /// Authentication Provider Deleted
+  authenticationProviderDeleted,
+
+  /// Authentication Provider Revoked
+  authenticationProviderRevoked,
+
+  /// Session Created
+  sessionCreated,
+
+  /// Session Updated
+  sessionUpdated,
+
+  /// Session Revoked
+  sessionRevoked,
+}
+
+class UserEvent implements SerializableToJson {
+  final String key;
+  final String type;
+  final Map<String, Object?> value;
+  final String sessionId;
+  final String userId;
+  final DateTime createdAt;
+
+  UserEventKind? get kind =>
+      UserEventKind.values.firstWhereOrNull((e) => e.name == type);
+
+  ///
+  UserEvent({
+    required this.key,
+    required this.type,
+    required this.value,
+    required this.sessionId,
+    required this.userId,
+    required this.createdAt,
+  });
+
+  factory UserEvent.fromJson(Map<String, Object?> json) {
+    return UserEvent(
+      key: json['key']! as String,
+      type: json['type']! as String,
+      value: json['value'] is String
+          ? jsonDecode(json['value']! as String) as Map<String, Object?>
+          : json['value']! as Map<String, Object?>,
+      sessionId: json['sessionId']! as String,
+      userId: json['userId']! as String,
+      createdAt: DateTime.parse(json['createdAt']! as String),
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'key': key,
+      'type': type,
+      'value': value,
+      'sessionId': sessionId,
+      'userId': userId,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
 }
 
 /// An error found when getting the user's data

@@ -5,10 +5,10 @@ import 'package:oauth/oauth.dart';
 // https://drift.simonbinder.eu/docs/advanced-features/
 // https://pub.dev/packages/stormberry
 class InMemoryPersistance extends Persistence {
-  final Map<String, AuthStateModel> mapState = {};
-  final Map<String, AuthUser<Object?>> mapAuthUser = {};
-  final Map<String, AppUserComplete> mapAppUser = {};
-  final Map<String, UserSession> mapSession = {};
+  Map<String, AuthStateModel> mapState = {};
+  Map<String, AuthUser<Object?>> mapAuthUser = {};
+  Map<String, AppUserComplete> mapAppUser = {};
+  Map<String, UserSession> mapSession = {};
 
   @override
   Future<AuthStateModel?> getState(String key) async {
@@ -105,5 +105,30 @@ class InMemoryPersistance extends Persistence {
       authUsers: [...prevUser.authUsers]
         ..removeWhere((e) => e.key == authUser.key),
     );
+  }
+
+  @override
+  Future<Result<T, ErrorWithStackTrace>> transaction<T extends Object>(
+    Future<T> Function() action,
+  ) async {
+    final mapStateBefore = mapState;
+    final mapAuthUserBefore = mapAuthUser;
+    final mapAppUserBefore = mapAppUser;
+    final mapSessionBefore = mapSession;
+    try {
+      mapState = {...mapState};
+      mapAuthUser = {...mapAuthUser};
+      mapAppUser = {...mapAppUser};
+      mapSession = {...mapSession};
+
+      final result = await action();
+      return Ok(result);
+    } catch (e, s) {
+      mapState = mapStateBefore;
+      mapAuthUser = mapAuthUserBefore;
+      mapAppUser = mapAppUserBefore;
+      mapSession = mapSessionBefore;
+      return Err(ErrorWithStackTrace(e, s));
+    }
   }
 }
