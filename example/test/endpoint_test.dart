@@ -77,8 +77,6 @@ void main() async {
           // TODO: test isolates
           ImplementedProviders.username: UsernamePasswordProvider(),
         },
-        host: 'localhost',
-        port: 0,
         persistence: persistence,
         baseRedirectUri: 'http://localhost:8080/base',
         jwtMaker: jwtMaker,
@@ -88,7 +86,7 @@ void main() async {
           allProvidersMocks: allProvidersMocks,
         ),
       );
-      server = await startServer(config);
+      server = await startServer(config, host: 'localhost', port: 0);
       url = Uri.parse('http://${server.address.host}:${server.port}');
     });
 
