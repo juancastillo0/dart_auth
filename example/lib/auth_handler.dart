@@ -5,6 +5,7 @@ import 'package:oauth/endpoint_models.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
 import 'package:oauth/providers.dart';
+import 'package:oauth_example/rate_limit.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'main.dart';
@@ -105,6 +106,11 @@ Future<Resp?> Function(RequestCtx) makeHandler(
     String path = request.url.path;
     if (path.startsWith('/')) path = path.substring(1);
 
+    final rateLimitResponse = await handler.rateLimit(request);
+    if (rateLimitResponse != null) return rateLimitResponse;
+    final verifySessionResponse = await handler.verifySessionDates(request);
+    if (verifySessionResponse != null) return verifySessionResponse;
+
     Resp<SerializableToJson, SerializableToJson>? response;
     try {
       // TODO: use only '/providers' and add DELETE (authenticationProviderDelete) to this route
@@ -126,11 +132,12 @@ Future<Resp?> Function(RequestCtx) makeHandler(
       } else if (RegExp('oauth/device$pIdRegExp').hasMatch(path)) {
         response = await handler.getOAuthDeviceCode(request);
       } else if (RegExp('oauth/callback$pIdRegExp').hasMatch(path)) {
+        // rate limit
         response = await handler.handleOAuthCallback(request);
       } else if (RegExp('oauth/state').hasMatch(path)) {
         response = await handler.getOAuthState(request);
-      } else if (webSocketHandler != null &&
-          RegExp('oauth/subscribe').hasMatch(path)) {
+      } else if (RegExp('oauth/subscribe').hasMatch(path) &&
+          webSocketHandler != null) {
         // TODO: return unsupported for webSocketHandler == null
         final innerResponse = await handler.handlerWebSocketOAuthStateSubscribe(
           request,
@@ -139,22 +146,37 @@ Future<Resp?> Function(RequestCtx) makeHandler(
         response = Resp(-1, ok: null, err: null, innerResponse: innerResponse);
         // TODO: maybe use /token instead?
       } else if (path == 'jwt/refresh') {
+        // refresh session only last update
         response = await handler.refreshAuthToken(request);
       } else if (path == 'jwt/revoke') {
         response = await handler.revokeAuthToken(request);
       } else if (path == 'user/me') {
         response = await handler.getUserMeInfo(request);
       } else if (path == 'user/mfa') {
+        // refresh session
+        response = await handler.userMFA(request);
+      } else if (path == 'user/signout') {
+        // refresh session
+        response = await handler.userSignOutSessions(request);
+      } else if (path == 'user/delete') {
+        // refresh session
         response = await handler.userMFA(request);
       } else if (RegExp('providers/delete$pIdRegExp').hasMatch(path)) {
+        // refresh session
         response = await handler.authenticationProviderDelete(request);
       } else if (RegExp('credentials/update$pIdRegExp').hasMatch(path)) {
+        // refresh session, rate limit
         response = await handler.credentialsUpdate(request);
       } else if (RegExp('credentials/signin$pIdRegExp').hasMatch(path)) {
+        // rate limit
         response = await handler.credentialsSignIn(request, signUp: false);
       } else if (RegExp('credentials/signup$pIdRegExp').hasMatch(path)) {
+        // rate limit
         response = await handler.credentialsSignIn(request, signUp: true);
       } else if (RegExp('admin/users').hasMatch(path)) {
+        response = await handler.getUsersInfoForAdmin(request);
+      } else if (RegExp('admin/users/disable').hasMatch(path)) {
+        // refresh session
         response = await handler.getUsersInfoForAdmin(request);
       }
     } on Resp catch (e) {
@@ -164,6 +186,98 @@ Future<Resp?> Function(RequestCtx) makeHandler(
   }
 
   return handleRequest;
+}
+
+enum AuthHandlerEndpoint {
+  /// GET /oauth/providers
+  /// Retrieve all OAuth providers and credentials providers.
+  oauthProviders('oauth/providers'),
+
+  /// GET /oauth/url/:provider
+  /// Retrieve the OAuth URL for the given provider.
+  oauthUrl('oauth/url', providerRequired: true),
+
+  /// GET /oauth/device/:provider
+  /// Retrieve the OAuth device code for the given provider.
+  oauthDevice('oauth/device', providerRequired: true),
+
+  /// GET|POST /oauth/callback/:provider
+  /// Handle the OAuth callback for the given provider.
+  oauthCallback('oauth/callback', providerRequired: true),
+
+  /// GET /oauth/state
+  /// Retrieve the OAuth state.
+  oauthState('oauth/state'),
+
+  /// GET /oauth/subscribe
+  /// Subscribe to the OAuth state using web sockets.
+  oauthSubscribe('oauth/subscribe'),
+
+  /// POST /jwt/refresh
+  /// Refresh the JWT.
+  jwtRefresh('jwt/refresh'),
+
+  /// POST /jwt/revoke
+  /// Revoke the JWT.
+  jwtRevoke('jwt/revoke'),
+
+  /// GET /user/me
+  /// Retrieve the user information.
+  userMe('user/me'),
+
+  /// POST /user/mfa
+  /// Configure multi-factor authentication.
+  userMfa('user/mfa'),
+
+  /// POST /user/signout
+  /// Sign out user sessions.
+  userSignout('user/signout'),
+
+  /// POST /user/delete
+  /// Delete the user.
+  userDelete('user/delete'),
+
+  /// POST /providers/delete/:provider
+  /// Delete the authentication provider.
+  providersDelete('providers/delete', providerRequired: true),
+
+  /// POST /credentials/update/:provider
+  /// Update the credentials provider.
+  credentialsUpdate('credentials/update', providerRequired: true),
+
+  /// POST /credentials/signin/:provider
+  /// Sign in with the credentials provider.
+  credentialsSignin('credentials/signin', providerRequired: true),
+
+  /// POST /credentials/signup/:provider
+  /// Sign up with the credentials provider.
+  credentialsSignup('credentials/signup', providerRequired: true),
+
+  /// GET /admin/users
+  /// Retrieve users information for admin.
+  adminUsers('admin/users'),
+
+  /// POST /admin/users/disable
+  /// Disable users for admin.
+  adminUsersDisable('admin/users/disable');
+
+  const AuthHandlerEndpoint(this.path, {this.providerRequired = false});
+
+  /// Path of the endpoint.
+  final String path;
+
+  /// Whether the endpoint requires a provider id.
+  final bool providerRequired;
+
+  /// Returns the endpoint for the given path.
+  static AuthHandlerEndpoint? fromPath(String path) {
+    // ignore: parameter_assignments
+    if (path.startsWith('/')) path = path.substring(1);
+    for (final endpoint in AuthHandlerEndpoint.values) {
+      if (path.startsWith(endpoint.path)) return endpoint;
+    }
+    return null;
+  }
 }
 
 class AuthHandler {
@@ -1549,6 +1663,151 @@ class AuthHandler {
     final responseData =
         await successResponse(sessionResult.unwrap(), user.providerId);
     return Resp.ok(responseData);
+  }
+
+  /// Verifies the session dates and returns an error if the session
+  /// has expired or requires verification.
+  Future<Resp?> verifySessionDates(RequestCtx request) async {
+    final endpoint = AuthHandlerEndpoint.fromPath(request.url.path);
+    if (endpoint == null) return null;
+    final maxCreation =
+        config.rateLimits.authHandlerMaxSessionCreation[endpoint];
+    final maxRefresh = config.rateLimits.authHandlerMaxSessionRefresh[endpoint];
+    if (maxCreation == null && maxRefresh == null) return null;
+    final claims = await authenticatedUserOrThrow(request);
+    final session = await config.persistence.getValidSession(claims.sessionId);
+    if (session == null) {
+      return Resp.unauthorized(
+        const AuthError(Translation(key: Translations.sessionExpiredKey)),
+      );
+    } else if (maxCreation != null &&
+        session.createdAt.isBefore(DateTime.now().subtract(maxCreation))) {
+      return Resp.unauthorized(
+        const AuthError(
+          Translation(key: Translations.sessionRequiresVerificationKey),
+        ),
+      );
+    } else if (maxRefresh != null &&
+        session.lastRefreshAt.isBefore(DateTime.now().subtract(maxRefresh))) {
+      // TODO: end session
+      return Resp.unauthorized(
+        const AuthError(
+          Translation(key: Translations.sessionExpiredKey),
+        ),
+      );
+    }
+    return null;
+  }
+
+  /// Increases the rate limit counter for the current request and verifies
+  /// if the request is allowed for the configured [RateLimit]s.
+  Future<Resp?> rateLimit(RequestCtx request) async {
+    final endpoint = AuthHandlerEndpoint.fromPath(request.url.path);
+    if (endpoint == null) return null;
+
+    final isSafe = const ['GET', 'HEAD', 'OPTIONS'].contains(request.method);
+    final rateLimits = config.rateLimits;
+    final endpointLimits = rateLimits.authHandlerLimits[endpoint];
+    final allLimitsList = [
+      if (isSafe && rateLimits.baseQueriesLimits.isNotEmpty)
+        MapEntry('QUERY', rateLimits.baseQueriesLimits)
+      else if (!isSafe && rateLimits.baseMutateLimits.isNotEmpty)
+        MapEntry('MUTATION', rateLimits.baseMutateLimits),
+      if (endpointLimits != null && endpointLimits.isNotEmpty)
+        MapEntry(endpoint.path, endpointLimits)
+    ];
+
+    if (allLimitsList.isNotEmpty) {
+      final requestIdentifiers = await config.identifiersFromRequest(
+        config,
+        request,
+      );
+      final r = await Future.wait(
+        allLimitsList.map(
+          (e) => config.rateLimiter.isAllowedResults(
+            requestIdentifiers,
+            e.key,
+            e.value,
+            increaseCount: 1,
+          ),
+        ),
+      );
+      for (final result in r) {
+        final notAllowed = result.values
+            .expand((e) => e)
+            .firstWhereOrNull((r) => !r.isAllowed);
+        if (notAllowed != null) {
+          notAllowed.toHeaders().forEach(request.appendResponseHeader);
+          return const Resp(
+            429, // Too Many Requests
+            err: AuthError(
+              // TODO: add translation
+              Translation(key: Translations.authProviderNotFoundToDeleteKey),
+            ),
+            ok: null,
+          );
+        }
+      }
+
+      final minResult =
+          r.expand((result) => result.values.expand((e) => e)).reduce(
+                (value, element) =>
+                    value.compareTo(element) < 0 ? value : element,
+              );
+      minResult.toHeaders().forEach(request.appendResponseHeader);
+    }
+
+    final allLimits = {
+      // TODO: should we split it? maybe use the same key for all safe methods
+      //  Not endpoint.path as key
+      ...isSafe ? rateLimits.baseQueriesLimits : rateLimits.baseMutateLimits,
+      ...?endpointLimits
+    }.toList()
+      ..sort();
+
+    if (allLimits.isNotEmpty) {
+      final requestIdentifiers = await config.identifiersFromRequest(
+        config,
+        request,
+      );
+      int i = -1;
+      bool isAllowed = true;
+      while (isAllowed && i < allLimits.length) {
+        i++;
+        isAllowed = await config.rateLimiter.isAllowed(
+          requestIdentifiers,
+          endpoint.path,
+          // TODO; maybe just pass the list of limits
+          allLimits[i],
+          increaseCount: i == 0 ? 1 : 0,
+        );
+      }
+      // TODO: compute reset with first event in range
+      final retryAfterSeconds =
+          Counts.defaultSecondsPerMinuteFraction.toString();
+      final headersToAdd = {
+        'RateLimit-Limit': allLimits[isAllowed ? 0 : i].limit.toString(),
+        'RateLimit-Remaining':
+            // TODO: compute remaining
+            isAllowed ? allLimits.first.limit.toString() : '0',
+        'RateLimit-Reset': retryAfterSeconds,
+        if (!isAllowed) 'Retry-After': retryAfterSeconds,
+      };
+      // TODO: should we always add headers to the response? make it configurable
+      headersToAdd.forEach(request.appendResponseHeader);
+
+      if (!isAllowed) {
+        return const Resp(
+          429, // Too Many Requests
+          err: AuthError(
+            // TODO: add translation
+            Translation(key: Translations.authProviderNotFoundToDeleteKey),
+          ),
+          ok: null,
+        );
+      }
+    }
+    return null;
   }
 }
 
