@@ -84,6 +84,10 @@ This repository is a monorepo with the following packages:
 - [Backend Config](#backend-config)
   - [Config](#config)
   - [AppCredentialsConfig](#appcredentialsconfig)
+  - [Rate Limiting](#rate-limiting)
+    - [PersistenceRateLimiter](#persistenceratelimiter)
+      - [RateLimit Headers](#ratelimit-headers)
+  - [Session Dates Verification](#session-dates-verification)
 - [Frontend Client](#frontend-client)
   - [Frontend Client GlobalState](#frontend-client-globalstate)
     - [Global State](#global-state)
@@ -433,6 +437,31 @@ final JsonWebTokenMaker jwtMaker;
 
 // TODO: maybe get it from the database?
 
+## Rate Limiting
+
+You may provide multiple `RateLimit`s for a given endpoint, which allows you to configure a different amount of requests allowed for different time window sizes. For example, a rate of 100 requests in 1 minute and a 500 requests in an hour allows for bursts of 100 petitions in a single minute, but the can't surpass 500 requests in an hour.
+
+
+### PersistenceRateLimiter
+
+We provide a RateLimiter implementation `PersistenceRateLimiter` that provides an eventually-consistent sliding window algorithm. It tracks the sliding counters in memory and relies on transactions in the persistence store to periodically sync the local count data with the shared persistence.
+
+#### RateLimit Headers
+
+When the count reaches the configured rate limit, 
+
+| Name                | Type    | Description                                                                                                                                                                                             | Example                           |
+| ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| RateLimit-Policy    | String  | The configuration of the policy                                                                                                                                                                         | 10;w=60;comment="sliding window"' |
+| RateLimit-Limit     | amount  | The amount of requests available in the time window                                                                                                                                                     | 10                                |
+| RateLimit-Remaining | amount  | The amount of additional requests that can<br>be performed given the current count                                                                                                                      | 1                                 |
+| RateLimit-Reset     | seconds | The number of seconds from now where the count will reset.<br>Since this is a sliding window algorithm, will be the resolution,<br>otherwise it will be the amount of seconds the client needs to wait. | 15                                |
+| Retry-After         | seconds | Same as RateLimit-Reset                                                                                                                                                                                 | 15                                |
+
+## Session Dates Verification
+
+You may configure the maximum amount of time that a request can be performed since the session was created.
+
 # Frontend Client
 
 We provide a client facing API for the front end. 
@@ -441,9 +470,15 @@ We provide a client facing API for the front end.
 
 ### Global State
 
+Contains translations and global state and settings for the client such as the selected theme brightness and locale.
+
 ### AuthClient State
 
+Main authentication logic of the client.
+
 ### Admin State
+
+State for the [Admin Dashboard](#admin-dashboard) section of the application.
 
 ## Endpoint
 
@@ -468,13 +503,15 @@ At the moment we provide the following translations:
 - English
 - Spanish
 
-However, they may be added in the server or client configuration.
+However, other translations may be added in the server or client configuration.
 
 ## Backend Translations
 
+Contains the messages sent to the client 
+
 ### Translation class
 
-This class provides a way to represent a message thar can be translated using a Backend [`Translations`](./lib/src/backend_translation.dart) class.
+This class provides a way to represent a message that can be translated using a Backend [`Translations`](./lib/src/backend_translation.dart) class.
 
 ## Frontend Translations
 

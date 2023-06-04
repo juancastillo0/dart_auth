@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:clock/clock.dart';
 import 'package:oauth/flow.dart';
 import 'package:oauth/oauth.dart';
-import 'package:oauth_example/main.dart';
 
 abstract class RateLimiter {
   /// Returns true if the [requestIdentifiers] should be allowed given the
@@ -17,39 +16,38 @@ abstract class RateLimiter {
     List<String> requestIdentifiers,
     String key,
     RateLimit limit, {
-    required bool increaseCount,
+    required int increaseCount,
+  });
+
+  /// Returns true if the [requestIdentifiers] should be allowed given the
+  /// [limits] imposed.
+  /// The [key] will be used to separate different rate counts.
+  /// If [increaseCount] is true, the count for [key] associated with
+  /// all [requestIdentifiers] will be increased.
+  Future<Map<String, List<RateLimitResult>>> isAllowedResults(
+    List<String> requestIdentifiers,
+    String key,
+    List<RateLimit> limits, {
+    required int increaseCount,
   });
 
   ///
-  Future<void> increaseCount(List<String> requestIdentifiers, String key) {
+  Future<void> increaseCount(
+    List<String> requestIdentifiers,
+    String key, {
+    int amount = 1,
+  }) {
     return isAllowed(
       requestIdentifiers,
       key,
       const RateLimit(1, Duration(minutes: 1)),
-      increaseCount: true,
+      increaseCount: amount,
     );
-  }
-
-  static Future<List<String>> identifiersFromRequest(
-    Config config,
-    RequestCtx request,
-  ) async {
-    final clientData = await config.sessionClientDataFromRequest(request);
-    final claims = await config.jwtMaker.getUserClaims(request);
-    return [
-      if (clientData.ipAddress != null) clientData.ipAddress!,
-      // TODO: take deviceId From claims or session
-      if (clientData.deviceId != null) clientData.deviceId!,
-      if (claims?.userId != null && claims!.userId.isNotEmpty)
-        claims.userId
-      else if (claims?.sessionId != null)
-        claims!.sessionId,
-    ];
   }
 }
 
 /// A rate limit with a [limit] of requests in a [duration].
-class RateLimit {
+class RateLimit implements Comparable<RateLimit>, SerializableToJson {
   /// The number of requests allowed in the [duration].
   final int limit;
 
@@ -59,31 +57,98 @@ class RateLimit {
   /// Creates a new [RateLimit] with the given [limit] and [duration].
   const RateLimit(this.limit, this.duration);
 
+  factory RateLimit.fromJson(Map<String, Object?> json) {
+    return RateLimit(
+      json['limit']! as int,
+      Duration(microseconds: json['duration']! as int),
+    );
+  }
+
+  /// The number of microseconds allowed per request.
+  int get microsecondsPerRequest => duration.inMicroseconds ~/ limit;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RateLimit && other.limit == limit && other.duration == duration;
+
+  @override
+  int get hashCode => Object.hash(limit, duration);
+
+  @override
+  int compareTo(RateLimit other) {
+    final c = microsecondsPerRequest.compareTo(other.microsecondsPerRequest);
+    return c == 0 ? other.limit.compareTo(limit) : c;
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'limit': limit,
+      'duration': duration.inMicroseconds,
+    };
+  }
+
   @override
   String toString() {
     return 'RateLimit{limit: $limit, duration: $duration}';
   }
 }
 
+class RateLimitResult implements Comparable<RateLimitResult> {
+  /// X-RateLimit-Remaining
+  /// The number of calls remaining in the interval before reaching the limit.
+  final int remaining;
+
+  /// X-RateLimit-Reset
+  /// The number of seconds remaining until the beginning of the next interval.
+  final Duration reset;
+
+  /// The limit that was used to calculate the [remaining] and [reset] values.
+  final RateLimit limit;
+
+  /// Whether the [remaining] is greater than 0
+  /// and the request should be allowed.
+  bool get isAllowed => remaining > 0;
+
+  ///
+  RateLimitResult({
+    required this.remaining,
+    required this.reset,
+    required this.limit,
+  });
+
+  Map<String, String> toHeaders({bool standard = true}) {
+    final prefix = standard ? '' : 'X-';
+    final policy =
+        '${limit.limit};w=${limit.duration.inSeconds};comment="sliding window"';
+    return {
+      '${prefix}RateLimit-Policy': policy,
+      '${prefix}RateLimit-Limit': limit.limit.toString(),
+      '${prefix}RateLimit-Remaining': remaining.toString(),
+      '${prefix}RateLimit-Reset': reset.inSeconds.toString(),
+      if (!isAllowed) 'Retry-After': reset.inSeconds.toString(),
+    };
+  }
+
+  @override
+  int compareTo(RateLimitResult other) {
+    final c = remaining.compareTo(other.remaining);
+    final resetC = reset.compareTo(other.reset);
+    return c == 0
+        ? resetC == 0
+            ? limit.compareTo(other.limit)
+            : resetC
+        : c;
+  }
+}
+
 // TODO:
-// x-ratelimit-limit: The maximum number of requests available in the current time frame.
-// x-ratelimit-remaining: The number of remaining requests in the current time frame.
-// x-ratelimit-reset: A UNIX timestamp of the expected time when the rate limit will reset.
 // https://stackoverflow.com/questions/16022624/examples-of-http-api-rate-limiting-http-response-headers
 
 // IBM
 // If the burst limit is exceeded, no X-RateLimit-* headers but a 429 error code is returned.
 // If the burst limit is not exceeded, the action proceeds to check the rate limit.
 // When the rate limit is not exceeded, the request is processed. When the rate limit is exceeded but the hard limit setting is not enabled, the request is still processed but with a warning. In this case, the response carries the following headers.
-// X-RateLimit-Limit
-// The number of calls allowed per interval.
-// X-RateLimit-Remaining
-// The number of calls remaining in the interval before reaching the limit.
-// When the rate limit is exceeded and the hard limit setting is enabled, the request is rejected. In this case, in addition to the headers above, the response carries the following headers.
-// X-RateLimit-Reset
-// The number of seconds remaining until the beginning of the next interval.
-// Retry-After
-// The Same as X-RateLimit-Reset.
 
 class CachedValue {
   final CountsMonth? previousSaved;
@@ -105,10 +170,21 @@ class CachedValue {
 class CachedKey {
   final String currentMonthKey;
   final String previousMonthKey;
+  final String requestIdentifier;
 
-  CachedKey(this.currentMonthKey, this.previousMonthKey);
+  ///
+  CachedKey(
+    this.currentMonthKey,
+    this.previousMonthKey,
+    this.requestIdentifier,
+  );
 }
 
+/// Eventually-consistent sliding window rate limiting.
+///
+/// Tracks sliding counters in memory and relies on transactions
+/// in [persistence] to periodically sync the local count data with
+/// the shared persistence.
 class PersistenceRateLimiter extends RateLimiter {
   /// The [Persistence] used to store the [CountsMonth]s.
   /// // TODO: use a custom persistence for Rate Limits
@@ -136,6 +212,8 @@ class PersistenceRateLimiter extends RateLimiter {
     this.persistence, {
     this.persistDuration = const Duration(seconds: 5),
     this.cacheDuration = const Duration(minutes: 4),
+    // TODO: max number of keys in memory cache
+    // TODO: persistence key granularity month or day
   }) {
     if (cacheDuration < persistDuration * 2) {
       throw ArgumentError.value(
@@ -155,13 +233,6 @@ class PersistenceRateLimiter extends RateLimiter {
     _updatedKeysToKeep.addAll(_toPersist.keys);
     _toPersist = {};
     await _setStates(toPersistValues);
-
-    // final now = clock.now();
-    // final toDeleteFromCache = inMemoryCache.values
-    //     .where((e) => now.difference(e.lastUpdate) > cacheDuration)
-    //     .map((e) => e.key.currentMonthKey)
-    //     .toSet();
-    // toDeleteFromCache.forEach(inMemoryCache.remove);
     if (!isDisposed) {
       _persistTimer = Timer(persistDuration, _executePersistTimer);
     }
@@ -187,53 +258,111 @@ class PersistenceRateLimiter extends RateLimiter {
   }
 
   @override
-  Future<bool> isAllowed(
+  Future<Map<String, List<RateLimitResult>>> isAllowedResults(
     List<String> requestIdentifiers,
     String key,
-    RateLimit limit, {
-    required bool increaseCount,
+    List<RateLimit> limits, {
+    required int increaseCount,
   }) async {
     if (isDisposed) {
       throw StateError('This $PersistenceRateLimiter has been disposed.');
-    } else if (limit.duration < const Duration(minutes: 1)) {
+    }
+    limits.forEach(_validateLimit);
+
+    final now = clock.now();
+    final keys = _getKeys(requestIdentifiers, key, now);
+    final states = await _getStates(keys, now);
+    // final Map<String, List<RateLimitResult>> isAllowedResult = states
+    //     .expand(
+    //   (s) => limits.map(
+    //     (limit) => MapEntry(
+    //       s.key.requestIdentifier,
+    //       s.current.isAllowedResult(s.previousSaved, limit, now),
+    //     ),
+    //   ),
+    // )
+    //    .fold({}, (map, e) => map..putIfAbsent(e.key, () => []).add(e.value));
+
+    final Map<String, List<RateLimitResult>> isAllowedResult =
+        Map.fromIterables(
+      requestIdentifiers,
+      states.map(
+        (s) => limits
+            .map(
+              (limit) => s.current.isAllowedResult(s.previousSaved, limit, now),
+            )
+            .toList(),
+      ),
+    );
+
+    if (increaseCount > 0) {
+      for (final c in states) {
+        c.lastUpdate = now;
+        c.current.increaseCount(now, amount: increaseCount);
+      }
+      _toPersist
+          .addEntries(states.map((e) => MapEntry(e.key.currentMonthKey, e)));
+    }
+
+    return isAllowedResult;
+  }
+
+  List<CachedKey> _getKeys(
+    List<String> requestIdentifiers,
+    String key,
+    DateTime now,
+  ) {
+    final currentMonth = '${now.year}${now.month < 10 ? '0' : ''}${now.month}';
+    final previousMonth = now.month == 1
+        ? '${now.year - 1}12'
+        : '${now.year}${(now.month - 1) < 10 ? '0' : ''}${now.month - 1}';
+    return requestIdentifiers
+        .map(
+          (e) => CachedKey(
+            'rl$currentMonth.$e.$key',
+            'rl$previousMonth.$e.$key',
+            e,
+          ),
+        )
+        .toList();
+  }
+
+  void _validateLimit(RateLimit limit) {
+    if (limit.duration < const Duration(minutes: 1)) {
       throw UnsupportedError(
         'Limit duration of less than one minute are not'
         ' supported. Limit: $limit.',
       );
     }
+  }
+
+  @override
+  Future<bool> isAllowed(
+    List<String> requestIdentifiers,
+    String key,
+    RateLimit limit, {
+    required int increaseCount,
+  }) async {
+    if (isDisposed) {
+      throw StateError('This $PersistenceRateLimiter has been disposed.');
+    }
+    _validateLimit(limit);
+
     final now = clock.now();
-    final currentMonth = '${now.year}${now.month < 10 ? '0' : ''}${now.month}';
-    final previousMonth = now.month == 1
-        ? '${now.year - 1}12'
-        : '${now.year}${(now.month - 1) < 10 ? '0' : ''}${now.month - 1}';
-    final keys = requestIdentifiers
-        .map((e) => CachedKey('rl$currentMonth$e', 'rl$previousMonth$e'))
-        .toList();
+    final keys = _getKeys(requestIdentifiers, key, now);
 
     // TODO: improve performance
     final states = await _getStates(keys, now);
     final isAllowedResult =
         states.every((s) => s.current.isAllowed(s.previousSaved, limit, now));
-    if (increaseCount) {
+    if (increaseCount > 0) {
       for (final c in states) {
         c.lastUpdate = now;
-        c.current.increaseCount(now);
+        c.current.increaseCount(now, amount: increaseCount);
       }
       _toPersist
           .addEntries(states.map((e) => MapEntry(e.key.currentMonthKey, e)));
     }
-    // int i = 0;
-    // final newStates = states.map((e) {
-    //   final prevCount = e?.meta?['count'] as int? ?? 0;
-    // return AuthStateModel(
-    //   state: keys[i++],
-    //   providerId: '',
-    //   createdAt: e?.createdAt ?? clock.now(),
-    //   responseType: null,
-    //   meta: {'count': prevCount + 1},
-    // );
-    // }).toList();
-    // await _setStates(newStates);
 
     return isAllowedResult;
   }
@@ -337,12 +466,12 @@ abstract class Counts {
   }
 
   /// Adds a count
-  void increaseCount(DateTime date) {
-    _findAndAdd(date);
-    c++;
+  void increaseCount(DateTime date, {int amount = 1}) {
+    _findAndAdd(date, amount: amount);
+    c += amount;
   }
 
-  Counts? _findAndAdd(DateTime date) {
+  Counts? _findAndAdd(DateTime date, {required int amount}) {
     final innerBase = innerDefault(1);
     if (innerBase == null) return null;
     final innerId = innerBase.idFromDate(date);
@@ -356,7 +485,7 @@ abstract class Counts {
       // TODO: insert in order. binary search.
       inner.add(item);
     }
-    item.increaseCount(date);
+    item.increaseCount(date, amount: amount);
     return item;
   }
 
@@ -706,6 +835,80 @@ class CountsMonth extends Counts implements SerializableToJson {
   @override
   CountsMonth clone() {
     return CountsMonth(c, month, inner.map((e) => e.clone()).toList());
+  }
+
+  RateLimitResult isAllowedResult(
+    CountsMonth? previous,
+    RateLimit limit,
+    DateTime end,
+  ) {
+    final start = end.subtract(limit.duration);
+    final previousCount =
+        previous?.countInRange(start, end, maxCount: limit.limit) ?? 0;
+    final pc = previousCount >= limit.limit
+        ? 0
+        : countInRange(start, end, maxCount: limit.limit - previousCount);
+    final remaining = limit.limit - (previousCount + pc);
+    var reset = const Duration(seconds: Counts.defaultSecondsPerMinuteFraction);
+
+    if (remaining <= 0) {
+      final endReset = getReset(limit.limit);
+      // TODO: count backwards and return the date
+      final resetDate = endReset ?? previous!.getReset(limit.limit - c)!;
+      reset = limit.duration - end.difference(resetDate);
+    }
+
+    return RateLimitResult(
+      remaining: remaining,
+      limit: limit,
+      reset: reset,
+    );
+  }
+
+  /// Returns the date where the amount of counts sum to [count]
+  /// The aggregation is done from the last to first dates so that the
+  /// date returned is the first date that would reset the sliding window
+  /// if no more petitions are performed. See [isAllowedResult].
+  DateTime? getReset(int count) {
+    if (count > c) {
+      return null;
+    } else if (count == c) {
+      return month;
+    }
+    int inc = count;
+    for (final day in inner.reversed) {
+      if (day.c < inc) {
+        inc -= day.c;
+        continue;
+      }
+      for (final hour in day.inner.reversed) {
+        if (hour.c < inc) {
+          inc -= hour.c;
+          continue;
+        }
+        for (final minute in hour.inner.reversed) {
+          if (minute.c < inc) {
+            inc -= minute.c;
+            continue;
+          }
+          for (final fraction in minute.inner.reversed) {
+            if (fraction.c < inc) {
+              inc -= fraction.c;
+              continue;
+            }
+            return DateTime(
+              month.year,
+              month.month,
+              day.day,
+              hour.hour,
+              minute.minute,
+              fraction.minuteFraction * fraction.secondsPerFraction,
+            );
+          }
+        }
+      }
+    }
+    throw Exception('Could not find reset $count in $this');
   }
 
   // @override

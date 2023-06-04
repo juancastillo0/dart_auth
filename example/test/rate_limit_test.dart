@@ -42,8 +42,9 @@ void main() {
       runFakeAsync<void>(initialTime: initialTime, (time) async {
         final secsInterval = Counts.defaultSecondsPerMinuteFraction;
         const id = 'id';
-        final keyCurrent = 'rl${initialTime.year}0${initialTime.month}$id';
-        final keyPrevious = 'rl${initialTime.year}0${initialTime.month - 1}$id';
+        final keyCurrent = 'rl${initialTime.year}0${initialTime.month}.$id.';
+        final keyPrevious =
+            'rl${initialTime.year}0${initialTime.month - 1}.$id.';
         final rateLimiter = PersistenceRateLimiter(persistence);
         Object? cachedValues() {
           return jsonEncDec(
@@ -65,7 +66,7 @@ void main() {
 
         for (final _ in Iterable<void>.generate(rate.limit - 1)) {
           expect(
-            await rateLimiter.isAllowed([id], '', rate, increaseCount: true),
+            await rateLimiter.isAllowed([id], '', rate, increaseCount: 1),
             true,
           );
           time.elapse(const Duration(seconds: 1));
@@ -73,7 +74,7 @@ void main() {
         }
 
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: false),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 0),
           true,
         );
         final item1 = {
@@ -108,7 +109,7 @@ void main() {
         time.elapse(const Duration(seconds: 1));
         expect(persistence.mapState, isNotEmpty);
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: true),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 1),
           true,
         );
 
@@ -137,17 +138,17 @@ void main() {
           },
         );
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: false),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 0),
           false,
         );
         time.elapse(const Duration(seconds: 1));
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: false),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 0),
           false,
         );
         time.elapse(const Duration(seconds: 9));
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: true),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 1),
           false,
         );
         final item3 = {
@@ -177,12 +178,12 @@ void main() {
 
         time.elapse(Duration(seconds: secsInterval * 3));
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: false),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 0),
           false,
         );
         time.elapse(Duration(seconds: secsInterval));
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: true),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 1),
           true,
         );
         final item4 = {
@@ -217,7 +218,7 @@ void main() {
         expect(cachedValues(), <String, dynamic>{});
 
         expect(
-          await rateLimiter.isAllowed([id], '', rate, increaseCount: true),
+          await rateLimiter.isAllowed([id], '', rate, increaseCount: 1),
           true,
         );
         final now = clock.now();
@@ -234,10 +235,11 @@ void main() {
         expect(
           cachedValues(),
           {
-            'rl${initialTime.year}0${initialTime.month + 1}$id': {
+            'rl${initialTime.year}0${initialTime.month + 1}.$id.': {
               'lastUpdate': clock.now().toIso8601String(),
               'previousSaved': item4,
-              'keyCurrent': 'rl${initialTime.year}0${initialTime.month + 1}$id',
+              'keyCurrent':
+                  'rl${initialTime.year}0${initialTime.month + 1}.$id.',
               'keyPrevious': keyCurrent,
               'saved': CountsMonth.empty(now).toJson(),
               'current': item5
@@ -250,7 +252,7 @@ void main() {
             [id],
             '',
             RateLimit(1 + rate.limit + 2, time.elapsed),
-            increaseCount: false,
+            increaseCount: 0,
           ),
           false,
         );
@@ -518,7 +520,7 @@ void main() {
             ['id'],
             'key',
             const RateLimit(2, Duration(seconds: 10)),
-            increaseCount: true,
+            increaseCount: 1,
           ),
           throwsA(isA<UnsupportedError>()),
         );
@@ -534,7 +536,7 @@ void main() {
             ['id'],
             'key',
             const RateLimit(2, Duration(seconds: 10)),
-            increaseCount: true,
+            increaseCount: 1,
           ),
           throwsA(isA<StateError>()),
         );
