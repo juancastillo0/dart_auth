@@ -463,3 +463,32 @@ class UserMeOrResponse implements SerializableToJson {
     return user == null ? response!.toJson() : user!.toJson();
   }
 }
+
+class UserSignOutSessionsQuery implements SerializableToJson {
+  /// The session ids to sign out
+  final List<String>? sessionIds;
+
+  /// If true, all sessions will be signed out
+  final bool signOutAll;
+
+  ///
+  UserSignOutSessionsQuery({
+    this.sessionIds,
+    this.signOutAll = false,
+  });
+
+  factory UserSignOutSessionsQuery.fromJson(Map<String, Object?> json) {
+    return UserSignOutSessionsQuery(
+      sessionIds: (json['sessionIds']! as List).cast(),
+      signOutAll: json['signOutAll']! as bool,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'sessionIds': sessionIds,
+      'signOutAll': signOutAll,
+    };
+  }
+}

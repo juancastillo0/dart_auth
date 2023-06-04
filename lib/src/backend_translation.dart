@@ -263,6 +263,13 @@ class Translations {
   /// Translation for 'Field input errors.'
   String get fieldErrors => 'Field input errors.';
 
+  /// Translation for 'Invalid session id "$sessionId".'
+  String invalidSessionId({required String sessionId}) =>
+      'Invalid session id "$sessionId".';
+
+  /// Translation for 'Session id is required.'
+  String get sessionIdsIsRequired => 'Session id is required.';
+
   /// Translation for 'Session expired.'
   String get sessionExpired => 'Session expired.';
 
@@ -362,6 +369,8 @@ class Translations {
   static const duplicateUserKey = 'duplicateUser';
   static const userNotFoundKey = 'userNotFound';
   static const fieldErrorsKey = 'fieldErrors';
+  static const invalidSessionIdKey = 'invalidSessionId';
+  static const sessionIdsIsRequiredKey = 'sessionIdsIsRequired';
   static const sessionExpiredKey = 'sessionExpired';
   static const sessionRequiresVerificationKey = 'sessionRequiresVerification';
   static const operationRequiresVerificationKey =
@@ -436,6 +445,7 @@ class Translations {
     duplicateUserKey,
     userNotFoundKey,
     fieldErrorsKey,
+    invalidSessionIdKey,
     sessionExpiredKey,
     sessionRequiresVerificationKey,
     operationRequiresVerificationKey,
@@ -575,6 +585,10 @@ class Translations {
         return t.userNotFound;
       case fieldErrorsKey:
         return t.fieldErrors;
+      case invalidSessionIdKey:
+        return t.invalidSessionId;
+      case sessionIdsIsRequiredKey:
+        return t.sessionIdsIsRequired;
       case sessionExpiredKey:
         return t.sessionExpired;
       case sessionRequiresVerificationKey:
@@ -827,6 +841,13 @@ class SpanishTranslations implements Translations {
       'Esta operación required de una sesión reciente,'
       ' por favor autentícate nuevamente.';
 
+  @override
+  String invalidSessionId({required String sessionId}) =>
+      'Identificador de sesión no es válido "$sessionId".';
+
+  @override
+  String get sessionIdsIsRequired =>
+      'Algún identificador de sesión es requerido.';
   @override
   String get sessionExpired => 'La sesión ha expirado.';
   @override

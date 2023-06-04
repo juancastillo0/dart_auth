@@ -247,6 +247,11 @@ class AuthHandler {
       minLastRefreshAtDiff: const Duration(days: 8),
     )) {
       // TODO: verify session data
+      return Resp.unauthorized(
+        const AuthError(
+          Translation(key: Translations.authProviderNotFoundToDeleteKey),
+        ),
+      );
     }
 
     // TODO: maybe pass expiresAt to createJwt
@@ -1074,6 +1079,60 @@ class AuthHandler {
         ).toList(),
       ),
     );
+  }
+
+  Future<Resp<SerializableToJson, AuthError>> userSignOutSessions(
+    RequestCtx request,
+  ) async {
+    if (request.method != 'POST') return Resp.notFound(null);
+    final claims = await authenticatedUserOrThrow(request);
+    final data = (await _parseBody(request, UserSignOutSessionsQuery.fromJson))
+        .throwErr();
+    final sessionIds = data.sessionIds ?? [];
+
+    if (!data.signOutAll && sessionIds.isEmpty) {
+      return Resp.badRequest(
+        body: const AuthError(
+          Translation(key: Translations.sessionIdsIsRequiredKey),
+        ),
+      );
+    }
+    final currentSessions = await config.persistence.getUserSessions(
+      claims.userId,
+      onlyValid: true,
+    );
+
+    final List<UserSession> sessionToSignOut;
+    if (data.signOutAll) {
+      sessionToSignOut = currentSessions;
+    } else {
+      final validSessionIds = currentSessions.map((e) => e.sessionId).toSet();
+      final invalidSession =
+          sessionIds.indexWhere((id) => !validSessionIds.contains(id));
+      if (invalidSession != -1) {
+        return Resp.badRequest(
+          body: AuthError(
+            Translation(
+              key: Translations.invalidSessionIdKey,
+              args: {'sessionId': sessionIds[invalidSession]},
+            ),
+          ),
+        );
+      }
+      sessionToSignOut = currentSessions
+          .where((session) => sessionIds.contains(session.sessionId))
+          .toList();
+    }
+
+    await Future.wait(
+      sessionToSignOut.map(
+        (session) => config.persistence.saveSession(
+          session.copyWith(refreshTokenToNull: true, endedAt: DateTime.now()),
+        ),
+      ),
+    );
+
+    return Resp.ok(null);
   }
 
   Future<Resp<UserInfoMe, AuthError>> userMFA(RequestCtx request) async {
